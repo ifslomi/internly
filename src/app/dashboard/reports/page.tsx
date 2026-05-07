@@ -150,7 +150,7 @@ export default function ReportsPage() {
                                     width: 40,
                                     height: 40,
                                     borderRadius: 10,
-                                    background: 'rgba(99,102,241,0.15)',
+                                    background: 'rgba(16,185,129,0.15)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -310,7 +310,7 @@ export default function ReportsPage() {
                                                 textAlign: 'right',
                                                 fontWeight: 700,
                                                 color: 'white',
-                                                borderTop: '2px solid rgba(99,102,241,0.3)',
+                                                borderTop: '2px solid rgba(16,185,129,0.3)',
                                             }}>
                                                 Total
                                             </td>
@@ -318,7 +318,7 @@ export default function ReportsPage() {
                                                 fontWeight: 700,
                                                 color: 'var(--primary-300)',
                                                 fontSize: 16,
-                                                borderTop: '2px solid rgba(99,102,241,0.3)',
+                                                borderTop: '2px solid rgba(16,185,129,0.3)',
                                             }}>
                                                 {weekTotalHours}h
                                             </td>

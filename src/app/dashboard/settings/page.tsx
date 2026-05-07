@@ -217,7 +217,7 @@ export default function SettingsPage() {
                                     width: 44,
                                     height: 44,
                                     borderRadius: 12,
-                                    background: 'rgba(99,102,241,0.15)',
+                                    background: 'rgba(16,185,129,0.15)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -314,8 +314,8 @@ export default function SettingsPage() {
                                                     gap: 6,
                                                     padding: '6px 12px',
                                                     borderRadius: 'var(--radius-full)',
-                                                    background: 'rgba(99,102,241,0.1)',
-                                                    border: '1px solid rgba(99,102,241,0.2)',
+                                                    background: 'rgba(16,185,129,0.1)',
+                                                    border: '1px solid rgba(16,185,129,0.2)',
                                                     fontSize: 13,
                                                     color: 'var(--primary-300)',
                                                 }}
@@ -399,7 +399,7 @@ export default function SettingsPage() {
                                                 height: 80,
                                                 borderRadius: 20,
                                                 objectFit: 'cover',
-                                                border: '3px solid rgba(99,102,241,0.3)',
+                                                border: '3px solid rgba(16,185,129,0.3)',
                                             }}
                                         />
                                     ) : (
@@ -407,14 +407,14 @@ export default function SettingsPage() {
                                             width: 80,
                                             height: 80,
                                             borderRadius: 20,
-                                            background: 'linear-gradient(135deg, #6366f1, #06b6d4)',
+                                            background: 'linear-gradient(135deg, #34d399, #10b981)',
                                             display: 'flex',
                                             alignItems: 'center',
                                             justifyContent: 'center',
                                             fontWeight: 800,
                                             fontSize: 32,
                                             color: 'white',
-                                            border: '3px solid rgba(99,102,241,0.3)',
+                                            border: '3px solid rgba(16,185,129,0.3)',
                                         }}>
                                             {name.charAt(0).toUpperCase()}
                                         </div>

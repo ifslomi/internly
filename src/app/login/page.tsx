@@ -61,8 +61,8 @@ export default function LoginPage() {
             overflow: 'hidden',
         }}>
             {/* Background */}
-            <div className="hero-glow" style={{ background: '#6366f1', top: '20%', left: '10%' }} />
-            <div className="hero-glow" style={{ background: '#8b5cf6', bottom: '20%', right: '10%', width: 400, height: 400 }} />
+            <div className="hero-glow" style={{ background: '#10b981', top: '20%', left: '10%' }} />
+            <div className="hero-glow" style={{ background: '#14b8a6', bottom: '20%', right: '10%', width: 400, height: 400 }} />
 
             <div style={{ maxWidth: 440, width: '100%', position: 'relative', zIndex: 1, padding: '0 4px' }}>
                 {/* Back link */}

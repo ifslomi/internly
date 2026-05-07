@@ -70,8 +70,8 @@ export default function SignUpPage() {
             position: 'relative',
             overflow: 'hidden',
         }}>
-            <div className="hero-glow" style={{ background: '#6366f1', top: '30%', right: '15%' }} />
-            <div className="hero-glow" style={{ background: '#06b6d4', bottom: '10%', left: '15%', width: 400, height: 400 }} />
+            <div className="hero-glow" style={{ background: '#10b981', top: '30%', right: '15%' }} />
+            <div className="hero-glow" style={{ background: '#14b8a6', bottom: '10%', left: '15%', width: 400, height: 400 }} />
 
             <div style={{ maxWidth: 480, width: '100%', position: 'relative', zIndex: 1, padding: '0 4px' }}>
                 <button

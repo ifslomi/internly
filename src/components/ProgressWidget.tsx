@@ -18,7 +18,7 @@ export function ProgressWidget({ percentage, label = 'Done', size = 'md' }: Prog
   const isBreathing = percentage < 50;
 
   return (
-    <div className={`relative flex flex-col items-center justify-center p-${size === 'sm' ? '4' : size === 'lg' ? '10' : '8'} bg-slate-950/40 rounded-[2rem] border border-white/5 aura-indigo glass-obsidian`}>
+    <div className={`relative flex flex-col items-center justify-center p-${size === 'sm' ? '4' : size === 'lg' ? '10' : '8'} bg-slate-950/40 rounded-[2rem] border border-white/5 aura-green glass-obsidian`}>
       <svg 
         className={`transform -rotate-90 ${isBreathing ? 'breathe-slow' : ''}`}
         width={viewBox * 2}
@@ -26,9 +26,9 @@ export function ProgressWidget({ percentage, label = 'Done', size = 'md' }: Prog
         viewBox={`0 0 ${viewBox * 2} ${viewBox * 2}`}
       >
         <defs>
-          <linearGradient id="indigo-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#6366f1" />
-            <stop offset="100%" stopColor="#a855f7" />
+          <linearGradient id="green-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#34d399" />
+            <stop offset="100%" stopColor="#10b981" />
           </linearGradient>
           <filter id="glow">
             <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
@@ -53,7 +53,7 @@ export function ProgressWidget({ percentage, label = 'Done', size = 'md' }: Prog
           cx={viewBox}
           cy={viewBox}
           r={radius}
-          stroke="url(#indigo-gradient)"
+          stroke="url(#green-gradient)"
           strokeWidth={strokeWidth}
           strokeDasharray={circumference}
           initial={{ strokeDashoffset: circumference }}

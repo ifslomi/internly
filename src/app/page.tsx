@@ -48,12 +48,12 @@ export default function LandingPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'var(--slate-950)',
+        background: 'radial-gradient(circle at top, rgba(16,185,129,0.08), transparent 34%), var(--slate-950)',
       }}>
         <div style={{
           width: 48,
           height: 48,
-          border: '3px solid rgba(99,102,241,0.2)',
+          border: '3px solid rgba(16,185,129,0.22)',
           borderTopColor: 'var(--primary-500)',
           borderRadius: '50%',
           animation: 'spin 0.8s linear infinite',
@@ -70,13 +70,13 @@ export default function LandingPage() {
       icon: <Clock size={28} />,
       title: 'Smart Hour Tracking',
       description: 'Real-time progress monitoring with intelligent analytics that keep you ahead of your internship requirements.',
-      color: '#6366f1',
+      color: '#10b981',
     },
     {
       icon: <FileText size={28} />,
       title: 'Weekly Report Generator',
       description: 'Automatically compile daily logs into professionally formatted weekly reports ready for submission.',
-      color: '#06b6d4',
+      color: '#14b8a6',
     },
     {
       icon: <BarChart3 size={28} />,
@@ -88,7 +88,7 @@ export default function LandingPage() {
       icon: <Sparkles size={28} />,
       title: 'AI-Assisted Summaries',
       description: 'Let AI draft your weekly reflections based on your logged activities — saving you valuable time.',
-      color: '#f59e0b',
+      color: '#84cc16',
     },
   ];
 
@@ -225,9 +225,9 @@ export default function LandingPage() {
         overflow: 'hidden',
       }}>
         {/* Background Glows */}
-        <div className="hero-glow" style={{ background: '#6366f1', top: '10%', left: '15%' }} />
-        <div className="hero-glow" style={{ background: '#06b6d4', bottom: '10%', right: '10%', width: 400, height: 400 }} />
-        <div className="hero-glow" style={{ background: '#8b5cf6', top: '40%', right: '30%', width: 300, height: 300, opacity: 0.1 }} />
+        <div className="hero-glow" style={{ background: '#10b981', top: '10%', left: '15%' }} />
+        <div className="hero-glow" style={{ background: '#14b8a6', bottom: '10%', right: '10%', width: 400, height: 400 }} />
+        <div className="hero-glow" style={{ background: '#84cc16', top: '40%', right: '30%', width: 300, height: 300, opacity: 0.1 }} />
 
         <div style={{ textAlign: 'center', maxWidth: 800, position: 'relative', zIndex: 1 }}>
           {/* Badge */}
@@ -237,8 +237,8 @@ export default function LandingPage() {
             gap: 8,
             padding: '8px 20px',
             borderRadius: 'var(--radius-full)',
-            background: 'rgba(99,102,241,0.1)',
-            border: '1px solid rgba(99,102,241,0.2)',
+            background: 'rgba(16,185,129,0.1)',
+            border: '1px solid rgba(16,185,129,0.2)',
             marginBottom: 32,
             fontSize: 13,
             fontWeight: 500,
@@ -258,7 +258,7 @@ export default function LandingPage() {
           }}>
             Your Internship,{' '}
             <span style={{
-              background: 'linear-gradient(135deg, #6366f1, #06b6d4, #8b5cf6)',
+              background: 'linear-gradient(135deg, #34d399, #10b981, #059669)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundSize: '200% 200%',
@@ -485,13 +485,13 @@ export default function LandingPage() {
           maxWidth: 600,
           margin: '0 auto',
           borderRadius: 'var(--radius-xl)',
-          background: 'rgba(99,102,241,0.05)',
-          border: '1px solid rgba(99,102,241,0.15)',
+          background: 'rgba(16,185,129,0.05)',
+          border: '1px solid rgba(16,185,129,0.15)',
           position: 'relative',
           overflow: 'hidden',
         }}>
           <div className="hero-glow" style={{
-            background: '#6366f1',
+            background: '#10b981',
             top: '-50%',
             left: '50%',
             transform: 'translateX(-50%)',
@@ -537,7 +537,7 @@ export default function LandingPage() {
       }}>
         {/* Subtle glow */}
         <div className="hero-glow" style={{
-          background: '#6366f1',
+          background: '#10b981',
           bottom: '-60%',
           left: '50%',
           transform: 'translateX(-50%)',
@@ -602,7 +602,7 @@ export default function LandingPage() {
                     cursor: 'pointer',
                     transition: 'all 200ms ease',
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(99,102,241,0.15)'; e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'; e.currentTarget.style.color = 'var(--primary-400)'; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(16,185,129,0.15)'; e.currentTarget.style.borderColor = 'rgba(16,185,129,0.3)'; e.currentTarget.style.color = 'var(--primary-400)'; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'var(--slate-500)'; }}
                 >
                   {social.icon}
@@ -849,9 +849,9 @@ export default function LandingPage() {
                       alignItems: 'center',
                       gap: 12,
                       padding: '14px 16px',
-                      background: 'rgba(99,102,241,0.06)',
+                      background: 'rgba(16,185,129,0.06)',
                       borderRadius: 12,
-                      border: '1px solid rgba(99,102,241,0.12)',
+                      border: '1px solid rgba(16,185,129,0.12)',
                     }}>
                       <span style={{ fontSize: 20 }}>✉️</span>
                       <div>

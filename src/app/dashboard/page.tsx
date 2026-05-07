@@ -111,7 +111,7 @@ export default function DashboardPage() {
                             width: 40,
                             height: 40,
                             borderRadius: 10,
-                            background: 'rgba(99,102,241,0.15)',
+                            background: 'rgba(16,185,129,0.15)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -188,7 +188,7 @@ export default function DashboardPage() {
                             width: 40,
                             height: 40,
                             borderRadius: 10,
-                            background: 'rgba(6,182,212,0.15)',
+                            background: 'rgba(20,184,166,0.15)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -222,7 +222,7 @@ export default function DashboardPage() {
                             width: 36,
                             height: 36,
                             borderRadius: 10,
-                            background: 'rgba(99,102,241,0.15)',
+                            background: 'rgba(16,185,129,0.15)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -241,8 +241,8 @@ export default function DashboardPage() {
                             <AreaChart data={burndownData}>
                                 <defs>
                                     <linearGradient id="colorRemaining" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
@@ -264,11 +264,11 @@ export default function DashboardPage() {
                                 <Area
                                     type="monotone"
                                     dataKey="remaining"
-                                    stroke="#6366f1"
+                                    stroke="#10b981"
                                     strokeWidth={2}
                                     fill="url(#colorRemaining)"
                                     name="Actual Remaining"
-                                    dot={{ fill: '#6366f1', r: 3 }}
+                                    dot={{ fill: '#10b981', r: 3 }}
                                 />
                                 <Line
                                     type="monotone"
@@ -371,8 +371,8 @@ export default function DashboardPage() {
                                 }}
                                 onClick={() => router.push(`/dashboard/log?edit=${log.id}`)}
                                 onMouseEnter={(e) => {
-                                    e.currentTarget.style.background = 'rgba(99,102,241,0.05)';
-                                    e.currentTarget.style.borderColor = 'rgba(99,102,241,0.15)';
+                                    e.currentTarget.style.background = 'rgba(16,185,129,0.05)';
+                                    e.currentTarget.style.borderColor = 'rgba(16,185,129,0.15)';
                                 }}
                                 onMouseLeave={(e) => {
                                     e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
@@ -383,7 +383,7 @@ export default function DashboardPage() {
                                     width: 40,
                                     height: 40,
                                     borderRadius: 10,
-                                    background: 'rgba(99,102,241,0.1)',
+                                    background: 'rgba(16,185,129,0.1)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',

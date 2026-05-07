@@ -267,18 +267,18 @@ export default function Chatbot() {
             alignItems: 'center',
             justifyContent: 'center',
             color: 'white',
-            boxShadow: '0 8px 32px rgba(99,102,241,0.4), 0 0 0 0 rgba(99,102,241,0.3)',
+            boxShadow: '0 8px 32px rgba(16,185,129,0.4), 0 0 0 0 rgba(16,185,129,0.3)',
             transition: 'transform 200ms ease, box-shadow 200ms ease',
             zIndex: 90,
             animation: pulseBtn ? 'chatbotPulse 2s ease-in-out infinite' : undefined,
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.transform = 'scale(1.1)';
-            e.currentTarget.style.boxShadow = '0 12px 40px rgba(99,102,241,0.5)';
+            e.currentTarget.style.boxShadow = '0 12px 40px rgba(16,185,129,0.5)';
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.transform = 'scale(1)';
-            e.currentTarget.style.boxShadow = '0 8px 32px rgba(99,102,241,0.4)';
+            e.currentTarget.style.boxShadow = '0 8px 32px rgba(16,185,129,0.4)';
           }}
         >
           <MessageCircle size={26} />
@@ -315,14 +315,14 @@ export default function Chatbot() {
           flexDirection: 'column',
           background: 'var(--slate-950)',
           border: '1px solid rgba(255,255,255,0.08)',
-          boxShadow: '0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,102,241,0.1)',
+          boxShadow: '0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(16,185,129,0.1)',
           zIndex: 91,
           animation: 'chatbotSlideIn 300ms cubic-bezier(0.34, 1.56, 0.64, 1)',
         }}>
           {/* Header */}
           <div style={{
             padding: '16px 20px',
-            background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(6,182,212,0.08))',
+            background: 'linear-gradient(135deg, rgba(16,185,129,0.15), rgba(20,184,166,0.08))',
             borderBottom: '1px solid rgba(255,255,255,0.06)',
             display: 'flex',
             alignItems: 'center',
@@ -502,8 +502,8 @@ export default function Chatbot() {
                     style={{
                       padding: '6px 12px',
                       borderRadius: 20,
-                      background: 'rgba(99,102,241,0.08)',
-                      border: '1px solid rgba(99,102,241,0.2)',
+                      background: 'rgba(16,185,129,0.08)',
+                      border: '1px solid rgba(16,185,129,0.2)',
                       color: 'var(--primary-300)',
                       fontSize: 12,
                       cursor: 'pointer',
@@ -511,12 +511,12 @@ export default function Chatbot() {
                       whiteSpace: 'nowrap',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgba(99,102,241,0.15)';
-                      e.currentTarget.style.borderColor = 'rgba(99,102,241,0.35)';
+                      e.currentTarget.style.background = 'rgba(16,185,129,0.15)';
+                      e.currentTarget.style.borderColor = 'rgba(16,185,129,0.35)';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'rgba(99,102,241,0.08)';
-                      e.currentTarget.style.borderColor = 'rgba(99,102,241,0.2)';
+                      e.currentTarget.style.background = 'rgba(16,185,129,0.08)';
+                      e.currentTarget.style.borderColor = 'rgba(16,185,129,0.2)';
                     }}
                   >
                     {q}
@@ -555,7 +555,7 @@ export default function Chatbot() {
                 outline: 'none',
                 transition: 'border-color 150ms',
               }}
-              onFocus={(e) => (e.target.style.borderColor = 'rgba(99,102,241,0.4)')}
+              onFocus={(e) => (e.target.style.borderColor = 'rgba(16,185,129,0.4)')}
               onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,0.08)')}
             />
             <button

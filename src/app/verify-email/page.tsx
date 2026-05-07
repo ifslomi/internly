@@ -123,8 +123,8 @@ export default function VerifyEmailPage() {
             position: 'relative',
             overflow: 'hidden',
         }}>
-            <div className="hero-glow" style={{ background: '#6366f1', top: '20%', left: '20%' }} />
-            <div className="hero-glow" style={{ background: '#06b6d4', bottom: '20%', right: '15%', width: 400, height: 400 }} />
+            <div className="hero-glow" style={{ background: '#10b981', top: '20%', left: '20%' }} />
+            <div className="hero-glow" style={{ background: '#14b8a6', bottom: '20%', right: '15%', width: 400, height: 400 }} />
 
             <div style={{ maxWidth: 440, width: '100%', position: 'relative', zIndex: 1, padding: '0 4px' }}>
                 <button
@@ -141,7 +141,7 @@ export default function VerifyEmailPage() {
                             width: 64,
                             height: 64,
                             borderRadius: '50%',
-                            background: success ? 'rgba(34,197,94,0.12)' : 'rgba(99,102,241,0.12)',
+                            background: success ? 'rgba(34,197,94,0.12)' : 'rgba(16,185,129,0.12)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -214,7 +214,7 @@ export default function VerifyEmailPage() {
                                         }}
                                         onFocus={(e) => {
                                             e.currentTarget.style.borderColor = 'var(--primary-500)';
-                                            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)';
+                                            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(16,185,129,0.15)';
                                         }}
                                         onBlur={(e) => {
                                             e.currentTarget.style.borderColor = digit ? 'var(--primary-500)' : 'rgba(255,255,255,0.12)';

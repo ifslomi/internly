@@ -134,7 +134,7 @@ export default function HistoryPage() {
                                     width: 36,
                                     height: 36,
                                     borderRadius: 10,
-                                    background: 'rgba(99,102,241,0.15)',
+                                    background: 'rgba(16,185,129,0.15)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -384,7 +384,7 @@ export default function HistoryPage() {
                     <button
                         className={`btn btn-secondary btn-sm ${showFilters ? 'active' : ''}`}
                         onClick={() => setShowFilters(!showFilters)}
-                        style={showFilters ? { borderColor: 'rgba(99,102,241,0.3)', background: 'rgba(99,102,241,0.1)' } : {}}
+                        style={showFilters ? { borderColor: 'rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.1)' } : {}}
                         id="history-toggle-filters"
                     >
                         <Filter size={16} /> Filters

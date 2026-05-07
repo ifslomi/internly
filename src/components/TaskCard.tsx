@@ -36,19 +36,19 @@ export function TaskCard({ task, onComplete, onDelete }: TaskCardProps) {
           }}
           whileHover={{ y: -4, transition: { duration: 0.2 } }}
           className={`relative group p-5 rounded-2xl border border-white/10 glass-obsidian glass-shine-top
-            ${isHigh ? 'aura-high' : 'aura-indigo'}`}
+            ${isHigh ? 'aura-high' : 'aura-green'}`}
         >
           {isHigh && (
-            <div className="absolute -inset-[1px] bg-red-500/10 blur-sm rounded-2xl -z-10 aura-glow-pulse" />
+            <div className="absolute -inset-px bg-red-500/10 blur-sm rounded-2xl -z-10 aura-glow-pulse" />
           )}
 
           <div className="flex items-start justify-between">
             <div className="flex gap-4">
               <button
                 onClick={() => onComplete?.(task.id)}
-                className="mt-1 w-6 h-6 rounded-full border-2 border-accent-indigo/50 hover:bg-accent-indigo/20 flex items-center justify-center transition-all group-hover:scale-110 flex-shrink-0"
+                className="mt-1 w-6 h-6 rounded-full border-2 border-emerald-500/50 hover:bg-emerald-500/20 flex items-center justify-center transition-all group-hover:scale-110 shrink-0"
               >
-                <Check className="w-4 h-4 text-accent-indigo opacity-0 hover:opacity-100" />
+                <Check className="w-4 h-4 text-emerald-400 opacity-0 hover:opacity-100" />
               </button>
               
               <div>

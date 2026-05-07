@@ -46,7 +46,7 @@ export default function ObsidianShowcase() {
           <BentoTile colSpan={2} rowSpan={2}>
             <div className="h-full flex flex-col">
               <div className="flex items-center gap-2 mb-4">
-                <Sparkles className="w-4 h-4 text-indigo-400" />
+                <Sparkles className="w-4 h-4 text-emerald-400" />
                 <span className="text-xs uppercase tracking-wider text-slate-500">Today&apos;s Progress</span>
               </div>
               <div className="flex-1 flex items-center justify-center">
@@ -102,7 +102,7 @@ export default function ObsidianShowcase() {
           {/* Task List - 2x1 */}
           <BentoTile colSpan={2}>
             <div className="flex items-center gap-2 mb-4">
-              <Clock className="w-4 h-4 text-indigo-400" />
+              <Clock className="w-4 h-4 text-emerald-400" />
               <span className="text-xs uppercase tracking-wider text-slate-500">Tasks</span>
             </div>
             <div className="space-y-3 max-h-64 overflow-y-auto pr-2">

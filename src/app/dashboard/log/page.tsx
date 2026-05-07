@@ -262,7 +262,7 @@ function LogFormContent() {
                                                 cursor: 'pointer',
                                                 transition: 'background 100ms',
                                             }}
-                                            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(99,102,241,0.1)')}
+                                            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(16,185,129,0.1)')}
                                             onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
                                             onMouseDown={() => {
                                                 setSupervisor(s);
@@ -306,8 +306,8 @@ function LogFormContent() {
                                 minWidth: 64,
                                 padding: '8px 16px',
                                 borderRadius: 'var(--radius-sm)',
-                                background: 'rgba(99,102,241,0.1)',
-                                border: '1px solid rgba(99,102,241,0.2)',
+                                background: 'rgba(16,185,129,0.1)',
+                                border: '1px solid rgba(16,185,129,0.2)',
                                 textAlign: 'center',
                                 fontSize: 18,
                                 fontWeight: 700,
@@ -383,7 +383,7 @@ function LogFormContent() {
                                 width: 40,
                                 height: 40,
                                 borderRadius: 12,
-                                background: 'rgba(99,102,241,0.1)',
+                                background: 'rgba(16,185,129,0.1)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -606,7 +606,7 @@ export default function LogPage() {
                 <div style={{
                     width: 48,
                     height: 48,
-                    border: '3px solid rgba(99,102,241,0.2)',
+                    border: '3px solid rgba(16,185,129,0.2)',
                     borderTopColor: 'var(--primary-500)',
                     borderRadius: '50%',
                     animation: 'spin 0.8s linear infinite',

@@ -58,12 +58,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'var(--slate-950)',
+                background: 'radial-gradient(circle at top, rgba(16,185,129,0.08), transparent 34%), var(--slate-950)',
             }}>
                 <div style={{
                     width: 48,
                     height: 48,
-                    border: '3px solid rgba(99,102,241,0.2)',
+                    border: '3px solid rgba(16,185,129,0.22)',
                     borderTopColor: 'var(--primary-500)',
                     borderRadius: '50%',
                     animation: 'spin 0.8s linear infinite',
@@ -79,7 +79,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
 
     return (
-        <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--slate-950)' }}>
+        <div style={{ display: 'flex', minHeight: '100vh', background: 'radial-gradient(circle at top, rgba(16,185,129,0.05), transparent 32%), var(--slate-950)' }}>
             {/* Mobile overlay */}
             {sidebarOpen && (
                 <div
@@ -157,7 +157,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             transition: 'transform 150ms, box-shadow 150ms',
                             ...(sidebarCollapsed ? { cursor: 'pointer' } : {}),
                         }}
-                            onMouseEnter={sidebarCollapsed ? (e) => { e.currentTarget.style.transform = 'scale(1.1)'; e.currentTarget.style.boxShadow = '0 0 12px rgba(99,102,241,0.4)'; } : undefined}
+                            onMouseEnter={sidebarCollapsed ? (e) => { e.currentTarget.style.transform = 'scale(1.1)'; e.currentTarget.style.boxShadow = '0 0 12px rgba(16,185,129,0.4)'; } : undefined}
                             onMouseLeave={sidebarCollapsed ? (e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; } : undefined}
                         >I</div>
                         {!sidebarCollapsed && (
@@ -264,7 +264,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 width: 36,
                                 height: 36,
                                 borderRadius: 10,
-                                background: 'linear-gradient(135deg, #6366f1, #06b6d4)',
+                                background: 'linear-gradient(135deg, #34d399, #10b981)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',

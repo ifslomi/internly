@@ -43,7 +43,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
             animate={{ opacity: 1 }}
             className="flex items-center gap-2"
           >
-            <div className="w-8 h-8 rounded-lg bg-linear-to-br from-indigo-500 to-violet-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-linear-to-br from-emerald-500 to-green-500 flex items-center justify-center">
               <span className="text-white font-bold text-sm">I</span>
             </div>
             <span className="font-bold text-white tracking-tight">Internly</span>
@@ -69,11 +69,11 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
               href={item.href}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group relative
                 ${isActive 
-                  ? 'bg-indigo-500/15 text-indigo-400 border border-indigo-500/20' 
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20' 
                   : 'text-slate-400 hover:text-white hover:bg-white/5'
                 }`}
             >
-              <item.icon size={20} className={isActive ? 'text-indigo-400' : ''} />
+              <item.icon size={20} className={isActive ? 'text-emerald-400' : ''} />
               
               {!collapsed && (
                 <motion.span 
@@ -101,7 +101,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
 
       <div className="p-4 border-t border-white/5">
         <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
-          <div className="w-8 h-8 rounded-full bg-linear-to-br from-indigo-500 to-cyan-500 flex items-center justify-center text-white text-sm font-medium">
+          <div className="w-8 h-8 rounded-full bg-linear-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white text-sm font-medium">
             U
           </div>
           {!collapsed && (

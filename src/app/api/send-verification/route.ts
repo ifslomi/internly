@@ -45,14 +45,14 @@ export async function POST(request: NextRequest) {
             html: `
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; background: #ffffff;">
                     <div style="text-align: center; margin-bottom: 32px;">
-                        <div style="width: 48px; height: 48px; border-radius: 14px; background: linear-gradient(135deg, #6366f1, #8b5cf6); display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 22px; color: white;">I</div>
+                        <div style="width: 48px; height: 48px; border-radius: 14px; background: linear-gradient(135deg, #34d399, #10b981); display: inline-flex; align-items: center; justify-content: center; font-weight: 800; font-size: 22px; color: white;">I</div>
                     </div>
                     <h2 style="color: #1e1e2e; margin-bottom: 8px; text-align: center; font-size: 22px;">Verify your email</h2>
                     <p style="color: #64748b; font-size: 14px; text-align: center; margin-bottom: 24px;">
                         Hi ${name || 'there'}, use the code below to verify your Internly account:
                     </p>
                     <div style="background: #f1f5f9; border-radius: 12px; padding: 24px; text-align: center; margin: 0 auto 24px;">
-                        <span style="font-size: 36px; font-weight: 700; letter-spacing: 8px; color: #6366f1; font-family: monospace;">${code}</span>
+                        <span style="font-size: 36px; font-weight: 700; letter-spacing: 8px; color: #10b981; font-family: monospace;">${code}</span>
                     </div>
                     <p style="color: #94a3b8; font-size: 13px; text-align: center;">This code expires in 10 minutes.</p>
                     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
