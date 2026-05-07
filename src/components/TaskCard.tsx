@@ -35,11 +35,11 @@ export function TaskCard({ task, onComplete, onDelete }: TaskCardProps) {
             transition: { duration: 0.3 }
           }}
           whileHover={{ y: -4, transition: { duration: 0.2 } }}
-          className={`relative group p-5 rounded-2xl border glass-obsidian glass-shine-top
-            ${isHigh ? 'border-red-200 bg-red-50 aura-high' : 'border-green-200 bg-green-50 aura-green'}`}
+          className={`relative group p-5 rounded-2xl border shadow-sm transition-all
+            ${isHigh ? 'border-red-200 bg-red-50 hover:border-red-300' : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'}`}
         >
           {isHigh && (
-            <div className="absolute -inset-px bg-red-500/10 blur-sm rounded-2xl -z-10 aura-glow-pulse" />
+            <div className="absolute -inset-px border border-red-300/50 rounded-2xl -z-10" />
           )}
 
           <div className="flex items-start justify-between">
@@ -52,14 +52,14 @@ export function TaskCard({ task, onComplete, onDelete }: TaskCardProps) {
               </button>
               
               <div>
-                <h3 className="text-lg font-medium text-gray-900 tracking-tight group-hover:text-gray-900 transition-colors">
+                <h3 className="text-lg font-medium text-gray-900 tracking-tight group-hover:text-emerald-600 transition-colors">
                   {task.name}
                 </h3>
-                <div className="flex items-center gap-3 mt-2 text-xs text-gray-600 font-light">
+                <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 font-light">
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3" /> {task.dueDate}
                   </span>
-                  <span className="px-2 py-0.5 rounded-full bg-white/80 border border-gray-200 uppercase tracking-widest text-[10px]">
+                  <span className="px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200 uppercase tracking-widest text-[10px]">
                     {task.category}
                   </span>
                 </div>
@@ -82,13 +82,13 @@ export function TaskCard({ task, onComplete, onDelete }: TaskCardProps) {
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: 20 }}
-          className="p-4 rounded-2xl bg-gray-50 border border-gray-200"
+          className="p-4 rounded-2xl bg-white/5 border border-white/5"
         >
           <div className="flex items-center gap-3">
-            <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center">
-              <Check className="w-3 h-3 text-emerald-600" />
+            <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
+              <Check className="w-3 h-3 text-emerald-400" />
             </div>
-            <span className="text-gray-500 line-through">{task.name}</span>
+            <span className="text-slate-400 line-through">{task.name}</span>
           </div>
         </motion.div>
       )}
