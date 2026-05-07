@@ -58,7 +58,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                background: 'radial-gradient(circle at top, rgba(16,185,129,0.08), transparent 34%), var(--slate-950)',
+                background: '#ffffff',
             }}>
                 <div style={{
                     width: 48,
@@ -79,7 +79,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
 
     return (
-        <div style={{ display: 'flex', minHeight: '100vh', background: 'radial-gradient(circle at top, rgba(16,185,129,0.05), transparent 32%), var(--slate-950)' }}>
+        <div style={{ display: 'flex', minHeight: '100vh', background: '#ffffff' }}>
             {/* Mobile overlay */}
             {sidebarOpen && (
                 <div
