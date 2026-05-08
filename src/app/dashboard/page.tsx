@@ -102,6 +102,7 @@ export default function DashboardPage() {
             {/* Stat Tiles */}
             <div className="stat-grid" style={{
                 display: 'grid',
+                gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
                 gap: 16,
                 marginBottom: 32,
             }}>
