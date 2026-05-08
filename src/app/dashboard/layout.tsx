@@ -6,7 +6,6 @@ import {
     LayoutDashboard,
     Plus,
     FileText,
-    History,
     Settings,
     LogOut,
     Menu,
@@ -30,7 +29,6 @@ const navItems = [
     { href: '/dashboard/reports', label: 'Weekly Reports', icon: FileText },
     { href: '/dashboard/competencies', label: 'Competencies', icon: Award },
     { href: '/dashboard/sanctions', label: 'Sanctions', icon: Calendar },
-    { href: '/dashboard/history', label: 'Logs History', icon: History },
     { href: '/dashboard/chat', label: 'Messages', icon: MessageCircle },
     { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
