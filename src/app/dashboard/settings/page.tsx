@@ -1,22 +1,73 @@
 'use client';
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
-'use client';
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/context';
 import AccountProfilePanel from '@/components/AccountProfilePanel';
-import {
-    Clock,
-    Bell,
-    Save,
-    Check,
-    X,
-    LogOut,
-    User,
-} from 'lucide-react';
+import { Clock, Bell, Save, Check, X, LogOut, User } from 'lucide-react';
 
 export default function SettingsPage() {
+    const { user, updateUser, logout } = useApp();
+    const [activeTab, setActiveTab] = useState<'internship' | 'account' | 'notifications'>('internship');
+    const [saved, setSaved] = useState(false);
+    const [showMobileLogout, setShowMobileLogout] = useState(false);
+    const [totalHours, setTotalHours] = useState(user?.totalRequiredHours || 480);
+    const [startDate, setStartDate] = useState(user?.startDate || '');
+    const [endDate, setEndDate] = useState(user?.endDate || '');
+    const [reminderEnabled, setReminderEnabled] = useState(user?.reminderEnabled ?? true);
+    const [supervisors, setSupervisors] = useState(user?.supervisors || []);
+    const [newSupervisor, setNewSupervisor] = useState('');
+
+    if (!user) return null;
+
+    const showSaved = () => {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+    };
+
+    const handleSaveInternship = () => {
+        updateUser({ totalRequiredHours: totalHours, startDate, endDate: endDate || undefined });
+        showSaved();
+    };
+
+    const handleSaveNotifications = () => {
+        updateUser({ reminderEnabled });
+        showSaved();
+    };
+
+    const addSupervisor = () => {
+        const trimmed = newSupervisor.trim();
+        if (trimmed && !supervisors.includes(trimmed)) {
+            const updated = [...supervisors, trimmed];
+            setSupervisors(updated);
+            updateUser({ supervisors: updated });
+            setNewSupervisor('');
+        }
+    };
+
+    const removeSupervisor = (name: string) => {
+        const updated = supervisors.filter((s) => s !== name);
+        setSupervisors(updated);
+        updateUser({ supervisors: updated });
+    };
+
+    const tabs = [
+        { id: 'internship' as const, label: 'Internship Details', icon: Clock },
+        { id: 'account' as const, label: 'Account', icon: User },
+        { id: 'notifications' as const, label: 'Notifications', icon: Bell },
+    ];
+
+    return (
+        <div>
+            {saved && (
+                <div style={{
+                    position: 'fixed',
+                    top: 24,
+                    right: 24,
+                    zIndex: 2000,
+                    padding: '16px 24px',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    color: 'white',
+                    display: 'flex',
                     alignItems: 'center',
                     gap: 10,
                     fontSize: 14,
@@ -73,7 +124,6 @@ export default function SettingsPage() {
                                     <label className="input-label" htmlFor="settings-total-hours">Total Required Hours</label>
                                     <input id="settings-total-hours" className="input" type="number" min={1} max={5000} value={totalHours} onChange={(e) => setTotalHours(Number(e.target.value))} />
                                 </div>
-
                                 <div id="settings-dates-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                                     <div className="input-group">
                                         <label className="input-label" htmlFor="settings-start-date">Internship Start Date</label>
@@ -175,146 +225,6 @@ export default function SettingsPage() {
                     </div>
                 </div>
             )}
-        </div>
-    );
-}
-                                            background: 'white',
-                                            top: 3,
-                                            left: reminderEnabled ? 25 : 3,
-                                            transition: 'left 200ms ease',
-                                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                                        }} />
-                                    </span>
-                                </label>
-                            </div>
-
-                            <button
-                                className="btn btn-primary"
-                                onClick={handleSaveNotifications}
-                                id="settings-save-notifications"
-                            >
-                                <Save size={16} /> Save Changes
-                            </button>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Mobile-only Logout Section */}
-            <div id="mobile-logout-section" style={{ display: 'none', marginTop: 32 }}>
-                <style>{`
-                    @media (max-width: 1024px) {
-                        #mobile-logout-section { display: block !important; }
-                    }
-                `}</style>
-                <div style={{
-                    padding: 20,
-                    borderRadius: 'var(--radius-lg)',
-                    background: 'rgba(244,63,94,0.04)',
-                    border: '1px solid rgba(244,63,94,0.12)',
-                }}>
-                    <button
-                        onClick={() => setShowMobileLogout(true)}
-                        style={{
-                            width: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 10,
-                            padding: '12px 20px',
-                            borderRadius: 'var(--radius-md)',
-                            background: 'rgba(244,63,94,0.1)',
-                            border: '1px solid rgba(244,63,94,0.2)',
-                            color: 'var(--rose-400)',
-                            fontSize: 14,
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            transition: 'all 150ms ease',
-                        }}
-                        onMouseEnter={(e) => {
-                            e.currentTarget.style.background = 'rgba(244,63,94,0.15)';
-                            e.currentTarget.style.borderColor = 'rgba(244,63,94,0.3)';
-                        }}
-                        onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'rgba(244,63,94,0.1)';
-                            e.currentTarget.style.borderColor = 'rgba(244,63,94,0.2)';
-                        }}
-                    >
-                        <LogOut size={18} />
-                        Log Out
-                    </button>
-                </div>
-            </div>
-
-            {/* Mobile Logout Confirmation Modal */}
-            {showMobileLogout && (
-                <div className="modal-overlay" onClick={() => setShowMobileLogout(false)}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400, padding: 32 }}>
-                        <div style={{ textAlign: 'center' }}>
-                            <div style={{
-                                width: 56,
-                                height: 56,
-                                borderRadius: 16,
-                                background: 'rgba(244,63,94,0.1)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                margin: '0 auto 16px',
-                            }}>
-                                <LogOut size={28} style={{ color: 'var(--rose-400)' }} />
-                            </div>
-                            <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Log Out?</h3>
-                            <p style={{ fontSize: 14, color: 'var(--slate-400)', marginBottom: 24 }}>
-                                Are you sure you want to log out of your account?
-                            </p>
-                            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-                                <button
-                                    className="btn btn-secondary"
-                                    onClick={() => setShowMobileLogout(false)}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    className="btn btn-danger"
-                                    onClick={() => { logout(); router.push('/'); }}
-                                >
-                                    <LogOut size={16} /> Log Out
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Responsive style for settings grid */}
-            <style>{`
-                @media (max-width: 768px) {
-                    .settings-grid { grid-template-columns: 1fr !important; }
-                    .settings-tab-nav {
-                        position: sticky !important;
-                        top: 0 !important;
-                        z-index: 10 !important;
-                        background: var(--slate-900) !important;
-                        margin: -4px -4px 0 !important;
-                        padding: 8px !important;
-                        border-radius: var(--radius-md) !important;
-                        display: flex !important;
-                        gap: 4px !important;
-                    }
-                    .settings-tab-nav .nav-link {
-                        flex: 1 !important;
-                        justify-content: center !important;
-                        font-size: 12px !important;
-                        padding: 8px 4px !important;
-                        white-space: nowrap !important;
-                    }
-                    #settings-account-grid,
-                    #settings-password-grid,
-                    #settings-dates-grid {
-                        grid-template-columns: 1fr !important;
-                    }
-                }
-            `}</style>
         </div>
     );
 }
