@@ -770,7 +770,7 @@ select.input {
 
 /* === STAT TILES === */
 .stat-tile {
-  padding: 24px;
+  padding: 16px;
   border-radius: var(--radius-lg);
   background: rgba(30, 41, 59, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -817,11 +817,11 @@ select.input {
 }
 
 .stat-value {
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.1;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .stat-label {

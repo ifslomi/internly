@@ -103,11 +103,11 @@ export default function DashboardPage() {
             <div className="stat-grid" style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-                gap: 16,
+                gap: 12,
                 marginBottom: 32,
             }}>
                 <div className="stat-tile stat-tile-indigo">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                         <div style={{
                             width: 40,
                             height: 40,
@@ -129,7 +129,7 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="stat-tile stat-tile-emerald">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                         <div style={{
                             width: 40,
                             height: 40,
@@ -148,21 +148,21 @@ export default function DashboardPage() {
                         {stats.totalRendered}
                     </div>
                     <div className="stat-label">Total Hours Rendered</div>
-                    <div style={{ marginTop: 12 }}>
+                    <div style={{ marginTop: 8 }}>
                         <div className="progress-bar-container">
                             <div
                                 className="progress-bar-fill"
                                 style={{ width: `${stats.progressPercentage}%` }}
                             />
                         </div>
-                        <p style={{ fontSize: 11, color: 'var(--slate-500)', marginTop: 6 }}>
+                        <p style={{ fontSize: 11, color: 'var(--slate-500)', marginTop: 4 }}>
                             {stats.progressPercentage}% of {stats.totalRequired} hrs
                         </p>
                     </div>
                 </div>
 
                 <div className="stat-tile stat-tile-amber stat-tile-extra" id="stat-remaining">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                         <div style={{
                             width: 40,
                             height: 40,
