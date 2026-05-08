@@ -107,7 +107,10 @@ export default function DashboardPage() {
                 marginBottom: 32,
             }}>
                 <div className="stat-tile stat-tile-indigo">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <span className="badge badge-primary">This Week</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                         <div style={{
                             width: 40,
                             height: 40,
@@ -117,19 +120,22 @@ export default function DashboardPage() {
                             alignItems: 'center',
                             justifyContent: 'center',
                             color: 'var(--primary-400)',
+                            flexShrink: 0,
                         }}>
                             <Clock size={20} />
                         </div>
-                        <span className="badge badge-primary">This Week</span>
-                    </div>
-                    <div className="stat-value" style={{ color: 'var(--primary-300)' }}>
-                        {stats.hoursThisWeek}
+                        <div className="stat-value" style={{ color: 'var(--primary-300)', marginBottom: 0 }}>
+                            {stats.hoursThisWeek}
+                        </div>
                     </div>
                     <div className="stat-label">Hours This Week</div>
                 </div>
 
                 <div className="stat-tile stat-tile-emerald">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <span className="badge badge-success">Total</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                         <div style={{
                             width: 40,
                             height: 40,
@@ -139,13 +145,13 @@ export default function DashboardPage() {
                             alignItems: 'center',
                             justifyContent: 'center',
                             color: 'var(--emerald-400)',
+                            flexShrink: 0,
                         }}>
                             <TrendingUp size={20} />
                         </div>
-                        <span className="badge badge-success">Total</span>
-                    </div>
-                    <div className="stat-value" style={{ color: 'var(--emerald-400)' }}>
-                        {stats.totalRendered}
+                        <div className="stat-value" style={{ color: 'var(--emerald-400)', marginBottom: 0 }}>
+                            {stats.totalRendered}
+                        </div>
                     </div>
                     <div className="stat-label">Total Hours Rendered</div>
                     <div style={{ marginTop: 8 }}>
@@ -162,7 +168,10 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="stat-tile stat-tile-amber stat-tile-extra" id="stat-remaining">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                        <span className="badge badge-warning">Remaining</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                         <div style={{
                             width: 40,
                             height: 40,
@@ -172,13 +181,13 @@ export default function DashboardPage() {
                             alignItems: 'center',
                             justifyContent: 'center',
                             color: 'var(--amber-400)',
+                            flexShrink: 0,
                         }}>
                             <Target size={20} />
                         </div>
-                        <span className="badge badge-warning">Remaining</span>
-                    </div>
-                    <div className="stat-value" style={{ color: 'var(--amber-400)' }}>
-                        {stats.remaining}
+                        <div className="stat-value" style={{ color: 'var(--amber-400)', marginBottom: 0 }}>
+                            {stats.remaining}
+                        </div>
                     </div>
                     <div className="stat-label">Hours Remaining</div>
                 </div>
