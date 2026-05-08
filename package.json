@@ -2,6 +2,7 @@
   "name": "internly-app",
   "version": "0.1.0",
   "private": true,
+  "description": "Intern management dashboard for interns: profiles, hours, reports, sanctions, and competencies.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

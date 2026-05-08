@@ -1,30 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Internly — Intern Management Dashboard (Intern-facing)
 
-## Getting Started
+This repository contains the Intern Dashboard for Internly, an on-the-job training (OJT) management system. This web app is the intern-facing dashboard where interns can manage their OJT profile, monitor hours, submit weekly reports, view and take assigned sanctions, and manage competencies.
 
-First, run the development server:
+Purpose
+- Provide interns with a single, easy-to-use dashboard to manage OJT requirements and communicate status to program administrators.
+- Serve as the first front-end deliverable; a separate Dean/Admin dashboard will be created later.
+
+Key Features (Intern Dashboard)
+- OJT Profile Management: full name, course, contact info, company, company details, edit profile, and image upload.
+- OJT Hours Monitoring: view hours to render, hours rendered this week, total hours rendered, and total hours remaining.
+- Weekly Report Generation: create and review weekly reports including date, activity description, task assignment source, and signatures/remarks.
+- OJT Sanction Management: view sanction days, scheduled sanction days, take a scheduled day to render sanctions, and view interns scheduled for a given sanction day.
+- OJT Competencies Management: manage competencies and upload images, videos, and links as evidence.
+
+Getting Started
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Run the development server:
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+3. Open http://localhost:3000 and log in as an intern to access the dashboard.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Project Structure
+- The intern-facing dashboard lives under `src/app` and `src/components`.
+- Global styles and theme tokens are in `src/app/globals.css`.
+- API routes and server functions are in `src/app/api`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Next Steps
+- Implement intern dashboard pages under `src/app/dashboard` (profile, hours, reports, sanctions, competencies).
+- Wire up Firebase authentication and Firestore collections for interns, hours, reports, sanctions, and competencies.
+- Add tests and CI as needed.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+For details on the intern dashboard features and data model, see `docs/intern-dashboard.md`.
