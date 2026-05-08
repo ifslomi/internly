@@ -2,9 +2,9 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/context';
+import AccountProfilePanel from '@/components/AccountProfilePanel';
 import {
     Settings as SettingsIcon,
-    User,
     Clock,
     Bell,
     Save,
@@ -12,8 +12,6 @@ import {
     Trash2,
     Shield,
     X,
-    Camera,
-    Upload,
     LogOut,
 } from 'lucide-react';
 
@@ -29,12 +27,6 @@ export default function SettingsPage() {
     const [startDate, setStartDate] = useState(user?.startDate || '');
     const [endDate, setEndDate] = useState(user?.endDate || '');
 
-    // Account fields
-    const [name, setName] = useState(user?.name || '');
-    const [email, setEmail] = useState(user?.email || '');
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-
     // Notifications
     const [reminderEnabled, setReminderEnabled] = useState(user?.reminderEnabled ?? true);
 
@@ -42,48 +34,7 @@ export default function SettingsPage() {
     const [supervisors, setSupervisors] = useState(user?.supervisors || []);
     const [newSupervisor, setNewSupervisor] = useState('');
 
-    // Profile image
-    const [profileImage, setProfileImage] = useState(user?.profileImage || '');
-    const [uploadingImage, setUploadingImage] = useState(false);
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
-
     if (!user) return null;
-
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        // Validate file type
-        if (!file.type.startsWith('image/')) {
-            return;
-        }
-
-        // Validate file size (max 2MB)
-        if (file.size > 2 * 1024 * 1024) {
-            return;
-        }
-
-        setUploadingImage(true);
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const dataUrl = event.target?.result as string;
-            setProfileImage(dataUrl);
-            updateUser({ profileImage: dataUrl });
-            setUploadingImage(false);
-            showSaved();
-        };
-        reader.onerror = () => {
-            setUploadingImage(false);
-        };
-        reader.readAsDataURL(file);
-    };
-
-    const handleRemoveImage = () => {
-        setProfileImage('');
-        updateUser({ profileImage: '' });
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        showSaved();
-    };
 
     const showSaved = () => {
         setSaved(true);
@@ -96,20 +47,6 @@ export default function SettingsPage() {
             startDate,
             endDate: endDate || undefined,
         });
-        showSaved();
-    };
-
-    const handleSaveAccount = () => {
-        const updates: Record<string, unknown> = { name, email };
-        if (newPassword) {
-            if (newPassword !== confirmPassword) {
-                return;
-            }
-            updates.password = newPassword;
-        }
-        updateUser(updates);
-        setNewPassword('');
-        setConfirmPassword('');
         showSaved();
     };
 
@@ -152,153 +89,11 @@ export default function SettingsPage() {
                     borderRadius: 'var(--radius-md)',
                     background: 'linear-gradient(135deg, #10b981, #059669)',
                     color: 'white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    fontSize: 14,
-                    fontWeight: 600,
-                    boxShadow: '0 8px 32px rgba(16,185,129,0.3)',
-                    animation: 'slideDown 300ms ease',
-                }}>
-                    <Check size={20} />
-                    Settings saved successfully!
-                </div>
-            )}
-            <style>{`@keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
-
-            {/* Header */}
-            <div style={{ marginBottom: 24 }}>
-                <h1 className="page-title" style={{ fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>
-                    Settings
-                </h1>
-                <p style={{ color: 'var(--slate-400)', fontSize: 14 }}>
-                    Manage your internship details, account, and preferences
-                </p>
-            </div>
-
-            <div className="settings-grid" style={{
-                display: 'grid',
-                gridTemplateColumns: '220px 1fr',
-                gap: 24,
-                alignItems: 'start',
-            }}>
-                {/* Tab Navigation */}
-                <div className="card settings-tab-nav" style={{ padding: 12, position: 'sticky', top: 32, zIndex: 10, background: 'rgb(30, 41, 59)' }}>
-                    {tabs.map((tab) => {
-                        const Icon = tab.icon;
-                        const isActive = activeTab === tab.id;
-                        return (
-                            <button
-                                key={tab.id}
-                                className={`nav-link ${isActive ? 'active' : ''}`}
-                                onClick={() => setActiveTab(tab.id)}
-                                style={{
-                                    width: '100%',
-                                    textAlign: 'left',
-                                    justifyContent: 'flex-start',
-                                    border: isActive ? undefined : 'none',
-                                    marginBottom: 4,
-                                }}
-                                id={`settings-tab-${tab.id}`}
-                            >
-                                <Icon size={16} />
-                                {tab.label}
-                            </button>
-                        );
-                    })}
-                </div>
-
-                {/* Tab Content */}
-                <div>
-                    {activeTab === 'internship' && (
+                    {activeTab === 'account' && (
                         <div className="card-elevated">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-                                <div style={{
-                                    width: 44,
-                                    height: 44,
-                                    borderRadius: 12,
-                                    background: 'rgba(16,185,129,0.15)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: 'var(--primary-400)',
-                                }}>
-                                    <Clock size={22} />
-                                </div>
-                                <div>
-                                    <h2 style={{ fontSize: 18, fontWeight: 700 }}>Internship Details</h2>
-                                    <p style={{ fontSize: 13, color: 'var(--slate-500)' }}>
-                                        Update your OJT hour requirements and dates
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
-                                <div className="input-group">
-                                    <label className="input-label" htmlFor="settings-total-hours">Total Required Hours</label>
-                                    <input
-                                        id="settings-total-hours"
-                                        className="input"
-                                        type="number"
-                                        min={1}
-                                        max={5000}
-                                        value={totalHours}
-                                        onChange={(e) => setTotalHours(Number(e.target.value))}
-                                    />
-                                    <p style={{ fontSize: 11, color: 'var(--slate-600)', marginTop: 2 }}>
-                                        Adjust if your contract changes
-                                    </p>
-                                </div>
-
-                                <div id="settings-dates-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                                    <div className="input-group">
-                                        <label className="input-label" htmlFor="settings-start-date">Internship Start Date</label>
-                                        <input
-                                            id="settings-start-date"
-                                            className="input"
-                                            type="date"
-                                            value={startDate}
-                                            onChange={(e) => setStartDate(e.target.value)}
-                                        />
-                                    </div>
-                                    <div className="input-group">
-                                        <label className="input-label" htmlFor="settings-end-date">Expected End Date (optional)</label>
-                                        <input
-                                            id="settings-end-date"
-                                            className="input"
-                                            type="date"
-                                            value={endDate}
-                                            onChange={(e) => setEndDate(e.target.value)}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="divider" style={{ margin: '24px 0' }} />
-
-                            {/* Supervisor Directory */}
-                            <div style={{ marginBottom: 24 }}>
-                                <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>
-                                    Supervisor Directory
-                                </h3>
-                                <p style={{ fontSize: 13, color: 'var(--slate-500)', marginBottom: 16 }}>
-                                    Save frequently used supervisor names for quick selection when logging.
-                                </p>
-
-                                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                                    <input
-                                        className="input"
-                                        placeholder="Add a supervisor name"
-                                        value={newSupervisor}
-                                        onChange={(e) => setNewSupervisor(e.target.value)}
-                                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addSupervisor())}
-                                        id="settings-new-supervisor"
-                                    />
-                                    <button
-                                        className="btn btn-secondary btn-sm"
-                                        onClick={addSupervisor}
-                                        id="settings-add-supervisor"
-                                    >
+                            <AccountProfilePanel title="Account" description="This is the same account section used by the Profile page." />
+                        </div>
+                    )}
                                         Add
                                     </button>
                                 </div>
