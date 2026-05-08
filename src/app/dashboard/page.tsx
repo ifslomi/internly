@@ -182,32 +182,7 @@ export default function DashboardPage() {
                     <div className="stat-label">Hours Remaining</div>
                 </div>
 
-                <div className="stat-tile stat-tile-cyan stat-tile-extra" id="stat-weekly-avg">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                        <div style={{
-                            width: 40,
-                            height: 40,
-                            borderRadius: 10,
-                            background: 'rgba(20,184,166,0.15)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'var(--cyan-400)',
-                        }}>
-                            <Activity size={20} />
-                        </div>
-                    </div>
-                    <div className="stat-value" style={{ color: 'var(--cyan-400)' }}>
-                        {stats.weeklyAverage}
-                    </div>
-                    <div className="stat-label">Weekly Average</div>
-                </div>
             </div>
-            <style>{`
-                @media (max-width: 768px) {
-                    .stat-tile-extra { display: none !important; }
-                }
-            `}</style>
 
             {/* Burn-down Chart */}
             {burndownData.length > 0 && (
