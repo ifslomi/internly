@@ -24,7 +24,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #9ca3af;
+  background: var(--slate-500);
   animation: chatDotBounce 1.2s ease-in-out infinite;
 }
 
@@ -73,7 +73,7 @@
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: #ffffff;
+  background: radial-gradient(circle at top, rgba(16, 185, 129, 0.14), transparent 38%), #03110c;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -91,8 +91,8 @@
   position: absolute;
   inset: -50%;
   background-image:
-    linear-gradient(rgba(16, 185, 129, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(16, 185, 129, 0.04) 1px, transparent 1px);
+    linear-gradient(rgba(16, 185, 129, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 185, 129, 0.03) 1px, transparent 1px);
   background-size: 60px 60px;
   animation: splashGridDrift 20s linear infinite;
 }
@@ -269,7 +269,7 @@
   display: inline-block;
   font-size: 36px;
   font-weight: 800;
-  color: #111827;
+  color: white;
   letter-spacing: -0.02em;
   opacity: 0;
   transform: translateY(100%);
@@ -287,7 +287,7 @@
   margin-top: 10px;
   font-size: 14px;
   font-weight: 500;
-  color: rgba(31, 41, 55, 0);
+  color: rgba(148, 163, 184, 0);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   transform: translateY(10px);
@@ -295,7 +295,7 @@
 }
 
 .splash-tagline-enter {
-  color: rgba(31, 41, 55, 0.6);
+  color: rgba(148, 163, 184, 0.7);
   transform: translateY(0);
 }
 
@@ -520,8 +520,8 @@ html {
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: #ffffff;
-  color: #1f2937;
+  background: radial-gradient(circle at top, rgba(16, 185, 129, 0.08), transparent 34%), var(--slate-950);
+  color: var(--slate-100);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -534,16 +534,16 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f3f4f6;
+  background: var(--slate-900);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: var(--slate-700);
   border-radius: var(--radius-full);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: var(--slate-600);
 }
 
 /* === BUTTONS === */

@@ -35,11 +35,11 @@ export function TaskCard({ task, onComplete, onDelete }: TaskCardProps) {
             transition: { duration: 0.3 }
           }}
           whileHover={{ y: -4, transition: { duration: 0.2 } }}
-          className={`relative group p-5 rounded-2xl border shadow-sm transition-all
-            ${isHigh ? 'border-red-200 bg-red-50 hover:border-red-300' : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'}`}
+          className={`relative group p-5 rounded-2xl border border-white/10 glass-obsidian glass-shine-top
+            ${isHigh ? 'aura-high' : 'aura-green'}`}
         >
           {isHigh && (
-            <div className="absolute -inset-px border border-red-300/50 rounded-2xl -z-10" />
+            <div className="absolute -inset-px bg-red-500/10 blur-sm rounded-2xl -z-10 aura-glow-pulse" />
           )}
 
           <div className="flex items-start justify-between">
@@ -52,14 +52,14 @@ export function TaskCard({ task, onComplete, onDelete }: TaskCardProps) {
               </button>
               
               <div>
-                <h3 className="text-lg font-medium text-gray-900 tracking-tight group-hover:text-emerald-600 transition-colors">
+                <h3 className="text-lg font-medium text-white/90 tracking-tight group-hover:text-white transition-colors">
                   {task.name}
                 </h3>
-                <div className="flex items-center gap-3 mt-2 text-xs text-gray-500 font-light">
+                <div className="flex items-center gap-3 mt-2 text-xs text-slate-400 font-light">
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3" /> {task.dueDate}
                   </span>
-                  <span className="px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200 uppercase tracking-widest text-[10px]">
+                  <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/5 uppercase tracking-widest text-[10px]">
                     {task.category}
                   </span>
                 </div>
@@ -69,7 +69,7 @@ export function TaskCard({ task, onComplete, onDelete }: TaskCardProps) {
             <div className="opacity-0 group-hover:opacity-100 flex gap-2 transition-opacity">
               <button 
                 onClick={() => onDelete?.(task.id)}
-                className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-red-500 transition-colors"
+                className="p-2 hover:bg-white/5 rounded-lg text-slate-400 hover:text-red-400 transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
               </button>

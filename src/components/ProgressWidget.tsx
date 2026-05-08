@@ -18,7 +18,7 @@ export function ProgressWidget({ percentage, label = 'Done', size = 'md' }: Prog
   const isBreathing = percentage < 50;
 
   return (
-    <div className={`relative flex flex-col items-center justify-center p-${size === 'sm' ? '4' : size === 'lg' ? '10' : '8'} bg-white rounded-[2rem] border border-gray-200 shadow-md`}>
+    <div className={`relative flex flex-col items-center justify-center p-${size === 'sm' ? '4' : size === 'lg' ? '10' : '8'} bg-slate-950/40 rounded-[2rem] border border-white/5 aura-green glass-obsidian`}>
       <svg 
         className={`transform -rotate-90 ${isBreathing ? 'breathe-slow' : ''}`}
         width={viewBox * 2}
@@ -46,7 +46,7 @@ export function ProgressWidget({ percentage, label = 'Done', size = 'md' }: Prog
           stroke="currentColor" 
           strokeWidth={strokeWidth} 
           fill="transparent" 
-          className="text-gray-200" 
+          className="text-white/5" 
         />
         
         <motion.circle
@@ -69,10 +69,10 @@ export function ProgressWidget({ percentage, label = 'Done', size = 'md' }: Prog
       </svg>
       
       <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center">
-        <span className={`${size === 'sm' ? 'text-lg' : size === 'lg' ? 'text-4xl' : 'text-2xl'} font-bold text-gray-900 leading-none`}>
+        <span className={`${size === 'sm' ? 'text-lg' : size === 'lg' ? 'text-4xl' : 'text-2xl'} font-bold text-white leading-none`}>
           {percentage}%
         </span>
-        <p className="text-[10px] text-gray-500 uppercase tracking-tighter mt-1">{label}</p>
+        <p className="text-[10px] text-slate-500 uppercase tracking-tighter mt-1">{label}</p>
       </div>
     </div>
   );

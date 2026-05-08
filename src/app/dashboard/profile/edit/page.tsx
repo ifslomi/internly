@@ -1,21 +1,30 @@
 "use client"
-import React, { useState } from 'react';
-import { uploadProfileImage, createOrUpdateInternProfile } from '@/lib/intern';
+import React, { useState, useEffect } from 'react';
+import { uploadProfileImage } from '@/lib/intern';
+import { useApp } from '@/lib/context';
 
 export default function EditProfilePage() {
+  const { user, updateUser } = useApp();
   const [name, setName] = useState('');
   const [course, setCourse] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    if (user) {
+      setName(user.fullName || user.name || '');
+      setCourse(user.course || '');
+    }
+  }, [user]);
+
   async function handleSave() {
+    if (!user) return alert('Not signed in');
     setSaving(true);
     try {
-      let photoUrl;
+      let photoUrl = user.profileImage;
       if (file) photoUrl = await uploadProfileImage(file);
-      // NOTE: replace 'me' with real internId from auth context
-      await createOrUpdateInternProfile('me', { fullName: name, course, photoUrl });
-      alert('Profile saved (placeholder)');
+      await updateUser({ fullName: name, course, profileImage: photoUrl });
+      alert('Profile saved');
     } catch (err) {
       console.error(err);
       alert('Failed to save profile');
