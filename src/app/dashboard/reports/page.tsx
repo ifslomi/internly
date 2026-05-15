@@ -266,7 +266,7 @@ export default function ReportsPage() {
                                     gap: 8,
                                     padding: 14,
                                     borderRadius: 'var(--radius-sm)',
-                                    background: 'rgba(9,9,11,0.45)',
+                                    background: 'rgba(24,24,27,0.45)',
                                     border: '1px solid rgba(255,255,255,0.06)',
                                 }}>
                                     {ACTIVITY_TYPES.map((type) => (
@@ -548,7 +548,7 @@ function ReportsContent({ activeTab, setActiveTab, logs, weeks, selectedWeekIdx,
                     gap: 10,
                     padding: 6,
                     borderRadius: 999,
-                    background: 'rgba(9,9,11,0.72)',
+                    background: 'rgba(24,24,27,0.72)',
                     border: '1px solid rgba(255,255,255,0.06)',
                     width: '100%',
                 }}
@@ -673,7 +673,7 @@ function HistoryContent({ activeTab, setActiveTab, logs, filteredLogs, searchQue
                     gap: 10,
                     padding: 6,
                     borderRadius: 999,
-                    background: 'rgba(9,9,11,0.72)',
+                    background: 'rgba(24,24,27,0.72)',
                     border: '1px solid rgba(255,255,255,0.06)',
                     width: '100%',
                 }}

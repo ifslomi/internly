@@ -1,14 +1,16 @@
 'use client';
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/context';
 import { getPendingSignup } from '@/lib/storage';
 import { Mail, RefreshCw, ArrowLeft, ShieldCheck } from 'lucide-react';
+import { navigateWithLoader, replaceWithLoader } from '@/lib/route-loading';
 
 export default function VerifyEmailPage() {
     const router = useRouter();
     const { user, verifyCode, resendCode } = useApp();
-    const [email, setEmail] = useState('');
+    const pendingSignup = useMemo(() => getPendingSignup(), []);
+    const email = pendingSignup?.email || '';
     const [digits, setDigits] = useState(['', '', '', '', '', '']);
     const [verifying, setVerifying] = useState(false);
     const [resending, setResending] = useState(false);
@@ -20,16 +22,13 @@ export default function VerifyEmailPage() {
     // Load pending signup email
     useEffect(() => {
         if (user) {
-            router.replace('/dashboard');
+            replaceWithLoader(router, '/dashboard');
             return;
         }
-        const pending = getPendingSignup();
-        if (!pending) {
-            router.replace('/signup');
-            return;
+        if (!pendingSignup) {
+            replaceWithLoader(router, '/signup');
         }
-        setEmail(pending.email);
-    }, [user, router]);
+    }, [user, router, pendingSignup]);
 
     // Resend cooldown timer
     useEffect(() => {
@@ -82,7 +81,7 @@ export default function VerifyEmailPage() {
             await verifyCode(code);
             setSuccess(true);
             // Redirect to login after a short delay
-            setTimeout(() => router.push('/login'), 2000);
+            setTimeout(() => navigateWithLoader(router, '/login'), 2000);
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : 'Verification failed.';
             setError(msg);
@@ -129,7 +128,7 @@ export default function VerifyEmailPage() {
             <div style={{ maxWidth: 440, width: '100%', position: 'relative', zIndex: 1, padding: '0 4px' }}>
                 <button
                     className="btn btn-ghost"
-                    onClick={() => router.push('/signup')}
+                    onClick={() => navigateWithLoader(router, '/signup')}
                     style={{ marginBottom: 32, color: 'var(--slate-400)' }}
                 >
                     <ArrowLeft size={18} /> Back to sign up

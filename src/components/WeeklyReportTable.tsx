@@ -43,11 +43,11 @@ export default function WeeklyReportTable({
             <table className="data-table">
               <thead>
                 <tr>
-                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(9, 9, 11, 0.9)' }}>Date</th>
-                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(9, 9, 11, 0.9)' }}>Activity</th>
-                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(9, 9, 11, 0.9)' }}>Description</th>
-                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(9, 9, 11, 0.9)' }}>Supervisor</th>
-                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(9, 9, 11, 0.9)' }}>Hours</th>
+                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(24, 24, 27, 0.9)' }}>Date</th>
+                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(24, 24, 27, 0.9)' }}>Activity</th>
+                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(24, 24, 27, 0.9)' }}>Description</th>
+                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(24, 24, 27, 0.9)' }}>Supervisor</th>
+                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(24, 24, 27, 0.9)' }}>Hours</th>
                 </tr>
               </thead>
               <tbody>

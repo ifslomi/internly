@@ -2,6 +2,7 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/context';
+import { navigateWithLoader } from '@/lib/route-loading';
 import { format, parseISO } from 'date-fns';
 import {
     Plus,
@@ -68,7 +69,7 @@ export default function DashboardPage() {
                 </div>
                 <button
                     className="btn btn-primary"
-                    onClick={() => router.push('/dashboard/reports')}
+                    onClick={() => navigateWithLoader(router, '/dashboard/reports')}
                     id="dashboard-log-btn"
                 >
                     <Plus size={18} />
@@ -206,7 +207,7 @@ export default function DashboardPage() {
                         </p>
                         <button
                             className="btn btn-primary btn-sm"
-                            onClick={() => router.push('/dashboard/reports')}
+                            onClick={() => navigateWithLoader(router, '/dashboard/reports')}
                             style={{ marginTop: 16 }}
                             id="dashboard-first-log"
                         >
@@ -230,7 +231,7 @@ export default function DashboardPage() {
                                     transition: 'all 150ms ease',
                                     cursor: 'pointer',
                                 }}
-                                onClick={() => router.push(item.href)}
+                                onClick={() => navigateWithLoader(router, item.href)}
                                 onMouseEnter={(e) => {
                                     e.currentTarget.style.background = 'rgba(16,185,129,0.05)';
                                     e.currentTarget.style.borderColor = 'rgba(16,185,129,0.15)';

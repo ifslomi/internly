@@ -112,7 +112,7 @@ export default function LogWorkModal({ open, onClose }: LogWorkModalProps) {
                                 gap: 8,
                                 padding: 16,
                                 borderRadius: 'var(--radius-sm)',
-                                background: 'rgba(9,9,11,0.45)',
+                                background: 'rgba(24,24,27,0.45)',
                                 border: '1px solid rgba(255,255,255,0.06)',
                             }}>
                                 {ACTIVITY_TYPES.map((type) => (
@@ -292,7 +292,7 @@ export default function LogWorkModal({ open, onClose }: LogWorkModalProps) {
                         <div
                             onClick={(e) => e.stopPropagation()}
                             style={{
-                                background: 'linear-gradient(180deg, rgba(9,9,11,0.98) 0%, rgba(9,9,11,1) 100%)',
+                                background: 'linear-gradient(180deg, rgba(24,24,27,0.98) 0%, rgba(24,24,27,1) 100%)',
                                 border: '1px solid rgba(255,255,255,0.08)',
                                 borderRadius: 20,
                                 maxWidth: 480,

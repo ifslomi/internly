@@ -30,7 +30,7 @@ export function Sidebar({ collapsed = false, onToggle }: SidebarProps) {
       initial={false}
       animate={{ width: collapsed ? 68 : 260 }}
       transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-      className="fixed left-0 top-0 h-screen bg-slate-950/95 backdrop-blur-xl border-r border-white/5 z-50 flex flex-col"
+      className="fixed left-0 top-0 h-screen bg-slate-900/95 backdrop-blur-xl border-r border-white/5 z-50 flex flex-col"
     >
       <div className="p-4 flex items-center justify-between">
         {!collapsed && (

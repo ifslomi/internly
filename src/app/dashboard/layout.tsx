@@ -2,19 +2,17 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useApp } from '@/lib/context';
+import { navigateWithLoader } from '@/lib/route-loading';
 import {
     LayoutDashboard,
     FileText,
     Settings,
     LogOut,
-    Menu,
     X,
     ChevronRight,
     ChevronsLeft,
-    ChevronsRight,
     BarChart3,
     MessageCircle,
-    User,
     Award,
     Calendar,
 } from 'lucide-react';
@@ -42,17 +40,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-    const [avatarLoadError, setAvatarLoadError] = useState(false);
+    const [failedAvatarSrc, setFailedAvatarSrc] = useState('');
 
     useEffect(() => {
         if (!loading && !user) {
-            router.push('/login');
+            navigateWithLoader(router, '/login');
         }
     }, [user, loading, router]);
-
-    useEffect(() => {
-        setAvatarLoadError(false);
-    }, [user?.profileImage]);
 
     if (loading || !user) {
         return (
@@ -76,9 +70,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         );
     }
 
+    const hasValidAvatar = Boolean(user.profileImage && failedAvatarSrc !== user.profileImage);
+
     const handleLogout = () => {
         logout();
-        router.push('/');
+        navigateWithLoader(router, '/');
     };
 
     return (
@@ -190,7 +186,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                 key={item.href}
                                 className={`nav-link ${isActive ? 'active' : ''}`}
                                 onClick={() => {
-                                    router.push(item.href);
+                                    navigateWithLoader(router, item.href);
                                     setSidebarOpen(false);
                                 }}
                                 style={{
@@ -247,12 +243,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     gap: sidebarCollapsed ? 0 : 10,
                     overflow: 'hidden',
                 }}>
-                    {user.profileImage && !avatarLoadError ? (
+                    {hasValidAvatar ? (
                         <img
                             src={user.profileImage}
                             alt={user.name}
                             title={sidebarCollapsed ? `${user.name}\n${user.email}` : undefined}
-                            onError={() => setAvatarLoadError(true)}
+                            onError={() => setFailedAvatarSrc(user.profileImage || '')}
                             style={{
                                 width: 36,
                                 height: 36,
@@ -394,7 +390,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     return (
                         <button
                             key={item.href}
-                            onClick={() => router.push(item.href)}
+                            onClick={() => navigateWithLoader(router, item.href)}
                             className={`mobile-nav-item ${isActive ? 'active' : ''}`}
                             style={{
                                 flex: 1,

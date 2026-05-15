@@ -27,10 +27,11 @@ export default function ClientShell({ children }: { children: React.ReactNode })
     const [mounted, setMounted] = useState(false);
     const pathname = usePathname();
     const searchParams = useSearchParams();
+    const routeKey = `${pathname || ''}?${searchParams?.toString() || ''}`;
 
     const START_THROTTLE_MS = 180;
-    const SHOW_DELAY_MS = 120;
-    const MIN_VISIBLE_MS = 340;
+    const SHOW_DELAY_MS = 80;
+    const MIN_VISIBLE_MS = 420;
     const MAX_VISIBLE_MS = 12000;
 
     const navActiveRef = useRef(false);
@@ -282,11 +283,14 @@ export default function ClientShell({ children }: { children: React.ReactNode })
                 <div className="global-route-loader" role="status" aria-live="polite" aria-label="Loading page">
                     <div className="global-route-loader-bar" />
                     <div className="global-route-loader-dot" />
+                    <span className="global-route-loader-label">Loading...</span>
                 </div>
             )}
 
-            <div style={{ display: showSplash ? 'none' : 'contents' }}>
-                {children}
+            <div style={{ display: showSplash ? 'none' : 'block' }} className="route-content-host">
+                <div key={routeKey} className="route-change-stage">
+                    {children}
+                </div>
             </div>
 
             {toasts.length > 0 && !showSplash && (

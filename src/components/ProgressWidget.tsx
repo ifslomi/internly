@@ -18,7 +18,7 @@ export function ProgressWidget({ percentage, label = 'Done', size = 'md' }: Prog
   const isBreathing = percentage < 50;
 
   return (
-    <div className={`relative flex flex-col items-center justify-center p-${size === 'sm' ? '4' : size === 'lg' ? '10' : '8'} bg-slate-950/40 rounded-[2rem] border border-white/5 aura-green glass-obsidian`}>
+    <div className={`relative flex flex-col items-center justify-center p-${size === 'sm' ? '4' : size === 'lg' ? '10' : '8'} bg-slate-900/55 rounded-[2rem] border border-white/5 aura-green glass-obsidian`}>
       <svg 
         className={`transform -rotate-90 ${isBreathing ? 'breathe-slow' : ''}`}
         width={viewBox * 2}

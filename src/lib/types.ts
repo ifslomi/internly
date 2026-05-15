@@ -14,6 +14,7 @@ export interface User {
     phone?: string;
   };
   course?: string;
+  department?: string;
   companyName?: string;
   companyAddress?: string;
   companyContactNumber?: string;

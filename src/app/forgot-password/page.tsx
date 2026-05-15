@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Mail, Send, CheckCircle } from 'lucide-react';
 import { showToast } from '@/lib/toast';
+import { navigateWithLoader } from '@/lib/route-loading';
 
 export default function ForgotPasswordPage() {
     const router = useRouter();
@@ -60,7 +61,7 @@ export default function ForgotPasswordPage() {
             <div style={{ maxWidth: 440, width: '100%', position: 'relative', zIndex: 1, padding: '0 4px' }}>
                 <button
                     className="btn btn-ghost"
-                    onClick={() => router.push('/login')}
+                    onClick={() => navigateWithLoader(router, '/login')}
                     style={{ marginBottom: 32, color: 'var(--slate-400)' }}
                 >
                     <ArrowLeft size={18} /> Back to login
@@ -187,7 +188,7 @@ export default function ForgotPasswordPage() {
                             </div>
 
                             <button
-                                onClick={() => router.push('/login')}
+                                onClick={() => navigateWithLoader(router, '/login')}
                                 className="btn btn-primary"
                                 style={{ width: '100%', padding: '14px 24px' }}
                             >
@@ -224,7 +225,7 @@ export default function ForgotPasswordPage() {
                     <p style={{ textAlign: 'center', fontSize: 14, color: 'var(--slate-400)' }}>
                         Remember your password?{' '}
                         <button
-                            onClick={() => router.push('/login')}
+                            onClick={() => navigateWithLoader(router, '/login')}
                             style={{
                                 color: 'var(--primary-400)',
                                 fontWeight: 600,

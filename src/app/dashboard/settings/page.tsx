@@ -63,7 +63,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="settings-grid" style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 24, alignItems: 'start' }}>
-                <div className="card settings-tab-nav" style={{ padding: 12, position: 'sticky', top: 32, zIndex: 10, background: 'rgba(9, 9, 11, 0.9)' }}>
+                <div className="card settings-tab-nav" style={{ padding: 12, position: 'sticky', top: 32, zIndex: 10, background: 'rgba(24, 24, 27, 0.9)' }}>
                     {tabs.map((tab) => {
                         const Icon = tab.icon;
                         const isActive = activeTab === tab.id;
@@ -160,7 +160,7 @@ export default function SettingsPage() {
                                 </div>
                             </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderRadius: 'var(--radius-md)', background: 'rgba(9,9,11,0.45)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 24 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderRadius: 'var(--radius-md)', background: 'rgba(24,24,27,0.45)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 24 }}>
                                 <div>
                                     <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Reminder Notifications</h3>
                                     <p style={{ fontSize: 13, color: 'var(--slate-500)' }}>Receive reminders for pending logs and reports</p>

@@ -46,7 +46,7 @@ export default function SanctionsPage() {
           gap: 10,
           padding: 6,
           borderRadius: 999,
-          background: 'rgba(9,9,11,0.72)',
+          background: 'rgba(24,24,27,0.72)',
           border: '1px solid rgba(255,255,255,0.06)',
           width: '100%',
         }}

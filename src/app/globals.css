@@ -477,7 +477,7 @@ body.splash-active .liquid-glass-bg {
   --slate-700: #3f3f46;
   --slate-800: #27272a;
   --slate-900: #18181b;
-  --slate-950: #09090b;
+  --slate-950: #18181b;
 
   /* Accents */
   --emerald-400: #34d399;
@@ -491,7 +491,7 @@ body.splash-active .liquid-glass-bg {
 
   /* Gradients */
   --gradient-primary: linear-gradient(135deg, #34d399 0%, #10b981 50%, #059669 100%);
-  --gradient-dark: linear-gradient(135deg, #09090b 0%, #18181b 50%, #27272a 100%);
+  --gradient-dark: linear-gradient(135deg, #18181b 0%, #232327 50%, #2c2c31 100%);
   --gradient-hero: linear-gradient(135deg, #050706 0%, #0a120f 40%, #0f261d 70%, #164e3a 100%);
   --gradient-card: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
   --gradient-accent: linear-gradient(135deg, #10b981 0%, #22c55e 100%);
@@ -734,6 +734,15 @@ body > :not(.liquid-glass-bg) {
     will-change: transform, opacity;
   }
 
+  .global-route-loader-label {
+    position: absolute;
+    top: 14px;
+    left: 16px;
+    font-size: 11px;
+    color: rgba(226, 232, 240, 0.72);
+    letter-spacing: 0.02em;
+  }
+
   @keyframes routeLoaderSweep {
     0% {
       transform: scaleX(0.16);
@@ -770,6 +779,60 @@ body > :not(.liquid-glass-bg) {
       animation: none !important;
     }
   }
+
+.route-content-host {
+  min-height: 100vh;
+}
+
+.route-change-stage {
+  animation: routeContentIn 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes routeContentIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-change-stage {
+    animation: none !important;
+  }
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.16) 50%, transparent 100%);
+  animation: skeletonShimmer 1.15s ease-in-out infinite;
+}
+
+@keyframes skeletonShimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after {
+    animation: none !important;
+  }
+}
 
 /* === SCROLLBAR === */
 ::-webkit-scrollbar {
@@ -944,7 +1007,7 @@ body > :not(.liquid-glass-bg) {
 .input {
   width: 100%;
   padding: 12px 16px;
-  background: rgba(9, 9, 11, 0.72);
+  background: rgba(24, 24, 27, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-sm);
   color: var(--slate-100);
@@ -957,7 +1020,7 @@ body > :not(.liquid-glass-bg) {
 .input:focus {
   border-color: var(--primary-500);
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.16);
-  background: rgba(9, 9, 11, 0.85);
+  background: rgba(24, 24, 27, 0.85);
 }
 
 .input::placeholder {
@@ -1134,7 +1197,7 @@ select.input {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--slate-400);
-  background: rgba(9, 9, 11, 0.65);
+  background: rgba(24, 24, 27, 0.65);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -1351,7 +1414,7 @@ select.input {
   gap: 10px;
   padding: 6px;
   border-radius: 999px;
-  background: rgba(9, 9, 11, 0.72);
+  background: rgba(24, 24, 27, 0.72);
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -1416,7 +1479,7 @@ select.input {
 .sidebar {
   width: 260px;
   min-height: 100vh;
-  background: rgba(9, 9, 11, 0.95);
+  background: rgba(24, 24, 27, 0.95);
   border-right: 1px solid rgba(255, 255, 255, 0.06);
   backdrop-filter: blur(20px);
   padding: 24px 16px;
@@ -1457,7 +1520,7 @@ select.input {
   left: 0;
   right: 0;
   z-index: 89;
-  background: rgba(9, 9, 11, 0.97);
+  background: rgba(24, 24, 27, 0.97);
   backdrop-filter: blur(20px);
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;

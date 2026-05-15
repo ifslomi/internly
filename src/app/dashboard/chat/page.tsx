@@ -313,7 +313,7 @@ function ProfileModal({ chatUser, onClose }: { chatUser: ChatUser | null; onClos
             <div
                 onClick={(e) => e.stopPropagation()}
                 style={{
-                    background: 'linear-gradient(180deg, rgba(9,9,11,0.97) 0%, rgba(9,9,11,1) 100%)',
+                    background: 'linear-gradient(180deg, rgba(24,24,27,0.97) 0%, rgba(24,24,27,1) 100%)',
                     border: '1px solid rgba(255,255,255,0.07)',
                     borderRadius: 24,
                     maxWidth: 380,
@@ -393,7 +393,7 @@ function ProfileModal({ chatUser, onClose }: { chatUser: ChatUser | null; onClos
                                     width: 96,
                                     height: 96,
                                     borderRadius: '50%',
-                                    border: '4px solid rgba(9,9,11,1)',
+                                    border: '4px solid rgba(24,24,27,1)',
                                     objectFit: 'cover',
                                     boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
                                 }}
@@ -403,7 +403,7 @@ function ProfileModal({ chatUser, onClose }: { chatUser: ChatUser | null; onClos
                                 width: 96,
                                 height: 96,
                                 borderRadius: '50%',
-                                border: '4px solid rgba(9,9,11,1)',
+                                border: '4px solid rgba(24,24,27,1)',
                                 background: 'linear-gradient(135deg, #10b981, #22c55e, #34d399)',
                                 display: 'flex',
                                 alignItems: 'center',
@@ -426,7 +426,7 @@ function ProfileModal({ chatUser, onClose }: { chatUser: ChatUser | null; onClos
                             height: 20,
                             borderRadius: '50%',
                             background: isOnline ? '#22c55e' : '#64748b',
-                            border: '3px solid rgba(9,9,11,1)',
+                            border: '3px solid rgba(24,24,27,1)',
                             boxShadow: isOnline ? '0 0 12px rgba(34,197,94,0.5)' : 'none',
                         }} />
                     </div>

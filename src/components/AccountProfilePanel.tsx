@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '@/lib/context';
-import { Save, User, GraduationCap, Mail, Phone, MapPin, ShieldCheck, Clock3, PencilLine, X } from 'lucide-react';
+import { Save, User, GraduationCap, Building2, Mail, Phone, MapPin, ShieldCheck, Clock3, PencilLine, X } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { uploadProfileImage } from '@/lib/intern';
 
@@ -23,6 +23,7 @@ export default function AccountProfilePanel({
   const [guardianEmail, setGuardianEmail] = useState('');
   const [guardianPhone, setGuardianPhone] = useState('');
   const [programCourse, setProgramCourse] = useState('');
+  const [department, setDepartment] = useState('');
   const [hoursToRender, setHoursToRender] = useState(480);
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -38,6 +39,7 @@ export default function AccountProfilePanel({
       setGuardianEmail(user.guardianEmail || user.guardian?.email || '');
       setGuardianPhone(user.guardianPhone || user.guardian?.phone || '');
       setProgramCourse(user.course || '');
+      setDepartment(user.department || '');
       setHoursToRender(user.totalRequiredHours || 480);
     }
   }, [user]);
@@ -66,6 +68,7 @@ export default function AccountProfilePanel({
           phone: guardianPhone,
         },
         course: programCourse,
+        department,
         totalRequiredHours: Number(hoursToRender) || 0,
       });
       setIsEditing(false);
@@ -81,6 +84,7 @@ export default function AccountProfilePanel({
     setGuardianEmail(user.guardianEmail || user.guardian?.email || '');
     setGuardianPhone(user.guardianPhone || user.guardian?.phone || '');
     setProgramCourse(user.course || '');
+    setDepartment(user.department || '');
     setHoursToRender(user.totalRequiredHours || 480);
   };
 
@@ -221,6 +225,13 @@ export default function AccountProfilePanel({
 
             <div>
               <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Building2 size={16} /> Department
+              </label>
+              <input className="input" value={department} onChange={(e) => setDepartment(e.target.value)} readOnly={!isEditing} aria-readonly={!isEditing} />
+            </div>
+
+            <div>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <Clock3 size={16} /> Hours of duty to render
               </label>
               <input className="input" type="number" min={1} max={5000} value={hoursToRender} onChange={(e) => setHoursToRender(Number(e.target.value))} readOnly={!isEditing} aria-readonly={!isEditing} />
@@ -298,6 +309,13 @@ export default function AccountProfilePanel({
                 <div>
                   <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Program/Course</p>
                   <p style={{ fontSize: 14, color: 'white' }}>{programCourse || '—'}</p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <Building2 size={18} style={{ color: 'var(--slate-500)', marginTop: 2, flexShrink: 0 }} />
+                <div>
+                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Department</p>
+                  <p style={{ fontSize: 14, color: 'white' }}>{department || '—'}</p>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>

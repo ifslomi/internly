@@ -5,6 +5,7 @@ import { useApp } from '@/lib/context';
 import { getRememberedEmail } from '@/lib/storage';
 import { Eye, EyeOff, LogIn, Mail, UserPlus, X } from 'lucide-react';
 import { showToast } from '@/lib/toast';
+import { navigateWithLoader, replaceWithLoader, startRouteLoading, stopRouteLoading } from '@/lib/route-loading';
 import { createPortal } from 'react-dom';
 
 type AuthMode = 'login' | 'signup';
@@ -56,7 +57,7 @@ export default function LoginPage() {
     }, [googleLoading, mode]);
 
     useEffect(() => {
-        if (!loading && user) router.push('/dashboard');
+        if (!loading && user) navigateWithLoader(router, '/dashboard');
     }, [user, loading, router]);
 
     useEffect(() => {
@@ -73,7 +74,7 @@ export default function LoginPage() {
         setGoogleLoading(false);
         setShowUbPopupModal(false);
         setMode(nextMode);
-        router.replace(nextMode === 'signup' ? '/login?mode=signup' : '/login', { scroll: false });
+        replaceWithLoader(router, nextMode === 'signup' ? '/login?mode=signup' : '/login', { scroll: false });
     };
 
     const isUbEmail = (value: string) => value.trim().toLowerCase().endsWith('@ub.edu.ph');
@@ -81,11 +82,11 @@ export default function LoginPage() {
     const handleLoginSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setSubmitting(true);
-        window.dispatchEvent(new CustomEvent('app:route-loading-start'));
+        startRouteLoading();
         try {
             await login(email, password, rememberMe);
             showToast({ kind: 'success', title: 'Welcome Back', message: 'Login successful.' });
-            router.push('/dashboard');
+            navigateWithLoader(router, '/dashboard');
         } catch (err: unknown) {
             const firebaseErr = err as { code?: string; message?: string };
             if (firebaseErr.code === 'auth/wrong-password' || firebaseErr.code === 'auth/invalid-credential') {
@@ -97,7 +98,7 @@ export default function LoginPage() {
             } else {
                 showToast({ kind: 'error', title: 'Login Failed', message: firebaseErr.message || 'Login failed.' });
             }
-            window.dispatchEvent(new CustomEvent('app:route-loading-stop'));
+            stopRouteLoading();
         } finally {
             setSubmitting(false);
         }
@@ -131,7 +132,7 @@ export default function LoginPage() {
         try {
             await signUp(name, email, password, totalHours, startDate);
             showToast({ kind: 'success', title: 'Account Created', message: 'Verify your UB email to continue.' });
-            router.push('/verify-email');
+            navigateWithLoader(router, '/verify-email');
         } catch (err: unknown) {
             const firebaseErr = err as { code?: string; message?: string };
             if (firebaseErr.code === 'auth/email-already-in-use') {
@@ -180,17 +181,17 @@ export default function LoginPage() {
                         minHeight: 620,
                         borderRadius: 34,
                         border: '1px solid rgba(255,255,255,0.08)',
-                        background: 'linear-gradient(160deg, rgba(2,6,23,0.75), rgba(3,10,21,0.52))',
+                        background: 'linear-gradient(160deg, rgba(24,24,27,0.84), rgba(24,24,27,0.62))',
                         position: 'relative',
                         overflow: 'hidden',
                         display: 'flex',
                         alignItems: 'center',
                     }}
                 >
-                    <div style={{ position: 'absolute', width: 560, height: 560, borderRadius: '50%', background: 'radial-gradient(circle at 30% 30%, rgba(16,185,129,0.8), rgba(5,46,22,0.85) 65%, rgba(2,6,23,0.6) 100%)', left: -250, top: -220, filter: 'blur(0.5px)' }} />
+                    <div style={{ position: 'absolute', width: 560, height: 560, borderRadius: '50%', background: 'radial-gradient(circle at 30% 30%, rgba(16,185,129,0.74), rgba(6,95,70,0.76) 62%, rgba(24,24,27,0.72) 100%)', left: -250, top: -220, filter: 'blur(0.5px)' }} />
                     <div style={{ position: 'absolute', width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle at 28% 28%, rgba(52,211,153,0.95), rgba(6,95,70,0.85))', left: 34, bottom: 52, boxShadow: '0 22px 70px rgba(16,185,129,0.28)' }} />
                     <div style={{ position: 'absolute', width: 180, height: 180, borderRadius: '50%', background: 'radial-gradient(circle at 30% 30%, rgba(74,222,128,0.75), rgba(4,120,87,0.8))', right: 34, top: 110, opacity: 0.88 }} />
-                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(120deg, rgba(2,6,23,0.14) 20%, rgba(2,6,23,0.55) 60%, rgba(2,6,23,0.86) 100%)' }} />
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(120deg, rgba(24,24,27,0.18) 20%, rgba(24,24,27,0.58) 60%, rgba(24,24,27,0.88) 100%)' }} />
 
                     <div style={{ position: 'relative', zIndex: 2, maxWidth: 440, paddingLeft: 16 }}>
                         <div
@@ -300,7 +301,7 @@ export default function LoginPage() {
                                         </label>
                                         <button
                                             type="button"
-                                            onClick={() => router.push('/forgot-password')}
+                                            onClick={() => navigateWithLoader(router, '/forgot-password')}
                                             style={{
                                                 color: 'var(--primary-400)',
                                                 fontWeight: 600,
@@ -532,18 +533,18 @@ export default function LoginPage() {
                                     if (mode === 'login') {
                                         setShowUbPopupModal(true);
                                         setUbPopupTimedOut(false);
-                                        window.dispatchEvent(new CustomEvent('app:route-loading-start'));
+                                        startRouteLoading();
                                     }
 
                                     try {
                                         if (mode === 'login') {
                                             await loginWithGoogle();
                                             showToast({ kind: 'success', title: 'Welcome Back', message: 'UB Mail login successful.' });
-                                            router.push('/dashboard');
+                                            navigateWithLoader(router, '/dashboard');
                                         } else {
                                             await signUpWithGoogle(password);
                                             showToast({ kind: 'success', title: 'Account Created', message: 'Verify your UB email to continue.' });
-                                            router.push('/verify-email');
+                                            navigateWithLoader(router, '/verify-email');
                                         }
                                     } catch (err: unknown) {
                                         const firebaseErr = err as { code?: string; message?: string };
@@ -559,7 +560,7 @@ export default function LoginPage() {
                                                             : 'UB Mail sign-up failed. Please try again.';
                                         showToast({ kind: 'error', title: mode === 'login' ? 'UB Mail Sign-in Failed' : 'UB Mail Sign-up Failed', message: msg });
                                         if (mode === 'login') {
-                                            window.dispatchEvent(new CustomEvent('app:route-loading-stop'));
+                                            stopRouteLoading();
                                         }
                                         setShowUbPopupModal(false);
                                     } finally {
