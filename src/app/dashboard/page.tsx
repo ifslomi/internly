@@ -9,8 +9,6 @@ import {
     Target,
     TrendingUp,
     Activity,
-    Calendar,
-    Flame,
 } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -179,33 +177,6 @@ export default function DashboardPage() {
                     <div className="stat-label">Hours Remaining</div>
                 </div>
 
-            </div>
-
-            {/* Quick Stats Row */}
-            <div className="quick-stats-grid" style={{
-                display: 'grid',
-                gap: 16,
-                marginBottom: 32,
-            }}>
-                <div className="card-glass" style={{ padding: 20, textAlign: 'center' }}>
-                    <Flame size={22} style={{ color: 'var(--amber-400)', margin: '0 auto 8px' }} />
-                    <div style={{ fontSize: 24, fontWeight: 800, color: 'white' }}>{stats.daysLogged}</div>
-                    <div style={{ fontSize: 12, color: 'var(--slate-500)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Days Logged</div>
-                </div>
-                <div className="card-glass" style={{ padding: 20, textAlign: 'center' }}>
-                    <Calendar size={22} style={{ color: 'var(--primary-400)', margin: '0 auto 8px' }} />
-                    <div style={{ fontSize: 24, fontWeight: 800, color: 'white' }}>
-                        {stats.totalRequired > 0 ? Math.ceil(stats.remaining / Math.max(stats.weeklyAverage, 1)) : 0}
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--slate-500)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Weeks Left</div>
-                </div>
-                <div className="card-glass" style={{ padding: 20, textAlign: 'center' }}>
-                    <Target size={22} style={{ color: 'var(--emerald-400)', margin: '0 auto 8px' }} />
-                    <div style={{ fontSize: 24, fontWeight: 800, color: 'white' }}>
-                        {stats.daysLogged > 0 ? (stats.totalRendered / stats.daysLogged).toFixed(1) : 0}
-                    </div>
-                    <div style={{ fontSize: 12, color: 'var(--slate-500)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Avg Hrs/Day</div>
-                </div>
             </div>
 
             {/* Recent Activity */}

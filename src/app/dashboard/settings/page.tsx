@@ -2,12 +2,12 @@
 import React, { useState } from 'react';
 import { useApp } from '@/lib/context';
 import AccountProfilePanel from '@/components/AccountProfilePanel';
-import { Building2, Bell, Save, Check, LogOut, User, Mail, Phone, MapPin, PencilLine, X } from 'lucide-react';
+import { Building2, Bell, Save, LogOut, User, Mail, Phone, MapPin, PencilLine, X } from 'lucide-react';
+import { showToast } from '@/lib/toast';
 
 export default function SettingsPage() {
     const { user, updateUser, logout } = useApp();
     const [activeTab, setActiveTab] = useState<'company' | 'account' | 'notifications'>('company');
-    const [saved, setSaved] = useState(false);
     const [showMobileLogout, setShowMobileLogout] = useState(false);
     const [companyName, setCompanyName] = useState(user?.company?.name || user?.companyName || '');
     const [companyAddress, setCompanyAddress] = useState(user?.company?.address || user?.companyAddress || '');
@@ -17,11 +17,6 @@ export default function SettingsPage() {
     const [reminderEnabled, setReminderEnabled] = useState(user?.reminderEnabled ?? true);
 
     if (!user) return null;
-
-    const showSaved = () => {
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
-    };
 
     const handleSaveCompany = () => {
         updateUser({
@@ -39,7 +34,7 @@ export default function SettingsPage() {
             },
         });
         setIsEditingCompany(false);
-        showSaved();
+        showToast({ kind: 'success', title: 'Saved', message: 'Company details updated.' });
     };
 
     const resetCompanyForm = () => {
@@ -51,7 +46,7 @@ export default function SettingsPage() {
 
     const handleSaveNotifications = () => {
         updateUser({ reminderEnabled });
-        showSaved();
+        showToast({ kind: 'success', title: 'Saved', message: 'Notification preferences updated.' });
     };
 
     const tabs = [
@@ -62,37 +57,13 @@ export default function SettingsPage() {
 
     return (
         <div>
-            {saved && (
-                <div style={{
-                    position: 'fixed',
-                    top: 24,
-                    right: 24,
-                    zIndex: 2000,
-                    padding: '16px 24px',
-                    borderRadius: 'var(--radius-md)',
-                    background: 'linear-gradient(135deg, #10b981, #059669)',
-                    color: 'white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    fontSize: 14,
-                    fontWeight: 600,
-                    boxShadow: '0 8px 32px rgba(16,185,129,0.3)',
-                    animation: 'slideDown 300ms ease',
-                }}>
-                    <Check size={20} />
-                    Settings saved successfully!
-                </div>
-            )}
-            <style>{`@keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }`}</style>
-
             <div style={{ marginBottom: 24 }}>
                 <h1 className="page-title" style={{ fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>Settings</h1>
                 <p style={{ color: 'var(--slate-400)', fontSize: 14 }}>Manage your student info, company details, and preferences</p>
             </div>
 
             <div className="settings-grid" style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 24, alignItems: 'start' }}>
-                <div className="card settings-tab-nav" style={{ padding: 12, position: 'sticky', top: 32, zIndex: 10, background: 'rgb(30, 41, 59)' }}>
+                <div className="card settings-tab-nav" style={{ padding: 12, position: 'sticky', top: 32, zIndex: 10, background: 'rgba(9, 9, 11, 0.9)' }}>
                     {tabs.map((tab) => {
                         const Icon = tab.icon;
                         const isActive = activeTab === tab.id;
@@ -189,7 +160,7 @@ export default function SettingsPage() {
                                 </div>
                             </div>
 
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderRadius: 'var(--radius-md)', background: 'rgba(15,23,42,0.4)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 24 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderRadius: 'var(--radius-md)', background: 'rgba(9,9,11,0.45)', border: '1px solid rgba(255,255,255,0.06)', marginBottom: 24 }}>
                                 <div>
                                     <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Reminder Notifications</h3>
                                     <p style={{ fontSize: 13, color: 'var(--slate-500)' }}>Receive reminders for pending logs and reports</p>

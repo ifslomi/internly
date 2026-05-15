@@ -47,12 +47,12 @@ export default function LogsHistoryTable({
             <table className="data-table">
               <thead>
                 <tr>
-                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(15, 23, 42, 0.9)' }}>Date</th>
-                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(15, 23, 42, 0.9)' }}>Activity</th>
-                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(15, 23, 42, 0.9)' }}>Description</th>
-                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(15, 23, 42, 0.9)' }}>Supervisor</th>
-                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(15, 23, 42, 0.9)' }}>Hours</th>
-                  <th style={{ textAlign: 'right', position: 'sticky', top: 0, zIndex: 1, background: 'rgba(15, 23, 42, 0.9)' }}>Actions</th>
+                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(9, 9, 11, 0.9)' }}>Date</th>
+                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(9, 9, 11, 0.9)' }}>Activity</th>
+                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(9, 9, 11, 0.9)' }}>Description</th>
+                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(9, 9, 11, 0.9)' }}>Supervisor</th>
+                  <th style={{ position: 'sticky', top: 0, zIndex: 1, background: 'rgba(9, 9, 11, 0.9)' }}>Hours</th>
+                  <th style={{ textAlign: 'right', position: 'sticky', top: 0, zIndex: 1, background: 'rgba(9, 9, 11, 0.9)' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>

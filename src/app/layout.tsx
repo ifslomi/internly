@@ -23,6 +23,11 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body suppressHydrationWarning>
+        <div className="liquid-glass-bg" aria-hidden="true">
+          <span className="liquid-blob liquid-blob-a" />
+          <span className="liquid-blob liquid-blob-b" />
+          <span className="liquid-blob liquid-blob-c" />
+        </div>
         <AppProvider>
           <ClientShell>
             {children}

@@ -1,20 +1,54 @@
 'use client';
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp } from '@/lib/context';
 import { getRememberedEmail } from '@/lib/storage';
-import { Eye, EyeOff, LogIn } from 'lucide-react';
+import { Eye, EyeOff, LogIn, Mail, UserPlus, X } from 'lucide-react';
+import { showToast } from '@/lib/toast';
+
+type AuthMode = 'login' | 'signup';
 
 export default function LoginPage() {
-    const { login, user, loading, loginWithGoogle } = useApp();
+    const { login, user, loading, loginWithGoogle, signUp, signUpWithGoogle } = useApp();
     const router = useRouter();
+    const searchParams = useSearchParams();
+
+    const requestedMode = useMemo<AuthMode>(() => (searchParams.get('mode') === 'signup' ? 'signup' : 'login'), [searchParams]);
+    const [mode, setMode] = useState<AuthMode>(requestedMode);
+
+    const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [totalHours, setTotalHours] = useState(480);
+    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
     const [rememberMe, setRememberMe] = useState(false);
+    const [agreedTerms, setAgreedTerms] = useState(false);
+    const [policyModal, setPolicyModal] = useState<'Privacy' | 'Terms' | null>(null);
+
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
+    const [showUbPopupModal, setShowUbPopupModal] = useState(false);
+    const [ubPopupTimedOut, setUbPopupTimedOut] = useState(false);
+
+    useEffect(() => {
+        setMode(requestedMode);
+    }, [requestedMode]);
+
+    useEffect(() => {
+        if (!googleLoading || mode !== 'login') {
+            setUbPopupTimedOut(false);
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            setUbPopupTimedOut(true);
+        }, 9000);
+
+        return () => clearTimeout(timer);
+    }, [googleLoading, mode]);
 
     useEffect(() => {
         if (!loading && user) router.push('/dashboard');
@@ -28,278 +62,753 @@ export default function LoginPage() {
         }
     }, []);
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const switchAuthMode = (nextMode: AuthMode) => {
+        if (nextMode === mode) return;
+        setError('');
+        setShowPassword(false);
+        setGoogleLoading(false);
+        setShowUbPopupModal(false);
+        setMode(nextMode);
+        router.replace(nextMode === 'signup' ? '/login?mode=signup' : '/login', { scroll: false });
+    };
+
+    const isUbEmail = (value: string) => value.trim().toLowerCase().endsWith('@ub.edu.ph');
+
+    const handleLoginSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
         setSubmitting(true);
+        window.dispatchEvent(new CustomEvent('app:route-loading-start'));
         try {
             await login(email, password, rememberMe);
+            showToast({ kind: 'success', title: 'Welcome Back', message: 'Login successful.' });
             router.push('/dashboard');
         } catch (err: unknown) {
             const firebaseErr = err as { code?: string; message?: string };
             if (firebaseErr.code === 'auth/wrong-password' || firebaseErr.code === 'auth/invalid-credential') {
                 setError('Invalid email or password.');
+                showToast({ kind: 'error', title: 'Login Failed', message: 'Invalid email or password.' });
             } else if (firebaseErr.code === 'auth/user-not-found') {
                 setError('No account found with this email.');
+                showToast({ kind: 'error', title: 'Login Failed', message: 'No account found with this email.' });
             } else if (firebaseErr.code === 'auth/too-many-requests') {
                 setError('Too many attempts. Please try again later.');
+                showToast({ kind: 'warning', title: 'Too Many Attempts', message: 'Please try again later.' });
             } else {
                 setError(firebaseErr.message || 'Login failed');
+                showToast({ kind: 'error', title: 'Login Failed', message: firebaseErr.message || 'Login failed.' });
             }
+            window.dispatchEvent(new CustomEvent('app:route-loading-stop'));
+        } finally {
+            setSubmitting(false);
         }
-        setSubmitting(false);
+    };
+
+    const handleSignUpSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+
+        if (!agreedTerms) {
+            setError('You must agree to the Terms of Service and Privacy Policy.');
+            return;
+        }
+        if (!isUbEmail(email)) {
+            setError('Please use your @ub.edu.ph email address.');
+            return;
+        }
+        if (password !== confirmPassword) {
+            setError('Passwords do not match.');
+            return;
+        }
+        if (password.length < 6) {
+            setError('Password must be at least 6 characters.');
+            return;
+        }
+        if (totalHours < 1) {
+            setError('Total required hours must be at least 1.');
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            await signUp(name, email, password, totalHours, startDate);
+            showToast({ kind: 'success', title: 'Account Created', message: 'Verify your UB email to continue.' });
+            router.push('/verify-email');
+        } catch (err: unknown) {
+            const firebaseErr = err as { code?: string; message?: string };
+            if (firebaseErr.code === 'auth/email-already-in-use') {
+                setError('An account with this email already exists.');
+            } else {
+                setError(firebaseErr.message || 'Sign up failed');
+            }
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
-        <div className="grid-pattern" style={{
-            minHeight: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 24,
-            position: 'relative',
-            overflow: 'hidden',
-        }}>
-            {/* Background */}
+        <div
+            className="grid-pattern"
+            style={{
+                minHeight: '100vh',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 24,
+                position: 'relative',
+                overflow: 'hidden',
+            }}
+        >
             <div className="hero-glow" style={{ background: '#10b981', top: '20%', left: '10%' }} />
             <div className="hero-glow" style={{ background: '#14b8a6', bottom: '20%', right: '10%', width: 400, height: 400 }} />
 
-            <div style={{ maxWidth: 440, width: '100%', position: 'relative', zIndex: 1, padding: '0 4px' }}>
-                <div className="card-elevated auth-card" style={{}}>
-                    {/* Header */}
-                    <div style={{ textAlign: 'center', marginBottom: 32 }}>
-                        <div style={{
-                            width: 48,
-                            height: 48,
-                            borderRadius: 14,
-                            background: 'var(--gradient-primary)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 800,
-                            fontSize: 22,
-                            color: 'white',
-                            margin: '0 auto 16px',
-                        }}>I</div>
-                        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 6 }}>Welcome back</h1>
-                        <p style={{ color: 'var(--slate-400)', fontSize: 14 }}>
-                            Sign in to your Internly account
-                        </p>
-                    </div>
+            <div
+                id="auth-shell"
+                style={{
+                    maxWidth: 1200,
+                    width: '100%',
+                    position: 'relative',
+                    zIndex: 1,
+                    display: 'grid',
+                    gridTemplateColumns: '1.08fr minmax(460px, 560px)',
+                    gap: 26,
+                    alignItems: 'center',
+                }}
+            >
+                <div
+                    id="auth-brand"
+                    style={{
+                        padding: '22px 26px',
+                        minHeight: 620,
+                        borderRadius: 34,
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        background: 'linear-gradient(160deg, rgba(2,6,23,0.75), rgba(3,10,21,0.52))',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        alignItems: 'center',
+                    }}
+                >
+                    <div style={{ position: 'absolute', width: 560, height: 560, borderRadius: '50%', background: 'radial-gradient(circle at 30% 30%, rgba(16,185,129,0.8), rgba(5,46,22,0.85) 65%, rgba(2,6,23,0.6) 100%)', left: -250, top: -220, filter: 'blur(0.5px)' }} />
+                    <div style={{ position: 'absolute', width: 220, height: 220, borderRadius: '50%', background: 'radial-gradient(circle at 28% 28%, rgba(52,211,153,0.95), rgba(6,95,70,0.85))', left: 34, bottom: 52, boxShadow: '0 22px 70px rgba(16,185,129,0.28)' }} />
+                    <div style={{ position: 'absolute', width: 180, height: 180, borderRadius: '50%', background: 'radial-gradient(circle at 30% 30%, rgba(74,222,128,0.75), rgba(4,120,87,0.8))', right: 34, top: 110, opacity: 0.88 }} />
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(120deg, rgba(2,6,23,0.14) 20%, rgba(2,6,23,0.55) 60%, rgba(2,6,23,0.86) 100%)' }} />
 
-                    {error && (
-                        <div style={{
-                            padding: '12px 16px',
-                            borderRadius: 'var(--radius-sm)',
-                            background: 'rgba(244,63,94,0.1)',
-                            border: '1px solid rgba(244,63,94,0.2)',
-                            color: 'var(--rose-400)',
-                            fontSize: 13,
-                            marginBottom: 20,
-                        }}>
-                            {error}
-                        </div>
-                    )}
-
-                    <form onSubmit={handleSubmit}>
-                        <div className="input-group" style={{ marginBottom: 16 }}>
-                            <label className="input-label" htmlFor="login-email">Email</label>
-                            <input
-                                id="login-email"
-                                className="input"
-                                type="email"
-                                placeholder="you@example.com"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                required
-                            />
-                        </div>
-
-                        <div className="input-group" style={{ marginBottom: 16 }}>
-                            <label className="input-label" htmlFor="login-password">Password</label>
-                            <div style={{ position: 'relative' }}>
-                                <input
-                                    id="login-password"
-                                    className="input"
-                                    type={showPassword ? 'text' : 'password'}
-                                    placeholder="Enter your password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    required
-                                    style={{ paddingRight: 44 }}
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    style={{
-                                        position: 'absolute',
-                                        right: 12,
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        background: 'none',
-                                        border: 'none',
-                                        color: 'var(--slate-500)',
-                                        cursor: 'pointer',
-                                        padding: 4,
-                                    }}
-                                >
-                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                </button>
-                            </div>
-                        </div>
-
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            marginBottom: 24,
-                        }}>
-                            <label style={{
+                    <div style={{ position: 'relative', zIndex: 2, maxWidth: 440, paddingLeft: 16 }}>
+                        <div
+                            style={{
+                                width: 64,
+                                height: 64,
+                                borderRadius: 18,
+                                background: 'var(--gradient-primary)',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: 8,
-                                fontSize: 13,
-                                color: 'var(--slate-400)',
-                                cursor: 'pointer',
-                            }}>
-                                <input
-                                    type="checkbox"
-                                    className="checkbox-custom"
-                                    checked={rememberMe}
-                                    onChange={(e) => setRememberMe(e.target.checked)}
-                                />
-                                Remember me
-                            </label>
+                                justifyContent: 'center',
+                                fontWeight: 800,
+                                fontSize: 28,
+                                color: 'white',
+                                marginBottom: 20,
+                                boxShadow: '0 14px 40px rgba(16,185,129,0.28)',
+                            }}
+                        >
+                            I
+                        </div>
+                        <h1 style={{ fontSize: 44, lineHeight: 1.05, fontWeight: 800, marginBottom: 10, letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+                            Welcome
+                        </h1>
+                        <p style={{ color: 'rgba(236,253,245,0.88)', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', fontSize: 12, marginBottom: 18 }}>
+                            Internly System Portal
+                        </p>
+                        <p style={{ color: 'var(--slate-300)', fontSize: 15, lineHeight: 1.72, maxWidth: 420, marginBottom: 22 }}>
+                            {mode === 'login'
+                                ? 'Sign in to continue tracking your internship progress, work logs, and weekly submissions.'
+                                : 'Create your account to organize hours, daily outputs, and weekly reports from one streamlined dashboard.'}
+                        </p>
+                        <h2 style={{ fontSize: 22, lineHeight: 1.28, fontWeight: 700, color: 'white', maxWidth: 420 }}>
+                            OJT Hours Monitoring and Training Management
+                        </h2>
+                    </div>
+                </div>
+
+                <div style={{ width: '100%', padding: '0 4px' }}>
+                    <div className="card-elevated auth-card" style={{ borderRadius: 24, minHeight: 620, paddingTop: 24 }}>
+                        <div key={mode} style={{ animation: 'authModeSwap 220ms ease both' }}>
+                            <div style={{ textAlign: 'center', marginBottom: 20 }}>
+                                <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 6, letterSpacing: '-0.02em' }}>
+                                    {mode === 'login' ? 'Sign in' : 'Sign up'}
+                                </h1>
+                                <p style={{ color: 'var(--slate-400)', fontSize: 13 }}>
+                                    {mode === 'login' ? 'Access your Internly account' : 'Create your Internly account'}
+                                </p>
+                            </div>
+
+                            {error && (
+                                <div
+                                    style={{
+                                        padding: '10px 14px',
+                                        borderRadius: 'var(--radius-sm)',
+                                        background: 'rgba(244,63,94,0.1)',
+                                        border: '1px solid rgba(244,63,94,0.2)',
+                                        color: 'var(--rose-400)',
+                                        fontSize: 13,
+                                        marginBottom: 14,
+                                    }}
+                                >
+                                    {error}
+                                </div>
+                            )}
+
+                            {mode === 'login' ? (
+                                <form onSubmit={handleLoginSubmit}>
+                                    <div className="input-group" style={{ marginBottom: 12 }}>
+                                        <label className="input-label" htmlFor="auth-email">Email</label>
+                                        <input
+                                            id="auth-email"
+                                            className="input"
+                                            type="email"
+                                            placeholder="you@example.com"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            required
+                                        />
+                                    </div>
+
+                                    <div className="input-group" style={{ marginBottom: 12 }}>
+                                        <label className="input-label" htmlFor="auth-password">Password</label>
+                                        <div style={{ position: 'relative' }}>
+                                            <input
+                                                id="auth-password"
+                                                className="input"
+                                                type={showPassword ? 'text' : 'password'}
+                                                placeholder="Enter your password"
+                                                value={password}
+                                                onChange={(e) => setPassword(e.target.value)}
+                                                required
+                                                style={{ paddingRight: 44 }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPassword(!showPassword)}
+                                                style={{
+                                                    position: 'absolute',
+                                                    right: 12,
+                                                    top: '50%',
+                                                    transform: 'translateY(-50%)',
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    color: 'var(--slate-500)',
+                                                    cursor: 'pointer',
+                                                    padding: 4,
+                                                }}
+                                            >
+                                                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--slate-400)', cursor: 'pointer' }}>
+                                            <input
+                                                type="checkbox"
+                                                className="checkbox-custom"
+                                                checked={rememberMe}
+                                                onChange={(e) => setRememberMe(e.target.checked)}
+                                            />
+                                            Remember me
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => router.push('/forgot-password')}
+                                            style={{
+                                                color: 'var(--primary-400)',
+                                                fontWeight: 600,
+                                                background: 'none',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                fontSize: 13,
+                                            }}
+                                        >
+                                            Forgot password?
+                                        </button>
+                                    </div>
+
+                                    <button type="submit" className="btn btn-primary" disabled={submitting} style={{ width: '100%', padding: '13px 20px' }}>
+                                        {submitting ? (
+                                            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <span
+                                                    style={{
+                                                        width: 18,
+                                                        height: 18,
+                                                        border: '2px solid rgba(255,255,255,0.3)',
+                                                        borderTopColor: 'white',
+                                                        borderRadius: '50%',
+                                                        animation: 'spin 0.8s linear infinite',
+                                                    }}
+                                                />
+                                                Signing in...
+                                            </span>
+                                        ) : (
+                                            <>
+                                                <LogIn size={18} /> Sign In
+                                            </>
+                                        )}
+                                    </button>
+                                </form>
+                            ) : (
+                                <form onSubmit={handleSignUpSubmit}>
+                                    <div id="signup-account-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                                        <div className="input-group">
+                                            <label className="input-label" htmlFor="signup-name">Full Name</label>
+                                            <input
+                                                id="signup-name"
+                                                className="input"
+                                                type="text"
+                                                placeholder="Juan Dela Cruz"
+                                                value={name}
+                                                onChange={(e) => setName(e.target.value)}
+                                                required
+                                            />
+                                        </div>
+                                        <div className="input-group">
+                                            <label className="input-label" htmlFor="signup-email">UB Email</label>
+                                            <input
+                                                id="signup-email"
+                                                className="input"
+                                                type="email"
+                                                placeholder="you@ub.edu.ph"
+                                                value={email}
+                                                onChange={(e) => setEmail(e.target.value)}
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div id="signup-passwords-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                                        <div className="input-group">
+                                            <label className="input-label" htmlFor="signup-password">Password</label>
+                                            <div style={{ position: 'relative' }}>
+                                                <input
+                                                    id="signup-password"
+                                                    className="input"
+                                                    type={showPassword ? 'text' : 'password'}
+                                                    placeholder="Min 6 characters"
+                                                    value={password}
+                                                    onChange={(e) => setPassword(e.target.value)}
+                                                    required
+                                                    style={{ paddingRight: 40 }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowPassword(!showPassword)}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        right: 10,
+                                                        top: '50%',
+                                                        transform: 'translateY(-50%)',
+                                                        background: 'none',
+                                                        border: 'none',
+                                                        color: 'var(--slate-500)',
+                                                        cursor: 'pointer',
+                                                        padding: 4,
+                                                    }}
+                                                >
+                                                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="input-group">
+                                            <label className="input-label" htmlFor="signup-confirm">Confirm Password</label>
+                                            <input
+                                                id="signup-confirm"
+                                                className="input"
+                                                type={showPassword ? 'text' : 'password'}
+                                                placeholder="Re-enter password"
+                                                value={confirmPassword}
+                                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div id="signup-details-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                                        <div className="input-group">
+                                            <label className="input-label" htmlFor="signup-hours">Total Hours</label>
+                                            <input
+                                                id="signup-hours"
+                                                className="input"
+                                                type="number"
+                                                min={1}
+                                                max={5000}
+                                                value={totalHours}
+                                                onChange={(e) => setTotalHours(Number(e.target.value))}
+                                                required
+                                            />
+                                        </div>
+                                        <div className="input-group">
+                                            <label className="input-label" htmlFor="signup-startdate">Start Date</label>
+                                            <input
+                                                id="signup-startdate"
+                                                className="input"
+                                                type="date"
+                                                value={startDate}
+                                                onChange={(e) => setStartDate(e.target.value)}
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14 }}>
+                                        <input
+                                            type="checkbox"
+                                            id="signup-agree"
+                                            checked={agreedTerms}
+                                            onChange={(e) => setAgreedTerms(e.target.checked)}
+                                            style={{
+                                                marginTop: 3,
+                                                width: 16,
+                                                height: 16,
+                                                accentColor: 'var(--primary-500)',
+                                                cursor: 'pointer',
+                                                flexShrink: 0,
+                                            }}
+                                        />
+                                        <label htmlFor="signup-agree" style={{ fontSize: 13, color: 'var(--slate-400)', lineHeight: 1.45, cursor: 'pointer' }}>
+                                            I agree to the{' '}
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    setPolicyModal('Terms');
+                                                }}
+                                                style={{ color: 'var(--primary-400)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, padding: 0, textDecoration: 'underline', textUnderlineOffset: 2 }}
+                                            >
+                                                Terms of Service
+                                            </button>{' '}
+                                            and{' '}
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    setPolicyModal('Privacy');
+                                                }}
+                                                style={{ color: 'var(--primary-400)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, padding: 0, textDecoration: 'underline', textUnderlineOffset: 2 }}
+                                            >
+                                                Privacy Policy
+                                            </button>
+                                        </label>
+                                    </div>
+
+                                    <button type="submit" className="btn btn-primary" disabled={submitting} style={{ width: '100%', padding: '13px 20px' }}>
+                                        {submitting ? (
+                                            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <span
+                                                    style={{
+                                                        width: 18,
+                                                        height: 18,
+                                                        border: '2px solid rgba(255,255,255,0.3)',
+                                                        borderTopColor: 'white',
+                                                        borderRadius: '50%',
+                                                        animation: 'spin 0.8s linear infinite',
+                                                    }}
+                                                />
+                                                Creating account...
+                                            </span>
+                                        ) : (
+                                            <>
+                                                <UserPlus size={18} /> Create Account
+                                            </>
+                                        )}
+                                    </button>
+                                </form>
+                            )}
+
+                            <div className="divider" style={{ margin: '16px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
+                                <span style={{ fontSize: 12, color: 'var(--slate-500)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>or</span>
+                                <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
+                            </div>
+
                             <button
                                 type="button"
-                                onClick={() => router.push('/forgot-password')}
+                                onClick={async () => {
+                                    setError('');
+
+                                    if (mode === 'signup') {
+                                        if (!agreedTerms) {
+                                            setError('You must agree to the Terms of Service and Privacy Policy.');
+                                            return;
+                                        }
+                                        if (password !== confirmPassword) {
+                                            setError('Passwords do not match.');
+                                            return;
+                                        }
+                                        if (password.length < 6) {
+                                            setError('Password must be at least 6 characters.');
+                                            return;
+                                        }
+                                    }
+
+                                    setGoogleLoading(true);
+                                    if (mode === 'login') {
+                                        setShowUbPopupModal(true);
+                                        setUbPopupTimedOut(false);
+                                        window.dispatchEvent(new CustomEvent('app:route-loading-start'));
+                                    }
+
+                                    try {
+                                        if (mode === 'login') {
+                                            await loginWithGoogle();
+                                            showToast({ kind: 'success', title: 'Welcome Back', message: 'UB Mail login successful.' });
+                                            router.push('/dashboard');
+                                        } else {
+                                            await signUpWithGoogle(password);
+                                            showToast({ kind: 'success', title: 'Account Created', message: 'Verify your UB email to continue.' });
+                                            router.push('/verify-email');
+                                        }
+                                    } catch (err: unknown) {
+                                        const firebaseErr = err as { code?: string; message?: string };
+                                        const msg =
+                                            firebaseErr.code === 'auth/popup-closed-by-user'
+                                                ? 'Popup closed before sign-in completed.'
+                                                : firebaseErr.code === 'auth/popup-blocked'
+                                                    ? 'Popup was blocked by your browser. Allow popups and try again.'
+                                                    : err instanceof Error
+                                                        ? err.message
+                                                        : mode === 'login'
+                                                            ? 'UB Mail sign-in failed. Please try again.'
+                                                            : 'UB Mail sign-up failed. Please try again.';
+                                        setError(msg);
+                                        showToast({ kind: 'error', title: mode === 'login' ? 'UB Mail Sign-in Failed' : 'UB Mail Sign-up Failed', message: msg });
+                                        if (mode === 'login') {
+                                            window.dispatchEvent(new CustomEvent('app:route-loading-stop'));
+                                        }
+                                        setShowUbPopupModal(false);
+                                    } finally {
+                                        setGoogleLoading(false);
+                                    }
+                                }}
+                                disabled={googleLoading}
                                 style={{
-                                    color: 'var(--primary-400)',
+                                    width: '100%',
+                                    padding: '12px 24px',
+                                    borderRadius: 'var(--radius-sm)',
+                                    border: '1px solid rgba(255,255,255,0.12)',
+                                    background: 'rgba(255,255,255,0.04)',
+                                    color: 'white',
+                                    fontSize: 14,
                                     fontWeight: 600,
-                                    background: 'none',
-                                    border: 'none',
-                                    cursor: 'pointer',
-                                    fontSize: 13,
+                                    cursor: googleLoading ? 'not-allowed' : 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 10,
+                                    transition: 'all 150ms',
+                                    opacity: googleLoading ? 0.6 : 1,
+                                }}
+                                onMouseEnter={(e) => {
+                                    if (!googleLoading) e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
                                 }}
                             >
-                                Forgot password?
+                                {googleLoading ? (
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span
+                                            style={{
+                                                width: 18,
+                                                height: 18,
+                                                border: '2px solid rgba(255,255,255,0.3)',
+                                                borderTopColor: 'white',
+                                                borderRadius: '50%',
+                                                animation: 'spin 0.8s linear infinite',
+                                            }}
+                                        />
+                                        Redirecting...
+                                    </span>
+                                ) : (
+                                    <>
+                                        <Mail size={18} />
+                                        {mode === 'login' ? 'Continue with UB Mail' : 'Continue with UB Mail'}
+                                    </>
+                                )}
                             </button>
-                        </div>
 
-                        <button
-                            type="submit"
-                            className="btn btn-primary"
-                            disabled={submitting}
-                            style={{ width: '100%', padding: '14px 24px' }}
-                            id="login-submit"
-                        >
-                            {submitting ? (
-                                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <span style={{
-                                        width: 18,
-                                        height: 18,
-                                        border: '2px solid rgba(255,255,255,0.3)',
-                                        borderTopColor: 'white',
-                                        borderRadius: '50%',
-                                        animation: 'spin 0.8s linear infinite',
-                                    }} />
-                                    Signing in...
-                                </span>
-                            ) : (
-                                <>
-                                    <LogIn size={18} /> Sign In
-                                </>
+                            {mode === 'login' && showUbPopupModal && (
+                                <div className="modal-overlay" onClick={() => { if (!googleLoading) setShowUbPopupModal(false); }}>
+                                    <div
+                                        className="modal-content"
+                                        onClick={(e) => e.stopPropagation()}
+                                        style={{
+                                            maxWidth: 420,
+                                            minHeight: 180,
+                                            padding: 28,
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: 16,
+                                        }}
+                                    >
+                                        <span
+                                            aria-hidden
+                                            style={{
+                                                width: 46,
+                                                height: 46,
+                                                border: '3px solid rgba(255,255,255,0.2)',
+                                                borderTopColor: 'var(--primary-400)',
+                                                borderRadius: '50%',
+                                                animation: 'spin 0.8s linear infinite',
+                                            }}
+                                        />
+                                        <p style={{ fontSize: 14, color: 'var(--slate-300)', textAlign: 'center', lineHeight: 1.5, margin: 0 }}>
+                                            {ubPopupTimedOut
+                                                ? 'Still waiting. If the popup is open, finish sign-in there. If it was closed, try UB Mail again.'
+                                                : 'Signing in with UB Mail. Please complete sign-in in the popup window.'}
+                                        </p>
+                                    </div>
+                                </div>
                             )}
-                        </button>
-                        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-                    </form>
 
-                    <div className="divider" style={{ margin: '24px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
-                        <span style={{ fontSize: 12, color: 'var(--slate-500)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>or</span>
-                        <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
+                            <div style={{ height: 14 }} />
+
+                            <p style={{ textAlign: 'center', fontSize: 14, color: 'var(--slate-400)' }}>
+                                {mode === 'login' ? 'Don&apos;t have an account?' : 'Already have an account?'}{' '}
+                                <button
+                                    onClick={() => switchAuthMode(mode === 'login' ? 'signup' : 'login')}
+                                    style={{
+                                        color: 'var(--primary-400)',
+                                        fontWeight: 600,
+                                        background: 'none',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        fontSize: 14,
+                                    }}
+                                >
+                                    {mode === 'login' ? 'Sign Up' : 'Log In'}
+                                </button>
+                            </p>
+
+                        </div>
                     </div>
-
-                    <button
-                        type="button"
-                        onClick={async () => {
-                            setGoogleLoading(true);
-                            setError('');
-                            try {
-                                await loginWithGoogle();
-                                router.push('/dashboard');
-                            } catch (err: unknown) {
-                                setError(err instanceof Error ? err.message : 'Google sign-in failed. Please try again.');
-                                setGoogleLoading(false);
-                            }
-                        }}
-                        disabled={googleLoading}
-                        style={{
-                            width: '100%',
-                            padding: '12px 24px',
-                            borderRadius: 'var(--radius-sm)',
-                            border: '1px solid rgba(255,255,255,0.12)',
-                            background: 'rgba(255,255,255,0.04)',
-                            color: 'white',
-                            fontSize: 14,
-                            fontWeight: 600,
-                            cursor: googleLoading ? 'not-allowed' : 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 10,
-                            transition: 'all 150ms',
-                            opacity: googleLoading ? 0.6 : 1,
-                        }}
-                        onMouseEnter={(e) => { if (!googleLoading) e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                    >
-                        {googleLoading ? (
-                            <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span style={{
-                                    width: 18,
-                                    height: 18,
-                                    border: '2px solid rgba(255,255,255,0.3)',
-                                    borderTopColor: 'white',
-                                    borderRadius: '50%',
-                                    animation: 'spin 0.8s linear infinite',
-                                }} />
-                                Redirecting...
-                            </span>
-                        ) : (
-                            <>
-                                <svg width="18" height="18" viewBox="0 0 48 48">
-                                    <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/>
-                                    <path fill="#FF3D00" d="m6.306 14.691 6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/>
-                                    <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/>
-                                    <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/>
-                                </svg>
-                                Continue with Google
-                            </>
-                        )}
-                    </button>
-
-                    <div style={{ height: 24 }} />
-
-                    <p style={{ textAlign: 'center', fontSize: 14, color: 'var(--slate-400)' }}>
-                        Don&apos;t have an account?{' '}
-                        <button
-                            onClick={() => router.push('/signup')}
-                            style={{
-                                color: 'var(--primary-400)',
-                                fontWeight: 600,
-                                background: 'none',
-                                border: 'none',
-                                cursor: 'pointer',
-                                fontSize: 14,
-                            }}
-                            id="login-signup-link"
-                        >
-                            Sign Up
-                        </button>
-                    </p>
                 </div>
             </div>
+
+            {policyModal && (
+                <div
+                    onClick={() => setPolicyModal(null)}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        zIndex: 100,
+                        background: 'rgba(0,0,0,0.6)',
+                        backdropFilter: 'blur(6px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 24,
+                        animation: 'signupPolicyFadeIn 200ms ease',
+                    }}
+                >
+                    <style>{`@keyframes signupPolicyFadeIn { from { opacity: 0; } to { opacity: 1; } } @keyframes signupPolicySlideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            background: 'var(--slate-900)',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: 16,
+                            padding: 32,
+                            maxWidth: 520,
+                            width: '100%',
+                            maxHeight: '80vh',
+                            overflowY: 'auto',
+                            position: 'relative',
+                            animation: 'signupPolicySlideUp 250ms ease',
+                        }}
+                    >
+                        <button
+                            onClick={() => setPolicyModal(null)}
+                            style={{
+                                position: 'absolute',
+                                top: 16,
+                                right: 16,
+                                background: 'rgba(255,255,255,0.06)',
+                                border: 'none',
+                                borderRadius: 8,
+                                width: 32,
+                                height: 32,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                color: 'var(--slate-400)',
+                                transition: 'background 150ms',
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.06)')}
+                        >
+                            <X size={16} />
+                        </button>
+
+                        <h3 style={{ fontSize: 22, fontWeight: 700, marginBottom: 16, color: 'white' }}>
+                            {policyModal === 'Privacy' ? 'Privacy Policy' : 'Terms of Service'}
+                        </h3>
+
+                        <div style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--slate-400)' }}>
+                            {policyModal === 'Privacy' && (
+                                <>
+                                    <p style={{ marginBottom: 12 }}><strong style={{ color: 'var(--slate-200)' }}>Effective Date:</strong> January 1, 2026</p>
+                                    <p style={{ marginBottom: 12 }}>Internly is committed to protecting your privacy. All data you enter, including daily logs, hour records, and personal information, is stored locally on your device using browser storage.</p>
+                                    <p style={{ marginBottom: 12 }}><strong style={{ color: 'var(--slate-200)' }}>Data Collection:</strong> We do not collect, transmit, or store your data on any external server. Everything stays on your browser.</p>
+                                    <p style={{ marginBottom: 12 }}><strong style={{ color: 'var(--slate-200)' }}>Cookies:</strong> Internly does not use tracking cookies or third-party analytics.</p>
+                                    <p><strong style={{ color: 'var(--slate-200)' }}>Your Control:</strong> You can delete all your data at any time by clearing your browser&apos;s local storage.</p>
+                                </>
+                            )}
+                            {policyModal === 'Terms' && (
+                                <>
+                                    <p style={{ marginBottom: 12 }}><strong style={{ color: 'var(--slate-200)' }}>Effective Date:</strong> January 1, 2026</p>
+                                    <p style={{ marginBottom: 12 }}>By using Internly, you agree to the following terms:</p>
+                                    <p style={{ marginBottom: 12 }}><strong style={{ color: 'var(--slate-200)' }}>1. Purpose:</strong> Internly is a web-based tool designed to help on-the-job training participants track hours, log activities, and generate weekly reports.</p>
+                                    <p style={{ marginBottom: 12 }}><strong style={{ color: 'var(--slate-200)' }}>2. Data Responsibility:</strong> All data is stored locally. You are responsible for maintaining and backing up your records.</p>
+                                    <p style={{ marginBottom: 12 }}><strong style={{ color: 'var(--slate-200)' }}>3. No Warranty:</strong> Internly is provided as is without warranties of any kind. We are not liable for data loss resulting from browser resets or device changes.</p>
+                                    <p><strong style={{ color: 'var(--slate-200)' }}>4. Modifications:</strong> We reserve the right to update these terms at any time. Continued use of the app constitutes acceptance of any changes.</p>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <style>{`
+                @keyframes spin { to { transform: rotate(360deg); } }
+                @keyframes authModeSwap {
+                    from { opacity: 0; transform: translateY(10px) scale(0.99); }
+                    to { opacity: 1; transform: translateY(0) scale(1); }
+                }
+                @media (max-width: 1180px) {
+                    #auth-shell {
+                        grid-template-columns: 1fr !important;
+                        max-width: 640px !important;
+                        gap: 20px !important;
+                    }
+                    #auth-brand {
+                        min-height: 420px !important;
+                        padding: 20px !important;
+                        border-radius: 24px !important;
+                    }
+                    #auth-brand h1 {
+                        font-size: 34px !important;
+                    }
+                    #signup-account-grid,
+                    #signup-passwords-grid,
+                    #signup-details-grid {
+                        grid-template-columns: 1fr !important;
+                    }
+                    .auth-card {
+                        min-height: auto !important;
+                    }
+                }
+            `}</style>
         </div>
     );
 }

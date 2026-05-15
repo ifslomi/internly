@@ -250,7 +250,7 @@ function ImageEditorModal({
                                 style={{
                                     padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
                                     border: aspect === opt.value ? '1px solid var(--primary-500)' : '1px solid rgba(255,255,255,0.1)',
-                                    background: aspect === opt.value ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)',
+                                    background: aspect === opt.value ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.04)',
                                     color: aspect === opt.value ? 'var(--primary-400)' : 'var(--slate-400)',
                                     cursor: 'pointer', transition: 'all 150ms',
                                 }}
@@ -313,7 +313,7 @@ function ProfileModal({ chatUser, onClose }: { chatUser: ChatUser | null; onClos
             <div
                 onClick={(e) => e.stopPropagation()}
                 style={{
-                    background: 'linear-gradient(180deg, rgba(15,23,42,0.97) 0%, rgba(15,23,42,1) 100%)',
+                    background: 'linear-gradient(180deg, rgba(9,9,11,0.97) 0%, rgba(9,9,11,1) 100%)',
                     border: '1px solid rgba(255,255,255,0.07)',
                     borderRadius: 24,
                     maxWidth: 380,
@@ -326,7 +326,7 @@ function ProfileModal({ chatUser, onClose }: { chatUser: ChatUser | null; onClos
                 {/* Header banner with mesh gradient */}
                 <div style={{
                     height: 120,
-                    background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 30%, #a855f7 60%, #06b6d4 100%)',
+                    background: 'linear-gradient(135deg, #047857 0%, #059669 30%, #10b981 60%, #34d399 100%)',
                     position: 'relative',
                     overflow: 'hidden',
                 }}>
@@ -393,7 +393,7 @@ function ProfileModal({ chatUser, onClose }: { chatUser: ChatUser | null; onClos
                                     width: 96,
                                     height: 96,
                                     borderRadius: '50%',
-                                    border: '4px solid rgba(15,23,42,1)',
+                                    border: '4px solid rgba(9,9,11,1)',
                                     objectFit: 'cover',
                                     boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
                                 }}
@@ -403,8 +403,8 @@ function ProfileModal({ chatUser, onClose }: { chatUser: ChatUser | null; onClos
                                 width: 96,
                                 height: 96,
                                 borderRadius: '50%',
-                                border: '4px solid rgba(15,23,42,1)',
-                                background: 'linear-gradient(135deg, #6366f1, #8b5cf6, #06b6d4)',
+                                border: '4px solid rgba(9,9,11,1)',
+                                background: 'linear-gradient(135deg, #10b981, #22c55e, #34d399)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -426,7 +426,7 @@ function ProfileModal({ chatUser, onClose }: { chatUser: ChatUser | null; onClos
                             height: 20,
                             borderRadius: '50%',
                             background: isOnline ? '#22c55e' : '#64748b',
-                            border: '3px solid rgba(15,23,42,1)',
+                            border: '3px solid rgba(9,9,11,1)',
                             boxShadow: isOnline ? '0 0 12px rgba(34,197,94,0.5)' : 'none',
                         }} />
                     </div>
@@ -479,21 +479,21 @@ function ProfileModal({ chatUser, onClose }: { chatUser: ChatUser | null; onClos
                             gap: 14,
                             padding: '14px 18px',
                             borderRadius: 14,
-                            background: 'rgba(99,102,241,0.04)',
-                            border: '1px solid rgba(99,102,241,0.08)',
+                            background: 'rgba(16,185,129,0.04)',
+                            border: '1px solid rgba(16,185,129,0.08)',
                             transition: 'all 200ms',
                         }}>
                             <div style={{
                                 width: 38,
                                 height: 38,
                                 borderRadius: 10,
-                                background: 'rgba(99,102,241,0.1)',
+                                background: 'rgba(16,185,129,0.1)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 flexShrink: 0,
                             }}>
-                                <Mail size={18} style={{ color: '#818cf8' }} />
+                                <Mail size={18} style={{ color: '#6ee7b7' }} />
                             </div>
                             <div style={{ minWidth: 0 }}>
                                 <p style={{ fontSize: 11, color: '#64748b', marginBottom: 3, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email</p>
@@ -508,15 +508,15 @@ function ProfileModal({ chatUser, onClose }: { chatUser: ChatUser | null; onClos
                                 gap: 14,
                                 padding: '14px 18px',
                                 borderRadius: 14,
-                                background: 'rgba(6,182,212,0.04)',
-                                border: '1px solid rgba(6,182,212,0.08)',
+                                background: 'rgba(52,211,153,0.04)',
+                                border: '1px solid rgba(52,211,153,0.08)',
                                 transition: 'all 200ms',
                             }}>
                                 <div style={{
                                     width: 38,
                                     height: 38,
                                     borderRadius: 10,
-                                    background: 'rgba(6,182,212,0.1)',
+                                    background: 'rgba(52,211,153,0.1)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -546,7 +546,7 @@ function ProfileModal({ chatUser, onClose }: { chatUser: ChatUser | null; onClos
                             padding: '12px 20px',
                             borderRadius: 12,
                             border: 'none',
-                            background: 'linear-gradient(135deg, #6366f1, #7c3aed)',
+                            background: 'linear-gradient(135deg, #10b981, #059669)',
                             color: 'white',
                             fontSize: 14,
                             fontWeight: 600,
@@ -556,15 +556,15 @@ function ProfileModal({ chatUser, onClose }: { chatUser: ChatUser | null; onClos
                             justifyContent: 'center',
                             gap: 8,
                             transition: 'all 200ms',
-                            boxShadow: '0 4px 16px rgba(99,102,241,0.25)',
+                            boxShadow: '0 4px 16px rgba(16,185,129,0.25)',
                         }}
                         onMouseEnter={(e) => {
                             e.currentTarget.style.transform = 'translateY(-1px)';
-                            e.currentTarget.style.boxShadow = '0 6px 20px rgba(99,102,241,0.35)';
+                            e.currentTarget.style.boxShadow = '0 6px 20px rgba(16,185,129,0.35)';
                         }}
                         onMouseLeave={(e) => {
                             e.currentTarget.style.transform = 'translateY(0)';
-                            e.currentTarget.style.boxShadow = '0 4px 16px rgba(99,102,241,0.25)';
+                            e.currentTarget.style.boxShadow = '0 4px 16px rgba(16,185,129,0.25)';
                         }}
                     >
                         <MessageCircle size={16} />
@@ -1477,14 +1477,14 @@ export default function ChatPage() {
                                     textAlign: 'left',
                                     transition: 'background 150ms',
                                 }}
-                                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(99,102,241,0.06)'; }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(16,185,129,0.06)'; }}
                                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                             >
                                 <div style={{
                                     width: 40,
                                     height: 40,
                                     borderRadius: '50%',
-                                    background: 'linear-gradient(135deg, #6366f1, #7c3aed)',
+                                    background: 'linear-gradient(135deg, #10b981, #059669)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -1569,7 +1569,7 @@ export default function ChatPage() {
                                                     width: 40,
                                                     height: 40,
                                                     borderRadius: '50%',
-                                                    background: 'linear-gradient(135deg, #6366f1, #06b6d4)',
+                                                    background: 'linear-gradient(135deg, #10b981, #34d399)',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
@@ -1713,11 +1713,11 @@ export default function ChatPage() {
                                                 gap: 6,
                                                 padding: '4px 10px 4px 6px',
                                                 borderRadius: 20,
-                                                background: 'rgba(99,102,241,0.15)',
-                                                border: '1px solid rgba(99,102,241,0.2)',
+                                                background: 'rgba(16,185,129,0.15)',
+                                                border: '1px solid rgba(16,185,129,0.2)',
                                                 fontSize: 12,
                                                 fontWeight: 600,
-                                                color: '#a5b4fc',
+                                                color: '#86efac',
                                             }}
                                         >
                                             {m.profileImage ? (
@@ -1727,7 +1727,7 @@ export default function ChatPage() {
                                                     width: 18,
                                                     height: 18,
                                                     borderRadius: '50%',
-                                                    background: 'linear-gradient(135deg, #6366f1, #06b6d4)',
+                                                    background: 'linear-gradient(135deg, #10b981, #34d399)',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
@@ -1741,7 +1741,7 @@ export default function ChatPage() {
                                             {(m.name || 'Unknown').split(' ')[0]}
                                             <button
                                                 onClick={() => toggleGroupMember(m)}
-                                                style={{ background: 'none', border: 'none', color: '#a5b4fc', cursor: 'pointer', padding: 0, display: 'flex' }}
+                                                style={{ background: 'none', border: 'none', color: '#86efac', cursor: 'pointer', padding: 0, display: 'flex' }}
                                             >
                                                 <X size={12} />
                                             </button>
@@ -1800,7 +1800,7 @@ export default function ChatPage() {
                                                     padding: '12px 14px',
                                                     borderRadius: 12,
                                                     border: 'none',
-                                                    background: isSelected ? 'rgba(99,102,241,0.08)' : 'transparent',
+                                                    background: isSelected ? 'rgba(16,185,129,0.08)' : 'transparent',
                                                     cursor: 'pointer',
                                                     transition: 'background 150ms',
                                                     textAlign: 'left',
@@ -1820,7 +1820,7 @@ export default function ChatPage() {
                                                         width: 40,
                                                         height: 40,
                                                         borderRadius: '50%',
-                                                        background: 'linear-gradient(135deg, #6366f1, #06b6d4)',
+                                                        background: 'linear-gradient(135deg, #10b981, #34d399)',
                                                         display: 'flex',
                                                         alignItems: 'center',
                                                         justifyContent: 'center',
@@ -1866,7 +1866,7 @@ export default function ChatPage() {
                                         borderRadius: 10,
                                         border: 'none',
                                         background: (groupName.trim() && selectedGroupMembers.length >= 2)
-                                            ? 'linear-gradient(135deg, #6366f1, #7c3aed)'
+                                            ? 'linear-gradient(135deg, #10b981, #059669)'
                                             : 'rgba(255,255,255,0.06)',
                                         color: (groupName.trim() && selectedGroupMembers.length >= 2) ? 'white' : 'var(--slate-500)',
                                         fontSize: 14,
@@ -1911,7 +1911,7 @@ export default function ChatPage() {
                                 width: 56,
                                 height: 56,
                                 borderRadius: '50%',
-                                background: 'rgba(99,102,241,0.1)',
+                                background: 'rgba(16,185,129,0.1)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
@@ -1963,8 +1963,8 @@ export default function ChatPage() {
                                             gap: 12,
                                             padding: '14px',
                                             borderRadius: 12,
-                                            border: isActive ? '1px solid rgba(99,102,241,0.3)' : '1px solid transparent',
-                                            background: isActive ? 'rgba(99,102,241,0.08)' : 'transparent',
+                                            border: isActive ? '1px solid rgba(16,185,129,0.3)' : '1px solid transparent',
+                                            background: isActive ? 'rgba(16,185,129,0.08)' : 'transparent',
                                             cursor: 'pointer',
                                             transition: 'all 150ms',
                                             textAlign: 'left',
@@ -1983,7 +1983,7 @@ export default function ChatPage() {
                                                     width: 48,
                                                     height: 48,
                                                     borderRadius: '50%',
-                                                    background: 'linear-gradient(135deg, #7c3aed, #ec4899)',
+                                                    background: 'linear-gradient(135deg, #059669, #ec4899)',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
@@ -2002,7 +2002,7 @@ export default function ChatPage() {
                                                     width: 48,
                                                     height: 48,
                                                     borderRadius: '50%',
-                                                    background: 'linear-gradient(135deg, #6366f1, #06b6d4)',
+                                                    background: 'linear-gradient(135deg, #10b981, #34d399)',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
@@ -2120,7 +2120,7 @@ export default function ChatPage() {
                             width: 80,
                             height: 80,
                             borderRadius: '50%',
-                            background: 'rgba(99,102,241,0.08)',
+                            background: 'rgba(16,185,129,0.08)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
@@ -2167,7 +2167,7 @@ export default function ChatPage() {
                                                 width: 40,
                                                 height: 40,
                                                 borderRadius: '50%',
-                                                background: 'linear-gradient(135deg, #7c3aed, #ec4899)',
+                                                background: 'linear-gradient(135deg, #059669, #ec4899)',
                                                 display: 'flex',
                                                 alignItems: 'center',
                                                 justifyContent: 'center',
@@ -2227,7 +2227,7 @@ export default function ChatPage() {
                                                     width: 40,
                                                     height: 40,
                                                     borderRadius: '50%',
-                                                    background: 'linear-gradient(135deg, #6366f1, #06b6d4)',
+                                                    background: 'linear-gradient(135deg, #10b981, #34d399)',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
@@ -2287,8 +2287,8 @@ export default function ChatPage() {
                                         width: 34,
                                         height: 34,
                                         borderRadius: 8,
-                                        background: showChatMenu ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)',
-                                        border: `1px solid ${showChatMenu ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                                        background: showChatMenu ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.04)',
+                                        border: `1px solid ${showChatMenu ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.08)'}`,
                                         color: showChatMenu ? 'var(--primary-400)' : 'var(--slate-400)',
                                         cursor: 'pointer',
                                         display: 'flex',
@@ -2298,7 +2298,7 @@ export default function ChatPage() {
                                         transition: 'all 150ms',
                                         marginLeft: 4,
                                     }}
-                                    onMouseEnter={(e) => { if (!showChatMenu) { e.currentTarget.style.color = 'var(--primary-400)'; e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)'; } }}
+                                    onMouseEnter={(e) => { if (!showChatMenu) { e.currentTarget.style.color = 'var(--primary-400)'; e.currentTarget.style.borderColor = 'rgba(16,185,129,0.3)'; } }}
                                     onMouseLeave={(e) => { if (!showChatMenu) { e.currentTarget.style.color = 'var(--slate-400)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; } }}
                                 >
                                     <MoreVertical size={16} />
@@ -2308,7 +2308,7 @@ export default function ChatPage() {
                                         position: 'absolute',
                                         top: 'calc(100% + 6px)',
                                         right: 0,
-                                        background: 'var(--slate-800, #1e293b)',
+                                        background: 'var(--slate-800, #27272a)',
                                         border: '1px solid rgba(255,255,255,0.1)',
                                         borderRadius: 12,
                                         padding: '6px 0',
@@ -2485,7 +2485,7 @@ export default function ChatPage() {
                                                     width: 28,
                                                     height: 28,
                                                     borderRadius: '50%',
-                                                    background: 'linear-gradient(135deg, #6366f1, #06b6d4)',
+                                                    background: 'linear-gradient(135deg, #10b981, #34d399)',
                                                     display: 'flex',
                                                     alignItems: 'center',
                                                     justifyContent: 'center',
@@ -2507,7 +2507,7 @@ export default function ChatPage() {
                                                 <p style={{
                                                     fontSize: 11,
                                                     fontWeight: 600,
-                                                    color: '#a5b4fc',
+                                                    color: '#86efac',
                                                     marginBottom: 3,
                                                     paddingLeft: 4,
                                                 }}>
@@ -2524,7 +2524,7 @@ export default function ChatPage() {
                                                         borderRadius: 16,
                                                         overflow: 'hidden',
                                                         marginBottom: msg.text ? 4 : 0,
-                                                        border: `2px solid ${isMine ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                                                        border: `2px solid ${isMine ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.08)'}`,
                                                     }}
                                                 >
                                                     <img
@@ -2569,7 +2569,7 @@ export default function ChatPage() {
                                                         width: 36,
                                                         height: 36,
                                                         borderRadius: 8,
-                                                        background: isMine ? 'rgba(255,255,255,0.15)' : 'rgba(99,102,241,0.15)',
+                                                        background: isMine ? 'rgba(255,255,255,0.15)' : 'rgba(16,185,129,0.15)',
                                                         display: 'flex',
                                                         alignItems: 'center',
                                                         justifyContent: 'center',
@@ -2610,7 +2610,7 @@ export default function ChatPage() {
                                                         ? (isLastInGroup ? '18px 18px 4px 18px' : '18px 4px 4px 18px')
                                                         : (isLastInGroup ? '18px 18px 18px 4px' : '4px 18px 18px 4px'),
                                                     background: isMine
-                                                        ? 'linear-gradient(135deg, #6366f1, #7c3aed)'
+                                                        ? 'linear-gradient(135deg, #10b981, #059669)'
                                                         : 'rgba(255,255,255,0.06)',
                                                     color: 'white',
                                                     fontSize: 14,
@@ -2642,7 +2642,7 @@ export default function ChatPage() {
                                                         const effectiveStatus = allSeen ? 'seen' : status;
 
                                                         if (effectiveStatus === 'seen') {
-                                                            return <CheckCheck size={14} style={{ color: '#60a5fa' }} />;
+                                                            return <CheckCheck size={14} style={{ color: '#34d399' }} />;
                                                         } else if (effectiveStatus === 'delivered') {
                                                             return <CheckCheck size={14} style={{ color: 'var(--slate-500)' }} />;
                                                         } else {
@@ -2788,7 +2788,7 @@ export default function ChatPage() {
                                                     onClick={() => setEditingImageIndex(idx)}
                                                     style={{
                                                         width: 28, height: 28, borderRadius: '50%',
-                                                        background: 'rgba(99,102,241,0.9)',
+                                                        background: 'rgba(16,185,129,0.9)',
                                                         border: 'none', color: 'white', cursor: 'pointer',
                                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                         padding: 0,
@@ -2849,14 +2849,14 @@ export default function ChatPage() {
                                     gap: 10,
                                     padding: '10px 12px',
                                     borderRadius: 10,
-                                    background: 'rgba(99,102,241,0.08)',
-                                    border: '1px solid rgba(99,102,241,0.2)',
+                                    background: 'rgba(16,185,129,0.08)',
+                                    border: '1px solid rgba(16,185,129,0.2)',
                                 }}>
                                     <div style={{
                                         width: 36,
                                         height: 36,
                                         borderRadius: 8,
-                                        background: 'rgba(99,102,241,0.15)',
+                                        background: 'rgba(16,185,129,0.15)',
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
@@ -2941,8 +2941,8 @@ export default function ChatPage() {
                                     width: 40,
                                     height: 40,
                                     borderRadius: 10,
-                                    border: `1px solid ${pendingFile ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.08)'}`,
-                                    background: pendingFile ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.04)',
+                                    border: `1px solid ${pendingFile ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                                    background: pendingFile ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.04)',
                                     color: pendingFile ? 'var(--primary-400)' : (uploading ? 'var(--primary-400)' : 'var(--slate-400)'),
                                     cursor: uploading ? 'not-allowed' : 'pointer',
                                     display: 'flex',
@@ -2981,7 +2981,7 @@ export default function ChatPage() {
                                     <span style={{
                                         width: 18,
                                         height: 18,
-                                        border: '2px solid rgba(99,102,241,0.3)',
+                                        border: '2px solid rgba(16,185,129,0.3)',
                                         borderTopColor: 'var(--primary-400)',
                                         borderRadius: '50%',
                                         animation: 'spin 0.8s linear infinite',
@@ -3125,7 +3125,7 @@ export default function ChatPage() {
                                 {tab.count > 0 && (
                                     <span style={{
                                         fontSize: 10,
-                                        background: mediaTab === tab.key ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.06)',
+                                        background: mediaTab === tab.key ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.06)',
                                         color: mediaTab === tab.key ? 'var(--primary-400)' : 'var(--slate-500)',
                                         padding: '1px 5px',
                                         borderRadius: 6,
@@ -3149,7 +3149,7 @@ export default function ChatPage() {
                                 }}>
                                     <div style={{
                                         width: 56, height: 56, borderRadius: '50%',
-                                        background: 'rgba(99,102,241,0.08)',
+                                        background: 'rgba(16,185,129,0.08)',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     }}>
                                         <ImageIcon size={24} style={{ color: 'var(--primary-400)', opacity: 0.5 }} />
@@ -3218,7 +3218,7 @@ export default function ChatPage() {
                                 }}>
                                     <div style={{
                                         width: 56, height: 56, borderRadius: '50%',
-                                        background: 'rgba(99,102,241,0.08)',
+                                        background: 'rgba(16,185,129,0.08)',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     }}>
                                         <FileText size={24} style={{ color: 'var(--primary-400)', opacity: 0.5 }} />
@@ -3271,7 +3271,7 @@ export default function ChatPage() {
                                 }}>
                                     <div style={{
                                         width: 56, height: 56, borderRadius: '50%',
-                                        background: 'rgba(99,102,241,0.08)',
+                                        background: 'rgba(16,185,129,0.08)',
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                     }}>
                                         <Link2 size={24} style={{ color: 'var(--primary-400)', opacity: 0.5 }} />
@@ -3306,7 +3306,7 @@ export default function ChatPage() {
                                             >
                                                 <div style={{
                                                     width: 32, height: 32, borderRadius: 8,
-                                                    background: 'rgba(99,102,241,0.1)',
+                                                    background: 'rgba(16,185,129,0.1)',
                                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                     flexShrink: 0,
                                                 }}>
@@ -3314,7 +3314,7 @@ export default function ChatPage() {
                                                 </div>
                                                 <div style={{ flex: 1, minWidth: 0 }}>
                                                     <p style={{
-                                                        fontSize: 12, fontWeight: 600, color: '#93c5fd', margin: 0,
+                                                        fontSize: 12, fontWeight: 600, color: '#6ee7b7', margin: 0,
                                                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                                                     }}>
                                                         {hostname}
@@ -3435,7 +3435,7 @@ export default function ChatPage() {
                                                 ) : (
                                                     <div style={{
                                                         width: 32, height: 32, borderRadius: '50%',
-                                                        background: 'linear-gradient(135deg, #6366f1, #06b6d4)',
+                                                        background: 'linear-gradient(135deg, #10b981, #34d399)',
                                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                         fontWeight: 700, fontSize: 12, color: 'white', flexShrink: 0,
                                                     }}>
@@ -3456,8 +3456,8 @@ export default function ChatPage() {
                                                         padding: '5px 10px',
                                                         borderRadius: 6,
                                                         border: '1px solid rgba(255,255,255,0.1)',
-                                                        background: currentNickname ? 'rgba(99,102,241,0.1)' : 'rgba(255,255,255,0.04)',
-                                                        color: currentNickname ? '#a5b4fc' : 'var(--slate-400)',
+                                                        background: currentNickname ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.04)',
+                                                        color: currentNickname ? '#86efac' : 'var(--slate-400)',
                                                         fontSize: 12,
                                                         fontWeight: 500,
                                                         cursor: 'pointer',
@@ -3531,7 +3531,7 @@ export default function ChatPage() {
                                                 padding: '10px',
                                                 borderRadius: 10,
                                                 border: 'none',
-                                                background: 'linear-gradient(135deg, #6366f1, #7c3aed)',
+                                                background: 'linear-gradient(135deg, #10b981, #059669)',
                                                 color: 'white',
                                                 fontSize: 13,
                                                 fontWeight: 600,
@@ -3617,8 +3617,8 @@ export default function ChatPage() {
                                             gap: 10,
                                             padding: '10px 14px',
                                             borderRadius: 12,
-                                            background: isCreator ? 'rgba(99,102,241,0.06)' : 'rgba(255,255,255,0.03)',
-                                            border: `1px solid ${isCreator ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.06)'}`,
+                                            background: isCreator ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.03)',
+                                            border: `1px solid ${isCreator ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.06)'}`,
                                         }}>
                                             {details?.profileImage ? (
                                                 <img src={details.profileImage} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
@@ -3626,8 +3626,8 @@ export default function ChatPage() {
                                                 <div style={{
                                                     width: 36, height: 36, borderRadius: '50%',
                                                     background: isCreator
-                                                        ? 'linear-gradient(135deg, #7c3aed, #ec4899)'
-                                                        : 'linear-gradient(135deg, #6366f1, #06b6d4)',
+                                                        ? 'linear-gradient(135deg, #059669, #ec4899)'
+                                                        : 'linear-gradient(135deg, #10b981, #34d399)',
                                                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                                                     fontWeight: 700, fontSize: 14, color: 'white', flexShrink: 0,
                                                 }}>

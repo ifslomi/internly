@@ -10,6 +10,7 @@ import WeeklyReportFilters from '@/components/WeeklyReportFilters';
 import WeeklyReportTable from '@/components/WeeklyReportTable';
 import LogsHistoryFilters from '@/components/LogsHistoryFilters';
 import LogsHistoryTable from '@/components/LogsHistoryTable';
+import { showToast } from '@/lib/toast';
 import {
     FileText,
     Download,
@@ -67,7 +68,6 @@ export default function ReportsPage() {
     const [editDescription, setEditDescription] = useState('');
     const [editSupervisor, setEditSupervisor] = useState('');
     const [editHours, setEditHours] = useState(8);
-    const [editSaved, setEditSaved] = useState(false);
 
     const weeks = useMemo(() => getWeeksForLogs(logs), [logs]);
 
@@ -86,12 +86,10 @@ export default function ReportsPage() {
         setEditDescription(log.taskDescription);
         setEditSupervisor(log.supervisor);
         setEditHours(log.dailyHours);
-        setEditSaved(false);
     };
 
     const closeEditModal = () => {
         setEditingLog(null);
-        setEditSaved(false);
     };
 
     const toggleEditActivity = (type: ActivityType) => {
@@ -109,10 +107,8 @@ export default function ReportsPage() {
             supervisor: editSupervisor,
             dailyHours: editHours,
         });
-        setEditSaved(true);
-        setTimeout(() => {
-            closeEditModal();
-        }, 1200);
+        showToast({ kind: 'success', title: 'Updated', message: 'Log entry updated successfully.' });
+        closeEditModal();
     };
 
     const supervisors = useMemo(() => {
@@ -193,6 +189,7 @@ export default function ReportsPage() {
             }
             return [...prev, saved];
         });
+        showToast({ kind: 'success', title: 'Saved', message: 'Weekly report saved.' });
     };
 
     const handleExportPDF = async () => {
@@ -201,8 +198,10 @@ export default function ReportsPage() {
         await handleSaveReport();
         try {
             await generatePDF(weekLogs, selectedWeek.label, reflection, user.name);
+            showToast({ kind: 'success', title: 'Exported', message: 'Weekly report PDF generated.' });
         } catch (err) {
             console.error('PDF generation failed:', err);
+            showToast({ kind: 'error', title: 'Export Failed', message: 'Could not generate PDF. Please try again.' });
         }
         setGenerating(false);
     };
@@ -244,22 +243,6 @@ export default function ReportsPage() {
                             <button className="btn btn-ghost btn-icon btn-sm" onClick={closeEditModal}><X size={18} /></button>
                         </div>
 
-                        {editSaved && (
-                            <div style={{
-                                padding: '12px 24px',
-                                background: 'rgba(16,185,129,0.1)',
-                                borderBottom: '1px solid rgba(16,185,129,0.2)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 8,
-                                color: 'var(--emerald-400)',
-                                fontSize: 13,
-                                fontWeight: 600,
-                            }}>
-                                <Check size={16} /> Log updated successfully!
-                            </div>
-                        )}
-
                         <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20, maxHeight: '60vh', overflowY: 'auto' }}>
                             <div className="input-group">
                                 <label className="input-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -283,7 +266,7 @@ export default function ReportsPage() {
                                     gap: 8,
                                     padding: 14,
                                     borderRadius: 'var(--radius-sm)',
-                                    background: 'rgba(15,23,42,0.4)',
+                                    background: 'rgba(9,9,11,0.45)',
                                     border: '1px solid rgba(255,255,255,0.06)',
                                 }}>
                                     {ACTIVITY_TYPES.map((type) => (
@@ -359,7 +342,7 @@ export default function ReportsPage() {
                             <button
                                 className="btn btn-primary"
                                 onClick={handleSaveEdit}
-                                disabled={editActivities.length === 0 || editSaved}
+                                disabled={editActivities.length === 0}
                             >
                                 <Save size={16} /> Save Changes
                             </button>
@@ -565,7 +548,7 @@ function ReportsContent({ activeTab, setActiveTab, logs, weeks, selectedWeekIdx,
                     gap: 10,
                     padding: 6,
                     borderRadius: 999,
-                    background: 'rgba(15,23,42,0.6)',
+                    background: 'rgba(9,9,11,0.72)',
                     border: '1px solid rgba(255,255,255,0.06)',
                     width: '100%',
                 }}
@@ -690,7 +673,7 @@ function HistoryContent({ activeTab, setActiveTab, logs, filteredLogs, searchQue
                     gap: 10,
                     padding: 6,
                     borderRadius: 999,
-                    background: 'rgba(15,23,42,0.6)',
+                    background: 'rgba(9,9,11,0.72)',
                     border: '1px solid rgba(255,255,255,0.06)',
                     width: '100%',
                 }}

@@ -18,59 +18,10 @@
  *   npx tsx scripts/migrate-to-subcollections.ts --dry-run
  */
 
-import { initializeApp, cert, ServiceAccount, applicationDefault } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import * as path from 'path';
-import * as fs from 'fs';
-import * as os from 'os';
+import { createAdminFirestore } from './firebase-admin';
 
 // ─── Initialize Firebase Admin ─────────────────────────
-const PROJECT_ID = 'internly-12';
-const serviceAccountPath = path.resolve(__dirname, '../service-account.json');
-
-let app;
-
-if (fs.existsSync(serviceAccountPath)) {
-    console.log('✓ Using service-account.json');
-    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf-8')) as ServiceAccount;
-    app = initializeApp({ credential: cert(serviceAccount), projectId: PROJECT_ID });
-} else {
-    // Try Firebase CLI's refresh token → create temp ADC file
-    const firebaseConfigPath = path.join(os.homedir(), '.config', 'configstore', 'firebase-tools.json');
-    if (fs.existsSync(firebaseConfigPath)) {
-        const config = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf-8'));
-        const tokens = config.tokens || config.user?.tokens;
-
-        if (tokens?.refresh_token) {
-            console.log('✓ Using Firebase CLI refresh token (creating temp ADC)');
-
-            // Create a temporary ADC-compatible JSON
-            const adcContent = JSON.stringify({
-                type: 'authorized_user',
-                client_id: '563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com',
-                client_secret: 'j9iVZfS8kkCEFUPaAeJV0sAi',
-                refresh_token: tokens.refresh_token,
-            });
-
-            const tmpAdcPath = path.join(os.tmpdir(), `firebase-adc-${Date.now()}.json`);
-            fs.writeFileSync(tmpAdcPath, adcContent);
-            process.env.GOOGLE_APPLICATION_CREDENTIALS = tmpAdcPath;
-
-            // Clean up on exit
-            process.on('exit', () => {
-                try { fs.unlinkSync(tmpAdcPath); } catch { /* ignore */ }
-            });
-
-            app = initializeApp({ credential: applicationDefault(), projectId: PROJECT_ID });
-        } else {
-            throw new Error('No refresh_token in Firebase CLI config. Run `firebase login` first.');
-        }
-    } else {
-        throw new Error('No credentials found. Place service-account.json in project root or run `firebase login`.');
-    }
-}
-
-const db = getFirestore(app);
+const { db, projectId: PROJECT_ID } = createAdminFirestore();
 
 // ─── Config ────────────────────────────────────────────
 const BATCH_LIMIT = 490; // Firestore batch max is 500

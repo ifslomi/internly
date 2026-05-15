@@ -38,7 +38,7 @@ interface AppContextType {
     addCompetency: (competency: Omit<Competency, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
     deleteCompetency: (id: string) => Promise<void>;
     refreshData: () => Promise<void>;
-    signUpWithGoogle: () => Promise<void>;
+    signUpWithGoogle: (password: string) => Promise<void>;
     loginWithGoogle: () => Promise<void>;
     verifyCode: (code: string) => Promise<void>;
     resendCode: () => Promise<void>;
@@ -238,6 +238,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         if (pending.googleUid) {
             uid = pending.googleUid;
+
+            // Link email/password credential to the UB Mail account so manual login works.
+            if (pending.password) {
+                const { EmailAuthProvider, linkWithCredential } = await import('firebase/auth');
+                const currentUser = auth.currentUser;
+                if (currentUser && currentUser.uid === pending.googleUid) {
+                    try {
+                        const credential = EmailAuthProvider.credential(pending.email, pending.password);
+                        await linkWithCredential(currentUser, credential);
+                    } catch (err: unknown) {
+                        const code = (err as { code?: string })?.code || '';
+                        if (
+                            code !== 'auth/provider-already-linked' &&
+                            code !== 'auth/email-already-in-use' &&
+                            code !== 'auth/credential-already-in-use'
+                        ) {
+                            throw err;
+                        }
+                    }
+                }
+            }
         } else {
             const { createUserWithEmailAndPassword } = await import('firebase/auth');
             const credential = await createUserWithEmailAndPassword(auth, pending.email, pending.password);
@@ -346,13 +367,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
 
     // ─── Google Sign-Up ─────────────────────────────────
-    const handleSignUpWithGoogle = async () => {
+    const handleSignUpWithGoogle = async (password: string) => {
         const { signInWithPopup } = await import('firebase/auth');
         const { googleProvider } = await import('./firebase');
         const result = await signInWithPopup(auth, googleProvider);
         const firebaseUser = result.user;
         const name = firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User';
         const email = firebaseUser.email || '';
+
+        if (password.length < 6) {
+            throw new Error('Password must be at least 6 characters.');
+        }
 
         if (!isUbEmail(email)) {
             try {
@@ -380,7 +405,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         storage.storePendingSignup({
             name,
             email,
-            password: '',
+            password,
             totalRequiredHours: 480,
             startDate: new Date().toISOString().split('T')[0],
             verificationToken: data.token,
@@ -398,6 +423,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const firebaseUser = result.user;
         const email = firebaseUser.email || '';
         const uid = firebaseUser.uid;
+
+        if (!isUbEmail(email)) {
+            try {
+                const { signOut } = await import('firebase/auth');
+                await signOut(auth);
+            } catch { /* ignore */ }
+            throw new Error('Please use your @ub.edu.ph email address.');
+        }
 
         // Check Firestore by UID, then fall back to localStorage migration
         let firestoreUser = await getUserFromFirestore(uid);

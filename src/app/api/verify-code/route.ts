@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 
-const SECRET = process.env.VERIFICATION_SECRET || 'internly-default-secret-change-me';
+const SECRET = process.env.VERIFICATION_SECRET;
+
+function requireSecret(): string {
+    if (!SECRET) {
+        throw new Error('VERIFICATION_SECRET is required. Add it to .env.local.');
+    }
+    return SECRET;
+}
 
 function signToken(code: string, email: string, expiresAt: number): string {
-    const hmac = crypto.createHmac('sha256', SECRET);
+    const hmac = crypto.createHmac('sha256', requireSecret());
     hmac.update(`${code}|${email.toLowerCase()}|${expiresAt}`);
     return hmac.digest('hex');
 }

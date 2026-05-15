@@ -2,36 +2,16 @@
  * Full database structure dump.
  * Usage: npx tsx scripts/dump-structure.ts
  */
-import { initializeApp, applicationDefault } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import * as path from 'path';
-import * as fs from 'fs';
-import * as os from 'os';
+import { createAdminFirestore } from './firebase-admin';
 
-const PROJECT_ID = 'internly-12';
-const firebaseConfigPath = path.join(os.homedir(), '.config', 'configstore', 'firebase-tools.json');
-const config = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf-8'));
-const tokens = config.tokens || config.user?.tokens;
-const adcContent = JSON.stringify({
-    type: 'authorized_user',
-    client_id: '563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com',
-    client_secret: 'j9iVZfS8kkCEFUPaAeJV0sAi',
-    refresh_token: tokens.refresh_token,
-});
-const tmpPath = path.join(os.tmpdir(), `firebase-adc-dump-${Date.now()}.json`);
-fs.writeFileSync(tmpPath, adcContent);
-process.env.GOOGLE_APPLICATION_CREDENTIALS = tmpPath;
-process.on('exit', () => { try { fs.unlinkSync(tmpPath); } catch {} });
-
-const app = initializeApp({ credential: applicationDefault(), projectId: PROJECT_ID });
-const db = getFirestore(app);
+const { db, projectId } = createAdminFirestore();
 
 async function dump() {
     // Known top-level collections
     const topCollections = ['users', 'conversations', 'chatUsers', 'supervisors', 'dailyLogs', 'weeklyReports', 'notifications', 'appMetadata', 'time_logs'];
 
     console.log('\n════════════════════════════════════════════════════════');
-    console.log('  FULL FIRESTORE DATABASE STRUCTURE — internly-12');
+    console.log(`  FULL FIRESTORE DATABASE STRUCTURE — ${projectId}`);
     console.log('════════════════════════════════════════════════════════\n');
 
     for (const col of topCollections) {

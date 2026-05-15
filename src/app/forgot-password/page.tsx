@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Mail, Send, CheckCircle } from 'lucide-react';
+import { showToast } from '@/lib/toast';
 
 export default function ForgotPasswordPage() {
     const router = useRouter();
@@ -20,15 +21,19 @@ export default function ForgotPasswordPage() {
             const { auth } = await import('@/lib/firebase');
             await sendPasswordResetEmail(auth, email);
             setSent(true);
+            showToast({ kind: 'success', title: 'Email Sent', message: 'Password reset link sent. Check your inbox.' });
         } catch (err: unknown) {
             const firebaseErr = err as { code?: string; message?: string };
             if (firebaseErr.code === 'auth/user-not-found' || firebaseErr.code === 'auth/invalid-email') {
                 // Don't reveal whether the email exists — just show success anyway
                 setSent(true);
+                showToast({ kind: 'success', title: 'Email Sent', message: 'If the account exists, a reset link was sent.' });
             } else if (firebaseErr.code === 'auth/too-many-requests') {
                 setError('Too many attempts. Please try again later.');
+                showToast({ kind: 'warning', title: 'Too Many Attempts', message: 'Please try again later.' });
             } else {
                 setError(firebaseErr.message || 'Failed to send reset email.');
+                showToast({ kind: 'error', title: 'Request Failed', message: firebaseErr.message || 'Failed to send reset email.' });
             }
         }
 

@@ -2,31 +2,9 @@
  * Quick verification: list all users and their subcollection doc counts.
  * Usage: npx tsx scripts/verify-subcollections.ts
  */
-import { initializeApp, applicationDefault } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import * as path from 'path';
-import * as fs from 'fs';
-import * as os from 'os';
+import { createAdminFirestore } from './firebase-admin';
 
-const PROJECT_ID = 'internly-12';
-
-// Reuse the Firebase CLI ADC trick
-const firebaseConfigPath = path.join(os.homedir(), '.config', 'configstore', 'firebase-tools.json');
-const config = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf-8'));
-const tokens = config.tokens || config.user?.tokens;
-const adcContent = JSON.stringify({
-    type: 'authorized_user',
-    client_id: '563584335869-fgrhgmd47bqnekij5i8b5pr03ho849e6.apps.googleusercontent.com',
-    client_secret: 'j9iVZfS8kkCEFUPaAeJV0sAi',
-    refresh_token: tokens.refresh_token,
-});
-const tmpAdcPath = path.join(os.tmpdir(), `firebase-adc-verify-${Date.now()}.json`);
-fs.writeFileSync(tmpAdcPath, adcContent);
-process.env.GOOGLE_APPLICATION_CREDENTIALS = tmpAdcPath;
-process.on('exit', () => { try { fs.unlinkSync(tmpAdcPath); } catch {} });
-
-const app = initializeApp({ credential: applicationDefault(), projectId: PROJECT_ID });
-const db = getFirestore(app);
+const { db } = createAdminFirestore();
 
 async function verify() {
     console.log('\n🔍 Verifying subcollection structure...\n');

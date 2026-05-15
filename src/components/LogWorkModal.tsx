@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useApp } from '@/lib/context';
 import { ACTIVITY_TYPES, ActivityType } from '@/lib/types';
 import { Calendar, Tag, FileText, User, Clock, Check, X } from 'lucide-react';
+import { showToast } from '@/lib/toast';
 
 interface LogWorkModalProps {
     open: boolean;
@@ -18,7 +19,6 @@ export default function LogWorkModal({ open, onClose }: LogWorkModalProps) {
     const [dailyHours, setDailyHours] = useState(8);
     const [showSupervisorList, setShowSupervisorList] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
-    const [success, setSuccess] = useState(false);
 
     useEffect(() => {
         if (!open) return;
@@ -28,7 +28,6 @@ export default function LogWorkModal({ open, onClose }: LogWorkModalProps) {
         setSupervisor('');
         setDailyHours(8);
         setShowConfirm(false);
-        setSuccess(false);
     }, [open]);
 
     const toggleActivity = (type: ActivityType) => {
@@ -53,12 +52,9 @@ export default function LogWorkModal({ open, onClose }: LogWorkModalProps) {
             supervisor,
             dailyHours,
         });
-        setSuccess(true);
+        showToast({ kind: 'success', title: 'Work Logged', message: 'Daily work entry added successfully.' });
         setShowConfirm(false);
-        setTimeout(() => {
-            setSuccess(false);
-            onClose();
-        }, 1200);
+        onClose();
     };
 
     if (!open || !user) return null;
@@ -90,22 +86,6 @@ export default function LogWorkModal({ open, onClose }: LogWorkModalProps) {
                     </button>
                 </div>
 
-                {success && (
-                    <div style={{
-                        padding: '12px 24px',
-                        background: 'rgba(16,185,129,0.1)',
-                        borderBottom: '1px solid rgba(16,185,129,0.2)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        color: 'var(--emerald-400)',
-                        fontSize: 13,
-                        fontWeight: 600,
-                    }}>
-                        <Check size={16} /> Work logged successfully!
-                    </div>
-                )}
-
                 <form onSubmit={handleSubmit}>
                     <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
                         <div className="input-group">
@@ -132,7 +112,7 @@ export default function LogWorkModal({ open, onClose }: LogWorkModalProps) {
                                 gap: 8,
                                 padding: 16,
                                 borderRadius: 'var(--radius-sm)',
-                                background: 'rgba(15,23,42,0.4)',
+                                background: 'rgba(9,9,11,0.45)',
                                 border: '1px solid rgba(255,255,255,0.06)',
                             }}>
                                 {ACTIVITY_TYPES.map((type) => (
@@ -312,7 +292,7 @@ export default function LogWorkModal({ open, onClose }: LogWorkModalProps) {
                         <div
                             onClick={(e) => e.stopPropagation()}
                             style={{
-                                background: 'linear-gradient(180deg, rgba(15,23,42,0.98) 0%, rgba(15,23,42,1) 100%)',
+                                background: 'linear-gradient(180deg, rgba(9,9,11,0.98) 0%, rgba(9,9,11,1) 100%)',
                                 border: '1px solid rgba(255,255,255,0.08)',
                                 borderRadius: 20,
                                 maxWidth: 480,

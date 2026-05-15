@@ -37,7 +37,7 @@ export async function generatePDF(
     doc.rect(0, 0, pageWidth, 45, 'F');
 
     // Accent line
-    doc.setFillColor(99, 102, 241);
+    doc.setFillColor(16, 185, 129);
     doc.rect(0, 45, pageWidth, 2, 'F');
 
     // Title
@@ -133,7 +133,7 @@ export async function generatePDF(
 
     // Total row
     y += 2;
-    doc.setFillColor(99, 102, 241);
+    doc.setFillColor(16, 185, 129);
     doc.rect(margin, y - 4, contentWidth, 8, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFont('helvetica', 'bold');
@@ -157,7 +157,7 @@ export async function generatePDF(
 
     doc.setFillColor(248, 250, 252);
     doc.rect(margin, y - 4, contentWidth, 2, 'F');
-    doc.setFillColor(99, 102, 241);
+    doc.setFillColor(16, 185, 129);
     doc.rect(margin, y - 4, 40, 2, 'F');
     y += 4;
 

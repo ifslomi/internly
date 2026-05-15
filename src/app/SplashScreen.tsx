@@ -1,8 +1,10 @@
 'use client';
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 export default function SplashScreen({ onFinish }: { onFinish: () => void }) {
     const [phase, setPhase] = useState(0);
+    const [mounted, setMounted] = useState(false);
     // Phase 0: Initial (logo builds)
     // Phase 1: Logo glow + text reveal
     // Phase 2: Tagline + particles
@@ -10,6 +12,7 @@ export default function SplashScreen({ onFinish }: { onFinish: () => void }) {
     // Phase 4: Exit animation
 
     useEffect(() => {
+        setMounted(true);
         const timers = [
             setTimeout(() => setPhase(1), 400),
             setTimeout(() => setPhase(2), 1000),
@@ -20,7 +23,9 @@ export default function SplashScreen({ onFinish }: { onFinish: () => void }) {
         return () => timers.forEach(clearTimeout);
     }, [onFinish]);
 
-    return (
+    if (!mounted) return null;
+
+    return createPortal(
         <div className={`splash-screen ${phase >= 4 ? 'splash-exit' : ''}`}>
             {/* Animated background grid */}
             <div className="splash-grid" />
@@ -87,6 +92,7 @@ export default function SplashScreen({ onFinish }: { onFinish: () => void }) {
 
             {/* Bottom shimmer line */}
             <div className={`splash-shimmer ${phase >= 2 ? 'splash-shimmer-active' : ''}`} />
-        </div>
+        </div>,
+        document.body
     );
 }
