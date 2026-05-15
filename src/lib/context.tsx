@@ -1,7 +1,7 @@
 'use client';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { User, DailyLog, WeeklyReport, HourStats } from './types';
+import { User, DailyLog, WeeklyReport, HourStats, Competency } from './types';
 import * as storage from './storage';
 import { calculateHourStats } from './calculations';
 import {
@@ -12,6 +12,9 @@ import {
     addDailyLogToFirestore,
     updateDailyLogInFirestore,
     deleteDailyLogFromFirestore,
+    getCompetenciesFromFirestore,
+    addCompetencyToFirestore,
+    deleteCompetencyFromFirestore,
     getWeeklyReportsFromFirestore,
     saveWeeklyReportToFirestore,
     migrateLocalDataToFirestore,
@@ -22,6 +25,7 @@ import { auth } from './firebase';
 interface AppContextType {
     user: User | null;
     logs: DailyLog[];
+    competencies: Competency[];
     stats: HourStats;
     loading: boolean;
     signUp: (name: string, email: string, password: string, hours: number, startDate: string) => Promise<void>;
@@ -31,6 +35,8 @@ interface AppContextType {
     addLog: (log: Omit<DailyLog, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
     updateLog: (id: string, updates: Partial<DailyLog>) => Promise<void>;
     deleteLog: (id: string) => Promise<void>;
+    addCompetency: (competency: Omit<Competency, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+    deleteCompetency: (id: string) => Promise<void>;
     refreshData: () => Promise<void>;
     signUpWithGoogle: () => Promise<void>;
     loginWithGoogle: () => Promise<void>;
@@ -52,9 +58,12 @@ const emptyStats: HourStats = {
     daysLogged: 0,
 };
 
+const isUbEmail = (value: string) => value.trim().toLowerCase().endsWith('@ub.edu.ph');
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [logs, setLogs] = useState<DailyLog[]>([]);
+    const [competencies, setCompetencies] = useState<Competency[]>([]);
     const [stats, setStats] = useState<HourStats>(emptyStats);
     const [loading, setLoading] = useState(true);
     const initializedRef = useRef(false);
@@ -69,9 +78,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             if (localUser) {
                 const localLogs = storage.getDailyLogs(localUser.id);
                 setLogs(localLogs);
+                const localCompetencies = storage.getCompetencies(localUser.id);
+                setCompetencies(localCompetencies);
                 setStats(calculateHourStats(localLogs, localUser.totalRequiredHours));
             } else {
                 setLogs([]);
+                setCompetencies([]);
                 setStats(emptyStats);
             }
             return;
@@ -107,9 +119,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 storage.cacheDailyLogs(firestoreUser.id, firestoreLogs);
                 setLogs(firestoreLogs);
                 setStats(calculateHourStats(firestoreLogs, firestoreUser.totalRequiredHours));
+
+                const firestoreCompetencies = await getCompetenciesFromFirestore(firebaseUser.uid);
+                storage.cacheCompetencies(firestoreUser.id, firestoreCompetencies);
+                setCompetencies(firestoreCompetencies);
             } else {
                 setUser(null);
                 setLogs([]);
+                setCompetencies([]);
                 setStats(emptyStats);
             }
         } catch (err) {
@@ -120,7 +137,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             if (localUser) {
                 const localLogs = storage.getDailyLogs(localUser.id);
                 setLogs(localLogs);
+                const localCompetencies = storage.getCompetencies(localUser.id);
+                setCompetencies(localCompetencies);
                 setStats(calculateHourStats(localLogs, localUser.totalRequiredHours));
+            } else {
+                setCompetencies([]);
             }
         }
     }, []);
@@ -137,10 +158,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     setUser(localUser);
                     const localLogs = storage.getDailyLogs(localUser.id);
                     setLogs(localLogs);
+                    const localCompetencies = storage.getCompetencies(localUser.id);
+                    setCompetencies(localCompetencies);
                     setStats(calculateHourStats(localLogs, localUser.totalRequiredHours));
                 } else {
                     setUser(null);
                     setLogs([]);
+                    setCompetencies([]);
                     setStats(emptyStats);
                 }
             }
@@ -155,6 +179,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // ─── Sign Up ────────────────────────────────────────
     const handleSignUp = async (name: string, email: string, password: string, hours: number, startDate: string) => {
+        if (!isUbEmail(email)) {
+            throw new Error('Please use your @ub.edu.ph email address.');
+        }
         // Check localStorage for existing account (quick check)
         const existingLocal = storage.findUserByEmail(email);
         if (existingLocal) {
@@ -327,6 +354,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const name = firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User';
         const email = firebaseUser.email || '';
 
+        if (!isUbEmail(email)) {
+            try {
+                const { signOut } = await import('firebase/auth');
+                await signOut(auth);
+            } catch { /* ignore */ }
+            throw new Error('Please use your @ub.edu.ph email address.');
+        }
+
         // Check if this Google account already has a profile (by UID — safe for Firestore rules)
         const existingFirestore = await getUserFromFirestore(firebaseUser.uid);
         const existingLocal = storage.findUserByEmail(email);
@@ -389,6 +424,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         storage.cacheDailyLogs(uid, firestoreLogs);
         setLogs(firestoreLogs);
         setStats(calculateHourStats(firestoreLogs, firestoreUser.totalRequiredHours));
+
+        const firestoreCompetencies = await getCompetenciesFromFirestore(uid);
+        storage.cacheCompetencies(uid, firestoreCompetencies);
+        setCompetencies(firestoreCompetencies);
     };
 
     // ─── Update User ────────────────────────────────────
@@ -484,6 +523,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    // ─── Competencies ─────────────────────────────────
+    const handleAddCompetency = async (competency: Omit<Competency, 'id' | 'createdAt' | 'updatedAt'>) => {
+        const localCompetency = storage.addCompetency(competency);
+        setCompetencies((prev) => [localCompetency, ...prev]);
+
+        if (auth.currentUser) {
+            try {
+                const fsCompetency = await addCompetencyToFirestore(competency);
+                if (fsCompetency.id !== localCompetency.id) {
+                    storage.replaceCompetencyId(localCompetency.id, fsCompetency.id);
+                    setCompetencies((prev) =>
+                        prev.map((c) => (c.id === localCompetency.id ? { ...c, id: fsCompetency.id } : c))
+                    );
+                }
+            } catch (err) {
+                console.error('[Context] Failed to save competency to Firestore:', err);
+            }
+        }
+    };
+
+    const handleDeleteCompetency = async (id: string) => {
+        storage.deleteCompetency(id);
+        setCompetencies((prev) => prev.filter((c) => c.id !== id));
+
+        if (auth.currentUser) {
+            try {
+                await deleteCompetencyFromFirestore(id);
+            } catch (err) {
+                console.error('[Context] Failed to delete competency from Firestore:', err);
+            }
+        }
+    };
+
     // ─── Weekly Reports (Firestore-backed) ──────────────
     const handleSaveWeeklyReport = async (report: Omit<WeeklyReport, 'id' | 'createdAt'>): Promise<WeeklyReport> => {
         // Save to localStorage cache
@@ -519,6 +591,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             value={{
                 user,
                 logs,
+                competencies,
                 stats,
                 loading,
                 signUp: handleSignUp,
@@ -528,6 +601,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 addLog: handleAddLog,
                 updateLog: handleUpdateLog,
                 deleteLog: handleDeleteLog,
+                addCompetency: handleAddCompetency,
+                deleteCompetency: handleDeleteCompetency,
                 refreshData,
                 signUpWithGoogle: handleSignUpWithGoogle,
                 loginWithGoogle: handleLoginWithGoogle,

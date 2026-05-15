@@ -1,4 +1,4 @@
-import { User, DailyLog, WeeklyReport } from './types';
+import { User, DailyLog, WeeklyReport, Competency } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
 const KEYS = {
@@ -6,6 +6,7 @@ const KEYS = {
     CURRENT_USER: 'internly_current_user',
     DAILY_LOGS: 'internly_daily_logs',
     WEEKLY_REPORTS: 'internly_weekly_reports',
+    COMPETENCIES: 'internly_competencies',
     REMEMBER_ME: 'internly_remember_me',
     PENDING_SIGNUP: 'internly_pending_signup',
 };
@@ -260,6 +261,33 @@ export function saveWeeklyReport(report: Omit<WeeklyReport, 'id' | 'createdAt'>)
     return newReport;
 }
 
+// --- Competencies ---
+export function getCompetencies(userId: string): Competency[] {
+    return getItem<Competency[]>(KEYS.COMPETENCIES, []).filter((c) => c.userId === userId);
+}
+
+export function addCompetency(competency: Omit<Competency, 'id' | 'createdAt' | 'updatedAt'>): Competency {
+    const competencies = getItem<Competency[]>(KEYS.COMPETENCIES, []);
+    const now = new Date().toISOString();
+    const newCompetency: Competency = {
+        ...competency,
+        id: uuidv4(),
+        createdAt: now,
+        updatedAt: now,
+    };
+    competencies.push(newCompetency);
+    setItem(KEYS.COMPETENCIES, competencies);
+    return newCompetency;
+}
+
+export function deleteCompetency(id: string): void {
+    const competencies = getItem<Competency[]>(KEYS.COMPETENCIES, []);
+    setItem(
+        KEYS.COMPETENCIES,
+        competencies.filter((c) => c.id !== id)
+    );
+}
+
 // ═══════════════════════════════════════════════════════
 // ─── Cache helpers (used by context for Firestore sync) ─
 // ═══════════════════════════════════════════════════════
@@ -285,6 +313,13 @@ export function cacheDailyLogs(userId: string, firestoreLogs: DailyLog[]): void 
     setItem(KEYS.DAILY_LOGS, [...otherLogs, ...firestoreLogs]);
 }
 
+/** Cache competencies from Firestore into localStorage */
+export function cacheCompetencies(userId: string, firestoreCompetencies: Competency[]): void {
+    const allCompetencies = getItem<Competency[]>(KEYS.COMPETENCIES, []);
+    const otherCompetencies = allCompetencies.filter((c) => c.userId !== userId);
+    setItem(KEYS.COMPETENCIES, [...otherCompetencies, ...firestoreCompetencies]);
+}
+
 /** Replace a daily log ID (used when Firestore assigns a different ID than local) */
 export function replaceDailyLogId(oldId: string, newId: string): void {
     const logs = getItem<DailyLog[]>(KEYS.DAILY_LOGS, []);
@@ -292,6 +327,16 @@ export function replaceDailyLogId(oldId: string, newId: string): void {
     if (idx >= 0) {
         logs[idx] = { ...logs[idx], id: newId };
         setItem(KEYS.DAILY_LOGS, logs);
+    }
+}
+
+/** Replace a competency ID (used when Firestore assigns a different ID than local) */
+export function replaceCompetencyId(oldId: string, newId: string): void {
+    const competencies = getItem<Competency[]>(KEYS.COMPETENCIES, []);
+    const idx = competencies.findIndex((c) => c.id === oldId);
+    if (idx >= 0) {
+        competencies[idx] = { ...competencies[idx], id: newId };
+        setItem(KEYS.COMPETENCIES, competencies);
     }
 }
 

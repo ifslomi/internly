@@ -3,7 +3,6 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/context';
 import { format, parseISO } from 'date-fns';
-import { getBurndownData } from '@/lib/calculations';
 import {
     Plus,
     Clock,
@@ -11,56 +10,44 @@ import {
     TrendingUp,
     Activity,
     Calendar,
-    ArrowRight,
     Flame,
-    BarChart3,
 } from 'lucide-react';
-import {
-    LineChart,
-    Line,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer,
-    Legend,
-    Area,
-    AreaChart,
-} from 'recharts';
 
 export default function DashboardPage() {
-    const { user, logs, stats } = useApp();
+    const { user, logs, competencies, stats } = useApp();
     const router = useRouter();
 
     if (!user) return null;
 
-    const recentLogs = [...logs]
-        .sort((a, b) => new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime())
-        .slice(0, 5);
+    const cleanText = (value: string) => value.replace(/<[^>]*>/g, '');
+    const activityItems = [
+        ...logs.map((log) => ({
+            id: `log-${log.id}`,
+            type: 'log' as const,
+            date: log.entryDate,
+            title: format(parseISO(log.entryDate), 'MMM dd, yyyy'),
+            description: cleanText(log.taskDescription),
+            tags: log.activityType,
+            rightTop: `${log.dailyHours}h`,
+            rightBottom: log.supervisor,
+            href: '/dashboard/reports',
+        })),
+        ...competencies.map((comp) => ({
+            id: `competency-${comp.id}`,
+            type: 'competency' as const,
+            date: comp.date,
+            title: format(parseISO(comp.date), 'MMM dd, yyyy'),
+            description: comp.outcome,
+            tags: [(comp.areaCovered.match(/[A-C]\.[0-9]+/i) || [comp.areaCovered])[0], 'Competency'],
+            rightTop: (comp.areaCovered.match(/[A-C]\.[0-9]+/i) || ['Area'])[0],
+            rightBottom: comp.activity,
+            href: '/dashboard/competencies',
+        })),
+    ];
 
-    const burndownData = getBurndownData(logs, user.totalRequiredHours, user.startDate, user.endDate);
-
-    const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) => {
-        if (active && payload && payload.length) {
-            return (
-                <div style={{
-                    background: 'var(--slate-800)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: 'var(--radius-sm)',
-                    padding: '12px 16px',
-                    boxShadow: 'var(--shadow-xl)',
-                }}>
-                    <p style={{ fontSize: 12, fontWeight: 600, color: 'white', marginBottom: 6 }}>{label}</p>
-                    {payload.map((entry, i) => (
-                        <p key={i} style={{ fontSize: 12, color: entry.color, marginBottom: 2 }}>
-                            {entry.name}: {entry.value} hrs
-                        </p>
-                    ))}
-                </div>
-            );
-        }
-        return null;
-    };
+    const recentActivities = activityItems
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 8);
 
     return (
         <div>
@@ -83,7 +70,7 @@ export default function DashboardPage() {
                 </div>
                 <button
                     className="btn btn-primary"
-                    onClick={() => router.push('/dashboard/log')}
+                    onClick={() => router.push('/dashboard/reports')}
                     id="dashboard-log-btn"
                 >
                     <Plus size={18} />
@@ -194,82 +181,6 @@ export default function DashboardPage() {
 
             </div>
 
-            {/* Burn-down Chart */}
-            {burndownData.length > 0 && (
-                <div className="card" style={{ padding: 24, marginBottom: 32 }}>
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        marginBottom: 20,
-                    }}>
-                        <div style={{
-                            width: 36,
-                            height: 36,
-                            borderRadius: 10,
-                            background: 'rgba(16,185,129,0.15)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'var(--primary-400)',
-                        }}>
-                            <BarChart3 size={18} />
-                        </div>
-                        <div>
-                            <h3 style={{ fontSize: 16, fontWeight: 700 }}>Hours Burndown</h3>
-                            <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Remaining hours vs ideal pace</p>
-                        </div>
-                    </div>
-
-                    <div className="chart-container" style={{ height: 280 }}>
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={burndownData}>
-                                <defs>
-                                    <linearGradient id="colorRemaining" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                                <XAxis
-                                    dataKey="week"
-                                    tick={{ fill: '#64748b', fontSize: 11 }}
-                                    axisLine={{ stroke: 'rgba(255,255,255,0.06)' }}
-                                    tickLine={false}
-                                />
-                                <YAxis
-                                    tick={{ fill: '#64748b', fontSize: 11 }}
-                                    axisLine={{ stroke: 'rgba(255,255,255,0.06)' }}
-                                    tickLine={false}
-                                />
-                                <Tooltip content={<CustomTooltip />} />
-                                <Legend
-                                    wrapperStyle={{ paddingTop: 16, fontSize: 12, color: '#94a3b8' }}
-                                />
-                                <Area
-                                    type="monotone"
-                                    dataKey="remaining"
-                                    stroke="#10b981"
-                                    strokeWidth={2}
-                                    fill="url(#colorRemaining)"
-                                    name="Actual Remaining"
-                                    dot={{ fill: '#10b981', r: 3 }}
-                                />
-                                <Line
-                                    type="monotone"
-                                    dataKey="ideal"
-                                    stroke="#334155"
-                                    strokeWidth={2}
-                                    strokeDasharray="6 6"
-                                    name="Ideal Pace"
-                                    dot={false}
-                                />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-            )}
-
             {/* Quick Stats Row */}
             <div className="quick-stats-grid" style={{
                 display: 'grid',
@@ -305,19 +216,13 @@ export default function DashboardPage() {
                     justifyContent: 'space-between',
                     marginBottom: 20,
                 }}>
-                    <h3 style={{ fontSize: 16, fontWeight: 700 }}>Recent Activity</h3>
-                    {logs.length > 0 && (
-                        <button
-                            className="btn btn-ghost btn-sm"
-                            onClick={() => router.push('/dashboard/history')}
-                            id="dashboard-view-all"
-                        >
-                            View All <ArrowRight size={14} />
-                        </button>
-                    )}
+                    <div>
+                        <h3 style={{ fontSize: 16, fontWeight: 700 }}>Recent Activity</h3>
+                        <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Logs and competencies across your account.</p>
+                    </div>
                 </div>
 
-                {recentLogs.length === 0 ? (
+                {recentActivities.length === 0 ? (
                     <div style={{
                         textAlign: 'center',
                         padding: '48px 24px',
@@ -326,11 +231,11 @@ export default function DashboardPage() {
                         <Clock size={40} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
                         <p style={{ fontSize: 15, fontWeight: 500, marginBottom: 8 }}>No activity yet</p>
                         <p style={{ fontSize: 13 }}>
-                            Start logging your daily work to see your activity here.
+                            Log your work or add competencies to see activity here.
                         </p>
                         <button
                             className="btn btn-primary btn-sm"
-                            onClick={() => router.push('/dashboard/log')}
+                            onClick={() => router.push('/dashboard/reports')}
                             style={{ marginTop: 16 }}
                             id="dashboard-first-log"
                         >
@@ -339,9 +244,9 @@ export default function DashboardPage() {
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {recentLogs.map((log) => (
+                        {recentActivities.map((item) => (
                             <div
-                                key={log.id}
+                                key={item.id}
                                 className="recent-activity-item"
                                 style={{
                                     display: 'flex',
@@ -354,7 +259,7 @@ export default function DashboardPage() {
                                     transition: 'all 150ms ease',
                                     cursor: 'pointer',
                                 }}
-                                onClick={() => router.push(`/dashboard/log?edit=${log.id}`)}
+                                onClick={() => router.push(item.href)}
                                 onMouseEnter={(e) => {
                                     e.currentTarget.style.background = 'rgba(16,185,129,0.05)';
                                     e.currentTarget.style.borderColor = 'rgba(16,185,129,0.15)';
@@ -374,22 +279,26 @@ export default function DashboardPage() {
                                     justifyContent: 'center',
                                     flexShrink: 0,
                                 }}>
-                                    <Calendar size={18} style={{ color: 'var(--primary-400)' }} />
+                                    {item.type === 'log' ? (
+                                        <Activity size={18} style={{ color: 'var(--primary-400)' }} />
+                                    ) : (
+                                        <Target size={18} style={{ color: 'var(--primary-400)' }} />
+                                    )}
                                 </div>
                                 <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2, flexWrap: 'wrap' }}>
                                         <span style={{ fontSize: 14, fontWeight: 600, color: 'white' }}>
-                                            {format(parseISO(log.entryDate), 'MMM dd, yyyy')}
+                                            {item.title}
                                         </span>
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                            {log.activityType.slice(0, 2).map((t) => (
-                                                <span key={t} className="tag" style={{ padding: '2px 8px', fontSize: 10 }}>
-                                                    {t}
+                                            {item.tags.slice(0, 2).map((tag) => (
+                                                <span key={tag} className="tag" style={{ padding: '2px 8px', fontSize: 10 }}>
+                                                    {tag}
                                                 </span>
                                             ))}
-                                            {log.activityType.length > 2 && (
+                                            {item.tags.length > 2 && (
                                                 <span className="tag" style={{ padding: '2px 8px', fontSize: 10 }}>
-                                                    +{log.activityType.length - 2}
+                                                    +{item.tags.length - 2}
                                                 </span>
                                             )}
                                         </div>
@@ -401,15 +310,15 @@ export default function DashboardPage() {
                                         overflow: 'hidden',
                                         textOverflow: 'ellipsis',
                                     }}>
-                                        {log.taskDescription.replace(/<[^>]*>/g, '').substring(0, 100)}
+                                        {item.description.substring(0, 100)}
                                     </p>
                                 </div>
                                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
                                     <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--primary-300)' }}>
-                                        {log.dailyHours}h
+                                        {item.rightTop}
                                     </div>
                                     <div style={{ fontSize: 11, color: 'var(--slate-500)' }}>
-                                        {log.supervisor}
+                                        {item.rightBottom}
                                     </div>
                                 </div>
                             </div>

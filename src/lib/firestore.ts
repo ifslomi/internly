@@ -30,7 +30,7 @@ import {
     limit,
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
-import { User, DailyLog, WeeklyReport, Notification, Supervisor } from './types';
+import { User, DailyLog, WeeklyReport, Notification, Supervisor, Competency } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
 // ─── Helper: resolve current UID ────────────────────────
@@ -50,7 +50,20 @@ export async function saveUserToFirestore(user: User): Promise<void> {
     await setDoc(userRef, {
         id: uid,
         name: user.name,
+        fullName: user.fullName || null,
         email: user.email,
+        address: user.address || null,
+        phoneNumber: user.phoneNumber || user.contact || null,
+        contact: user.contact || user.phoneNumber || null,
+        guardianEmail: user.guardianEmail || user.guardian?.email || null,
+        guardianPhone: user.guardianPhone || user.guardian?.phone || null,
+        guardian: user.guardian || null,
+        course: user.course || null,
+        companyName: user.companyName || user.company?.name || null,
+        companyAddress: user.companyAddress || user.company?.address || null,
+        companyContactNumber: user.companyContactNumber || user.company?.contactNumber || null,
+        companyEmail: user.companyEmail || user.company?.email || null,
+        company: user.company || null,
         totalRequiredHours: user.totalRequiredHours,
         startDate: user.startDate,
         endDate: user.endDate || null,
@@ -71,8 +84,21 @@ export async function getUserFromFirestore(uid: string): Promise<User | null> {
     return {
         id: data.id || uid,
         name: data.name || '',
+        fullName: data.fullName || undefined,
         email: data.email || '',
         password: '', // Never store passwords in Firestore
+        address: data.address || undefined,
+        phoneNumber: data.phoneNumber || undefined,
+        contact: data.contact || data.phoneNumber || undefined,
+        guardianEmail: data.guardianEmail || data.guardian?.email || undefined,
+        guardianPhone: data.guardianPhone || data.guardian?.phone || undefined,
+        guardian: data.guardian || undefined,
+        course: data.course || undefined,
+        companyName: data.companyName || data.company?.name || undefined,
+        companyAddress: data.companyAddress || data.company?.address || undefined,
+        companyContactNumber: data.companyContactNumber || data.company?.contactNumber || undefined,
+        companyEmail: data.companyEmail || data.company?.email || undefined,
+        company: data.company || undefined,
         totalRequiredHours: data.totalRequiredHours || 480,
         startDate: data.startDate || '',
         endDate: data.endDate || undefined,
@@ -103,8 +129,21 @@ export async function findUserByEmailInFirestore(email: string): Promise<User | 
     return {
         id: data.id || snap.docs[0].id,
         name: data.name || '',
+        fullName: data.fullName || undefined,
         email: data.email || '',
         password: '',
+        address: data.address || undefined,
+        phoneNumber: data.phoneNumber || undefined,
+        contact: data.contact || data.phoneNumber || undefined,
+        guardianEmail: data.guardianEmail || data.guardian?.email || undefined,
+        guardianPhone: data.guardianPhone || data.guardian?.phone || undefined,
+        guardian: data.guardian || undefined,
+        course: data.course || undefined,
+        companyName: data.companyName || data.company?.name || undefined,
+        companyAddress: data.companyAddress || data.company?.address || undefined,
+        companyContactNumber: data.companyContactNumber || data.company?.contactNumber || undefined,
+        companyEmail: data.companyEmail || data.company?.email || undefined,
+        company: data.company || undefined,
         totalRequiredHours: data.totalRequiredHours || 480,
         startDate: data.startDate || '',
         endDate: data.endDate || undefined,
@@ -220,6 +259,69 @@ export async function updateDailyLogInFirestore(
 export async function deleteDailyLogFromFirestore(id: string, userId?: string): Promise<void> {
     const uid = resolveUid(userId);
     await deleteDoc(doc(db, 'users', uid, 'dailyLogs', id));
+}
+
+// ═══════════════════════════════════════════════════════
+// ─── Competencies (Subcollection) ─────────────────────
+// Path: users/{userId}/competencies/{competencyId}
+// ═══════════════════════════════════════════════════════
+
+/** Get the competencies subcollection reference for a user */
+function competenciesCol(uid: string) {
+    return collection(db, 'users', uid, 'competencies');
+}
+
+/** Fetch all competencies for a user from Firestore */
+export async function getCompetenciesFromFirestore(userId: string): Promise<Competency[]> {
+    const uid = resolveUid(userId);
+    const q = query(competenciesCol(uid), orderBy('date', 'desc'));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => {
+        const data = d.data();
+        return {
+            id: d.id,
+            userId: uid,
+            date: data.date || '',
+            activity: data.activity || '',
+            areaCovered: data.areaCovered || '',
+            outcome: data.outcome || '',
+            evidenceType: data.evidenceType || '',
+            evidenceUrl: data.evidenceUrl || '',
+            evidenceLabel: data.evidenceLabel || '',
+            createdAt: data.createdAt || '',
+            updatedAt: data.updatedAt || '',
+        } as Competency;
+    });
+}
+
+/** Add a competency to Firestore */
+export async function addCompetencyToFirestore(
+    competency: Omit<Competency, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<Competency> {
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    const uid = resolveUid(competency.userId);
+    const newCompetency: Competency = {
+        ...competency,
+        userId: uid,
+        id,
+        createdAt: now,
+        updatedAt: now,
+    };
+    const competencyRef = doc(db, 'users', uid, 'competencies', id);
+    await setDoc(competencyRef, {
+        ...newCompetency,
+        _createdAt: serverTimestamp(),
+        _updatedAt: serverTimestamp(),
+    });
+
+    return newCompetency;
+}
+
+/** Delete a competency from Firestore */
+export async function deleteCompetencyFromFirestore(id: string, userId?: string): Promise<void> {
+    const uid = resolveUid(userId);
+    await deleteDoc(doc(db, 'users', uid, 'competencies', id));
 }
 
 // ═══════════════════════════════════════════════════════

@@ -7,6 +7,7 @@ import { ArrowLeft, Eye, EyeOff, UserPlus, X } from 'lucide-react';
 export default function SignUpPage() {
     const { signUp, user, loading, signUpWithGoogle } = useApp();
     const router = useRouter();
+    const isUbEmail = (value: string) => value.trim().toLowerCase().endsWith('@ub.edu.ph');
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -30,6 +31,10 @@ export default function SignUpPage() {
 
         if (!agreedTerms) {
             setError('You must agree to the Terms of Service and Privacy Policy.');
+            return;
+        }
+        if (!isUbEmail(email)) {
+            setError('Please use your @ub.edu.ph email address.');
             return;
         }
         if (password !== confirmPassword) {
@@ -76,11 +81,11 @@ export default function SignUpPage() {
             <div style={{ maxWidth: 480, width: '100%', position: 'relative', zIndex: 1, padding: '0 4px' }}>
                 <button
                     className="btn btn-ghost"
-                    onClick={() => router.push('/')}
+                    onClick={() => router.push('/login')}
                     style={{ marginBottom: 32, color: 'var(--slate-400)' }}
                     id="signup-back"
                 >
-                    <ArrowLeft size={18} /> Back to home
+                    <ArrowLeft size={18} /> Back to login
                 </button>
 
                 <div className="card-elevated auth-card" style={{}}>

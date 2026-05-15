@@ -18,13 +18,21 @@ export async function POST(request: NextRequest) {
     try {
         const { email, name } = await request.json();
 
-        if (!email) {
+        const normalizedEmail = String(email || '').trim().toLowerCase();
+
+        if (!normalizedEmail) {
             return NextResponse.json({ error: 'Email is required' }, { status: 400 });
+        }
+        if (!normalizedEmail.endsWith('@ub.edu.ph')) {
+            return NextResponse.json(
+                { error: 'Please use your @ub.edu.ph email address.' },
+                { status: 400 }
+            );
         }
 
         const code = generateCode();
         const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
-        const token = signToken(code, email.toLowerCase(), expiresAt);
+        const token = signToken(code, normalizedEmail, expiresAt);
 
         // Configure Gmail SMTP transport
         const transporter = nodemailer.createTransport({
@@ -40,7 +48,7 @@ export async function POST(request: NextRequest) {
         // Send verification email
         await transporter.sendMail({
             from: `"Internly" <${process.env.EMAIL_USER}>`,
-            to: email,
+            to: normalizedEmail,
             subject: 'Your Internly Verification Code',
             html: `
                 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; background: #ffffff;">

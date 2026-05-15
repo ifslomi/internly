@@ -4,7 +4,6 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useApp } from '@/lib/context';
 import {
     LayoutDashboard,
-    Plus,
     FileText,
     Settings,
     LogOut,
@@ -13,9 +12,7 @@ import {
     ChevronRight,
     ChevronsLeft,
     ChevronsRight,
-    ClipboardList,
     BarChart3,
-    Clock,
     MessageCircle,
     User,
     Award,
@@ -24,8 +21,6 @@ import {
 
 const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/dashboard/hours', label: 'OJT Hours', icon: Clock },
-    { href: '/dashboard/log', label: 'Log Today\'s Work', icon: Plus },
     { href: '/dashboard/reports', label: 'Weekly Reports', icon: FileText },
     { href: '/dashboard/competencies', label: 'Competencies', icon: Award },
     { href: '/dashboard/sanctions', label: 'Sanctions', icon: Calendar },
@@ -35,7 +30,6 @@ const navItems = [
 
 const mobileNavItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/dashboard/log', label: 'Logs', icon: ClipboardList },
     { href: '/dashboard/chat', label: 'Chat', icon: MessageCircle },
     { href: '/dashboard/reports', label: 'Reports', icon: BarChart3 },
     { href: '/dashboard/settings', label: 'Settings', icon: Settings },

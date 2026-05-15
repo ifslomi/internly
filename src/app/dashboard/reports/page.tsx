@@ -5,12 +5,15 @@ import { getWeeksForLogs, getLogsForWeek } from '@/lib/calculations';
 import { generatePDF } from '@/lib/pdf';
 import { WeeklyReport, ActivityType, DailyLog, ACTIVITY_TYPES } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
+import LogWorkModal from '@/components/LogWorkModal';
+import WeeklyReportFilters from '@/components/WeeklyReportFilters';
+import WeeklyReportTable from '@/components/WeeklyReportTable';
+import LogsHistoryFilters from '@/components/LogsHistoryFilters';
+import LogsHistoryTable from '@/components/LogsHistoryTable';
 import {
     FileText,
     Download,
     Calendar,
-    Sparkles,
-    Eye,
     Clock,
     Search,
     Filter,
@@ -21,6 +24,7 @@ import {
     Tag,
     User,
     Check,
+    Plus,
     Save,
     X,
 } from 'lucide-react';
@@ -30,14 +34,24 @@ export default function ReportsPage() {
     
     // Tab state
     const [activeTab, setActiveTab] = useState<'reports' | 'history'>('reports');
+
+    // Log modal state
+    const [showLogModal, setShowLogModal] = useState(false);
     
     // Reports state
     const [selectedWeekIdx, setSelectedWeekIdx] = useState(0);
     const [reflection, setReflection] = useState('');
-    const [showPreview, setShowPreview] = useState(true);
+    const [showPreview] = useState(true);
     const [generating, setGenerating] = useState(false);
-    const [draftingAI, setDraftingAI] = useState(false);
     const [savedReports, setSavedReports] = useState<WeeklyReport[]>([]);
+
+    // Preview filters state
+    const [previewSearch, setPreviewSearch] = useState('');
+    const [previewSupervisor, setPreviewSupervisor] = useState('');
+    const [previewActivity, setPreviewActivity] = useState<ActivityType | ''>('');
+    const [previewDateFrom, setPreviewDateFrom] = useState('');
+    const [previewDateTo, setPreviewDateTo] = useState('');
+    const [showPreviewFilters, setShowPreviewFilters] = useState(true);
 
     // History state
     const [searchQuery, setSearchQuery] = useState('');
@@ -144,7 +158,6 @@ export default function ReportsPage() {
     const weekLogs = selectedWeek
         ? getLogsForWeek(logs, selectedWeek.start, selectedWeek.end)
         : [];
-    const weekTotalHours = weekLogs.reduce((s, l) => s + l.dailyHours, 0);
 
     // Load saved reflection when switching weeks
     const currentSavedReport = selectedWeek
@@ -194,31 +207,9 @@ export default function ReportsPage() {
         setGenerating(false);
     };
 
-    const handleAIDraft = () => {
-        if (weekLogs.length === 0) return;
-        setDraftingAI(true);
-
-        // Simulate AI drafting from the logs
-        setTimeout(() => {
-            const activities = weekLogs.map((l) => l.activityType.join(', ')).join('; ');
-            const descriptions = weekLogs
-                .map(
-                    (l) =>
-                        `${format(parseISO(l.entryDate), 'EEEE')}: ${l.taskDescription
-                            .replace(/<[^>]*>/g, '')
-                            .substring(0, 100)}`
-                )
-                .join('\n');
-
-            const draft = `This week was a productive period focused on ${activities}. Over ${weekLogs.length} working day(s), I rendered a total of ${weekTotalHours} hours contributing to various tasks and responsibilities.\n\nKey activities included:\n${descriptions}\n\nThrough these experiences, I have gained deeper understanding of the work processes and improved my professional skills. The hands-on exposure has been invaluable in bridging the gap between academic knowledge and practical application. I look forward to building on these learnings in the coming week.`;
-
-            setReflection(draft);
-            setDraftingAI(false);
-        }, 2000);
-    };
-
     return (
         <div>
+            <LogWorkModal open={showLogModal} onClose={() => setShowLogModal(false)} />
             {/* Edit Modal */}
             {editingLog && (
                 <div className="modal-overlay" onClick={closeEditModal}>
@@ -415,67 +406,38 @@ export default function ReportsPage() {
                 </div>
             )}
 
-            {/* Tabs */}
-            <div style={{ marginBottom: 24, display: 'flex', gap: 8, borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: 0 }}>
-                <button
-                    onClick={() => setActiveTab('reports')}
-                    style={{
-                        padding: '12px 20px',
-                        borderBottom: activeTab === 'reports' ? '2px solid var(--primary-400)' : 'transparent',
-                        background: 'transparent',
-                        color: activeTab === 'reports' ? 'white' : 'var(--slate-400)',
-                        fontSize: 14,
-                        fontWeight: 600,
-                        border: 'none',
-                        cursor: 'pointer',
-                        transition: 'all 200ms',
-                    }}
-                >
-                    <FileText size={16} style={{ display: 'inline', marginRight: 8, marginBottom: -2 }} />
-                    Weekly Reports
-                </button>
-                <button
-                    onClick={() => setActiveTab('history')}
-                    style={{
-                        padding: '12px 20px',
-                        borderBottom: activeTab === 'history' ? '2px solid var(--primary-400)' : 'transparent',
-                        background: 'transparent',
-                        color: activeTab === 'history' ? 'white' : 'var(--slate-400)',
-                        fontSize: 14,
-                        fontWeight: 600,
-                        border: 'none',
-                        cursor: 'pointer',
-                        transition: 'all 200ms',
-                    }}
-                >
-                    <History size={16} style={{ display: 'inline', marginRight: 8, marginBottom: -2 }} />
-                    Logs History
-                </button>
-            </div>
-
             {/* Content */}
             {activeTab === 'reports' ? (
                 // REPORTS TAB
                 <ReportsContent 
-                    user={user} 
+                    activeTab={activeTab}
+                    setActiveTab={setActiveTab}
                     logs={logs} 
                     weeks={weeks} 
                     selectedWeekIdx={selectedWeekIdx}
                     setSelectedWeekIdx={setSelectedWeekIdx}
-                    reflection={reflection}
-                    setReflection={setReflection}
                     showPreview={showPreview}
-                    setShowPreview={setShowPreview}
                     generating={generating}
-                    draftingAI={draftingAI}
-                    savedReports={savedReports}
-                    onSaveReport={handleSaveReport}
                     onExportPDF={handleExportPDF}
-                    onAIDraft={handleAIDraft}
+                    onOpenLogModal={() => setShowLogModal(true)}
+                    previewSearch={previewSearch}
+                    setPreviewSearch={setPreviewSearch}
+                    previewSupervisor={previewSupervisor}
+                    setPreviewSupervisor={setPreviewSupervisor}
+                    previewActivity={previewActivity}
+                    setPreviewActivity={setPreviewActivity}
+                    previewDateFrom={previewDateFrom}
+                    setPreviewDateFrom={setPreviewDateFrom}
+                    previewDateTo={previewDateTo}
+                    setPreviewDateTo={setPreviewDateTo}
+                    showPreviewFilters={showPreviewFilters}
+                    setShowPreviewFilters={setShowPreviewFilters}
                 />
             ) : (
                 // HISTORY TAB
                 <HistoryContent
+                    activeTab={activeTab}
+                    setActiveTab={setActiveTab}
                     logs={logs}
                     filteredLogs={filteredLogs}
                     searchQuery={searchQuery}
@@ -503,25 +465,163 @@ export default function ReportsPage() {
 }
 
 // Reports Tab Content
-function ReportsContent({ user, logs, weeks, selectedWeekIdx, setSelectedWeekIdx, reflection, setReflection, showPreview, setShowPreview, generating, draftingAI, savedReports, onSaveReport, onExportPDF, onAIDraft }: any) {
+function ReportsContent({ activeTab, setActiveTab, logs, weeks, selectedWeekIdx, setSelectedWeekIdx, showPreview, generating, onExportPDF, onOpenLogModal, previewSearch, setPreviewSearch, previewSupervisor, setPreviewSupervisor, previewActivity, setPreviewActivity, previewDateFrom, setPreviewDateFrom, previewDateTo, setPreviewDateTo, showPreviewFilters, setShowPreviewFilters }: any) {
     const selectedWeek = weeks[selectedWeekIdx];
     const weekLogs = selectedWeek
         ? getLogsForWeek(logs, selectedWeek.start, selectedWeek.end)
         : [];
-    const weekTotalHours = weekLogs.reduce((s: number, l: DailyLog) => s + l.dailyHours, 0);
-    const currentSavedReport = selectedWeek
-        ? savedReports.find((r: WeeklyReport) => r.weekStart === selectedWeek.start.toISOString())
-        : null;
+
+    // Preview filters logic
+    const previewSupervisors = useMemo(() => {
+        const set = new Set(weekLogs.map((l) => l.supervisor));
+        return Array.from(set).sort();
+    }, [weekLogs]);
+
+    const previewFilteredLogs = useMemo(() => {
+        return weekLogs.filter((log) => {
+            if (previewSearch) {
+                const q = previewSearch.toLowerCase();
+                const match =
+                    log.taskDescription.toLowerCase().includes(q) ||
+                    log.supervisor.toLowerCase().includes(q) ||
+                    log.activityType.some((a) => a.toLowerCase().includes(q));
+                if (!match) return false;
+            }
+            if (previewSupervisor && log.supervisor !== previewSupervisor) return false;
+            if (previewActivity && !log.activityType.includes(previewActivity)) return false;
+            if (previewDateFrom && log.entryDate < previewDateFrom) return false;
+            if (previewDateTo && log.entryDate > previewDateTo) return false;
+            return true;
+        });
+    }, [weekLogs, previewSearch, previewSupervisor, previewActivity, previewDateFrom, previewDateTo]);
+
+    const previewTotalFilteredHours = useMemo(() => {
+        return previewFilteredLogs.reduce((s, l) => s + l.dailyHours, 0);
+    }, [previewFilteredLogs]);
+
+    const previewHasActiveFilters =
+        previewSearch || previewSupervisor || previewActivity || previewDateFrom || previewDateTo;
+
+    const clearPreviewFilters = () => {
+        setPreviewSearch('');
+        setPreviewSupervisor('');
+        setPreviewActivity('');
+        setPreviewDateFrom('');
+        setPreviewDateTo('');
+    };
 
     return (
         <div>
-            <div style={{ marginBottom: 24 }}>
-                <h1 className="page-title" style={{ fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>
-                    Weekly Report Generator
-                </h1>
-                <p style={{ color: 'var(--slate-400)', fontSize: 14 }}>
-                    Compile your daily logs into professional weekly reports
-                </p>
+            <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24 }}>
+                <div>
+                    <h1 className="page-title" style={{ fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>
+                        Weekly Report Generator
+                    </h1>
+                    <p style={{ color: 'var(--slate-400)', fontSize: 14 }}>
+                        Compile your daily logs into professional weekly reports
+                    </p>
+                </div>
+                <div id="report-top-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                    <button
+                        className="btn btn-success btn-sm"
+                        onClick={onOpenLogModal}
+                        id="report-log-work"
+                    >
+                        <Plus size={16} /> Log Today's Work
+                    </button>
+                    <button
+                        className="btn btn-primary btn-sm"
+                        onClick={onExportPDF}
+                        disabled={generating || weekLogs.length === 0}
+                        id="report-export-pdf"
+                    >
+                        {generating ? (
+                            <>
+                                <span style={{
+                                    width: 14,
+                                    height: 14,
+                                    border: '2px solid rgba(255,255,255,0.3)',
+                                    borderTopColor: 'white',
+                                    borderRadius: '50%',
+                                    animation: 'spin 0.8s linear infinite',
+                                    display: 'inline-block',
+                                }} />
+                                Generating...
+                            </>
+                        ) : (
+                            <>
+                                <Download size={16} /> Export PDF
+                            </>
+                        )}
+                    </button>
+                </div>
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            </div>
+
+            <div
+                style={{
+                    marginBottom: 24,
+                    display: 'flex',
+                    gap: 10,
+                    padding: 6,
+                    borderRadius: 999,
+                    background: 'rgba(15,23,42,0.6)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    width: '100%',
+                }}
+            >
+                <button
+                    onClick={() => setActiveTab('reports')}
+                    style={{
+                        padding: '10px 18px',
+                        borderRadius: 999,
+                        background:
+                            activeTab === 'reports'
+                                ? 'linear-gradient(135deg, rgba(16,185,129,0.35), rgba(16,185,129,0.15))'
+                                : 'transparent',
+                        color: activeTab === 'reports' ? 'white' : 'var(--slate-400)',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        border: activeTab === 'reports' ? '1px solid rgba(16,185,129,0.45)' : '1px solid transparent',
+                        boxShadow: activeTab === 'reports' ? '0 8px 20px rgba(16,185,129,0.2)' : 'none',
+                        cursor: 'pointer',
+                        transition: 'all 200ms',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flex: 1,
+                        gap: 8,
+                    }}
+                >
+                    <FileText size={16} />
+                    Weekly Reports
+                </button>
+                <button
+                    onClick={() => setActiveTab('history')}
+                    style={{
+                        padding: '10px 18px',
+                        borderRadius: 999,
+                        background:
+                            activeTab === 'history'
+                                ? 'linear-gradient(135deg, rgba(16,185,129,0.35), rgba(16,185,129,0.15))'
+                                : 'transparent',
+                        color: activeTab === 'history' ? 'white' : 'var(--slate-400)',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        border: activeTab === 'history' ? '1px solid rgba(16,185,129,0.45)' : '1px solid transparent',
+                        boxShadow: activeTab === 'history' ? '0 8px 20px rgba(16,185,129,0.2)' : 'none',
+                        cursor: 'pointer',
+                        transition: 'all 200ms',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flex: 1,
+                        gap: 8,
+                    }}
+                >
+                    <History size={16} />
+                    Logs History
+                </button>
             </div>
 
             {weeks.length === 0 ? (
@@ -536,267 +636,34 @@ function ReportsContent({ user, logs, weeks, selectedWeekIdx, setSelectedWeekIdx
                 </div>
             ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24 }}>
-                    <div className="card" style={{ padding: 24 }}>
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            flexWrap: 'wrap',
-                            gap: 16,
-                        }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <div style={{
-                                    width: 40,
-                                    height: 40,
-                                    borderRadius: 10,
-                                    background: 'rgba(16,185,129,0.15)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: 'var(--primary-400)',
-                                }}>
-                                    <Calendar size={20} />
-                                </div>
-                                <div>
-                                    <p style={{ fontSize: 13, color: 'var(--slate-500)' }}>Select Week</p>
-                                    <div style={{ position: 'relative', display: 'inline-block' }}>
-                                        <select
-                                            className="input"
-                                            style={{
-                                                background: 'transparent',
-                                                border: 'none',
-                                                padding: '4px 32px 4px 0',
-                                                fontSize: 16,
-                                                fontWeight: 700,
-                                                color: 'white',
-                                                cursor: 'pointer',
-                                            }}
-                                            value={selectedWeekIdx}
-                                            onChange={(e) => setSelectedWeekIdx(Number(e.target.value))}
-                                            id="report-week-select"
-                                        >
-                                            {weeks.map((week: any, i: number) => (
-                                                <option key={i} value={i} style={{ background: 'var(--slate-800)' }}>
-                                                    {week.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div id="report-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                                <button
-                                    className="btn btn-secondary btn-sm"
-                                    onClick={() => setShowPreview(!showPreview)}
-                                    id="report-toggle-preview"
-                                >
-                                    <Eye size={16} /> {showPreview ? 'Hide' : 'Show'} Preview
-                                </button>
-                                <button
-                                    className="btn btn-primary btn-sm"
-                                    onClick={onExportPDF}
-                                    disabled={generating || weekLogs.length === 0}
-                                    id="report-export-pdf"
-                                >
-                                    {generating ? (
-                                        <>
-                                            <span style={{
-                                                width: 14,
-                                                height: 14,
-                                                border: '2px solid rgba(255,255,255,0.3)',
-                                                borderTopColor: 'white',
-                                                borderRadius: '50%',
-                                                animation: 'spin 0.8s linear infinite',
-                                                display: 'inline-block',
-                                            }} />
-                                            Generating...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Download size={16} /> Export PDF
-                                        </>
-                                    )}
-                                </button>
-                                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-                            </div>
-                        </div>
-
-                        <div style={{
-                            display: 'flex',
-                            gap: 24,
-                            marginTop: 16,
-                            paddingTop: 16,
-                            borderTop: '1px solid rgba(255,255,255,0.06)',
-                            flexWrap: 'wrap',
-                        }}>
-                            <div>
-                                <span style={{ fontSize: 12, color: 'var(--slate-500)' }}>Entries</span>
-                                <p style={{ fontSize: 18, fontWeight: 700, color: 'white' }}>{weekLogs.length}</p>
-                            </div>
-                            <div>
-                                <span style={{ fontSize: 12, color: 'var(--slate-500)' }}>Total Hours</span>
-                                <p style={{ fontSize: 18, fontWeight: 700, color: 'var(--primary-300)' }}>{weekTotalHours}h</p>
-                            </div>
-                            <div>
-                                <span style={{ fontSize: 12, color: 'var(--slate-500)' }}>Status</span>
-                                <p style={{ fontSize: 14, fontWeight: 600, color: currentSavedReport ? 'var(--emerald-400)' : 'var(--amber-400)' }}>
-                                    {currentSavedReport ? '✓ Saved' : 'Not saved'}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
                     {showPreview && weekLogs.length > 0 && (
-                        <div className="card" style={{ overflow: 'hidden' }}>
-                            <div style={{ padding: '16px 24px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                                <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--slate-200)' }}>
-                                    Daily Activity Log
-                                </h3>
-                            </div>
-                            <div style={{ overflowX: 'auto' }}>
-                                <table className="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Date</th>
-                                            <th>Activity</th>
-                                            <th>Description</th>
-                                            <th>Supervisor</th>
-                                            <th>Hours</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {weekLogs.map((log: DailyLog) => (
-                                            <tr key={log.id}>
-                                                <td style={{ whiteSpace: 'nowrap' }}>
-                                                    {format(parseISO(log.entryDate), 'EEE, MMM dd')}
-                                                </td>
-                                                <td>
-                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                                        {log.activityType.map((t) => (
-                                                            <span key={t} className="tag" style={{ padding: '2px 8px', fontSize: 10 }}>
-                                                                {t}
-                                                            </span>
-                                                        ))}
-                                                    </div>
-                                                </td>
-                                                <td style={{ maxWidth: 300 }}>
-                                                    <p style={{
-                                                        overflow: 'hidden',
-                                                        textOverflow: 'ellipsis',
-                                                        display: '-webkit-box',
-                                                        WebkitLineClamp: 2,
-                                                        WebkitBoxOrient: 'vertical',
-                                                        fontSize: 13,
-                                                    }}>
-                                                        {log.taskDescription.replace(/<[^>]*>/g, '')}
-                                                    </p>
-                                                </td>
-                                                <td>{log.supervisor}</td>
-                                                <td>
-                                                    <span style={{ fontWeight: 700, color: 'var(--primary-300)' }}>
-                                                        {log.dailyHours}h
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                    <tfoot>
-                                        <tr>
-                                            <td colSpan={4} style={{
-                                                textAlign: 'right',
-                                                fontWeight: 700,
-                                                color: 'white',
-                                                borderTop: '2px solid rgba(16,185,129,0.3)',
-                                            }}>
-                                                Total
-                                            </td>
-                                            <td style={{
-                                                fontWeight: 700,
-                                                color: 'var(--primary-300)',
-                                                fontSize: 16,
-                                                borderTop: '2px solid rgba(16,185,129,0.3)',
-                                            }}>
-                                                {weekTotalHours}h
-                                            </td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
-                        </div>
+                        <>
+                            <WeeklyReportFilters
+                                searchQuery={previewSearch}
+                                setSearchQuery={setPreviewSearch}
+                                showFilters={showPreviewFilters}
+                                setShowFilters={setShowPreviewFilters}
+                                hasActiveFilters={previewHasActiveFilters}
+                                clearFilters={clearPreviewFilters}
+                                supervisors={previewSupervisors}
+                                filterSupervisor={previewSupervisor}
+                                setFilterSupervisor={setPreviewSupervisor}
+                                filterActivity={previewActivity}
+                                setFilterActivity={setPreviewActivity}
+                                filterDateFrom={previewDateFrom}
+                                setFilterDateFrom={setPreviewDateFrom}
+                                filterDateTo={previewDateTo}
+                                setFilterDateTo={setPreviewDateTo}
+                            />
+                            <WeeklyReportTable
+                                weekLogs={weekLogs}
+                                filteredLogs={previewFilteredLogs}
+                                hasActiveFilters={previewHasActiveFilters}
+                                totalFilteredHours={previewTotalFilteredHours}
+                            />
+                        </>
                     )}
 
-                    <div className="card" style={{ padding: 24 }}>
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            marginBottom: 16,
-                        }}>
-                            <h3 style={{ fontSize: 16, fontWeight: 700 }}>
-                                Weekly Learning & Reflections
-                            </h3>
-                            <button
-                                className="btn btn-ghost btn-sm"
-                                onClick={onAIDraft}
-                                disabled={draftingAI || weekLogs.length === 0}
-                                style={{ color: 'var(--amber-400)' }}
-                                id="report-ai-draft"
-                            >
-                                {draftingAI ? (
-                                    <>
-                                        <span style={{
-                                            width: 14,
-                                            height: 14,
-                                            border: '2px solid rgba(245,158,11,0.3)',
-                                            borderTopColor: 'var(--amber-400)',
-                                            borderRadius: '50%',
-                                            animation: 'spin 0.8s linear infinite',
-                                            display: 'inline-block',
-                                        }} />
-                                        Drafting...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Sparkles size={16} /> Draft with AI
-                                    </>
-                                )}
-                            </button>
-                        </div>
-
-                        <textarea
-                            className="input textarea"
-                            placeholder="Write your weekly reflection here. What did you learn? What challenges did you face? What would you do differently?"
-                            value={reflection}
-                            onChange={(e) => setReflection(e.target.value)}
-                            style={{ minHeight: 200 }}
-                            id="report-reflection"
-                        />
-
-                        <div style={{
-                            display: 'flex',
-                            justifyContent: 'flex-end',
-                            gap: 12,
-                            marginTop: 16,
-                            flexWrap: 'wrap',
-                        }}>
-                            <button
-                                className="btn btn-secondary btn-sm"
-                                onClick={onSaveReport}
-                                id="report-save"
-                            >
-                                Save Report
-                            </button>
-                            <button
-                                className="btn btn-primary btn-sm"
-                                onClick={onExportPDF}
-                                disabled={generating || weekLogs.length === 0}
-                                id="report-export-pdf-bottom"
-                            >
-                                <Download size={16} /> Download PDF
-                            </button>
-                        </div>
-                    </div>
                 </div>
             )}
         </div>
@@ -804,7 +671,7 @@ function ReportsContent({ user, logs, weeks, selectedWeekIdx, setSelectedWeekIdx
 }
 
 // History Tab Content
-function HistoryContent({ logs, filteredLogs, searchQuery, setSearchQuery, showFilters, setShowFilters, hasActiveFilters, clearFilters, supervisors, filterSupervisor, setFilterSupervisor, filterActivity, setFilterActivity, filterDateFrom, setFilterDateFrom, filterDateTo, setFilterDateTo, totalFilteredHours, openEditModal, setDeleteConfirm }: any) {
+function HistoryContent({ activeTab, setActiveTab, logs, filteredLogs, searchQuery, setSearchQuery, showFilters, setShowFilters, hasActiveFilters, clearFilters, supervisors, filterSupervisor, setFilterSupervisor, filterActivity, setFilterActivity, filterDateFrom, setFilterDateFrom, filterDateTo, setFilterDateTo, totalFilteredHours, openEditModal, setDeleteConfirm }: any) {
     return (
         <div>
             <div style={{ marginBottom: 24 }}>
@@ -816,227 +683,98 @@ function HistoryContent({ logs, filteredLogs, searchQuery, setSearchQuery, showF
                 </p>
             </div>
 
-            <div className="card" style={{ padding: 20, marginBottom: 24 }}>
-                <div id="history-search-row" style={{
+            <div
+                style={{
+                    marginBottom: 24,
                     display: 'flex',
-                    gap: 12,
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                }}>
-                    <div style={{ flex: '1 1 200px', minWidth: 0, position: 'relative' }}>
-                        <Search size={18} style={{
-                            position: 'absolute',
-                            left: 14,
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            color: 'var(--slate-500)',
-                        }} />
-                        <input
-                            className="input"
-                            placeholder="Search logs..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            style={{ paddingLeft: 44, width: '100%' }}
-                            id="history-search"
-                        />
-                    </div>
-                    <button
-                        className={`btn btn-secondary btn-sm ${showFilters ? 'active' : ''}`}
-                        onClick={() => setShowFilters(!showFilters)}
-                        style={showFilters ? { borderColor: 'rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.1)' } : {}}
-                        id="history-toggle-filters"
-                    >
-                        <Filter size={16} /> Filters
-                        {hasActiveFilters && (
-                            <span style={{
-                                width: 6,
-                                height: 6,
-                                borderRadius: '50%',
-                                background: 'var(--primary-400)',
-                                marginLeft: 4,
-                            }} />
-                        )}
-                    </button>
-                    {hasActiveFilters && (
-                        <button
-                            className="btn btn-ghost btn-sm"
-                            onClick={clearFilters}
-                            style={{ color: 'var(--rose-400)' }}
-                            id="history-clear-filters"
-                        >
-                            <X size={14} /> Clear
-                        </button>
-                    )}
-                </div>
-
-                {showFilters && (
-                    <div id="history-filters-grid" style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                        gap: 12,
-                        marginTop: 16,
-                        paddingTop: 16,
-                        borderTop: '1px solid rgba(255,255,255,0.06)',
-                    }}>
-                        <div className="input-group">
-                            <label className="input-label">Supervisor</label>
-                            <select
-                                className="input"
-                                value={filterSupervisor}
-                                onChange={(e) => setFilterSupervisor(e.target.value)}
-                                id="history-filter-supervisor"
-                            >
-                                <option value="">All Supervisors</option>
-                                {supervisors.map((s: string) => (
-                                    <option key={s} value={s}>{s}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="input-group">
-                            <label className="input-label">Activity Type</label>
-                            <select
-                                className="input"
-                                value={filterActivity}
-                                onChange={(e) => setFilterActivity(e.target.value as ActivityType | '')}
-                                id="history-filter-activity"
-                            >
-                                <option value="">All Activities</option>
-                                {ACTIVITY_TYPES.map((t) => (
-                                    <option key={t} value={t}>{t}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="input-group">
-                            <label className="input-label">From Date</label>
-                            <input
-                                className="input"
-                                type="date"
-                                value={filterDateFrom}
-                                onChange={(e) => setFilterDateFrom(e.target.value)}
-                                id="history-filter-from"
-                            />
-                        </div>
-                        <div className="input-group">
-                            <label className="input-label">To Date</label>
-                            <input
-                                className="input"
-                                type="date"
-                                value={filterDateTo}
-                                onChange={(e) => setFilterDateTo(e.target.value)}
-                                id="history-filter-to"
-                            />
-                        </div>
-                    </div>
-                )}
+                    gap: 10,
+                    padding: 6,
+                    borderRadius: 999,
+                    background: 'rgba(15,23,42,0.6)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    width: '100%',
+                }}
+            >
+                <button
+                    onClick={() => setActiveTab('reports')}
+                    style={{
+                        padding: '10px 18px',
+                        borderRadius: 999,
+                        background:
+                            activeTab === 'reports'
+                                ? 'linear-gradient(135deg, rgba(16,185,129,0.35), rgba(16,185,129,0.15))'
+                                : 'transparent',
+                        color: activeTab === 'reports' ? 'white' : 'var(--slate-400)',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        border: activeTab === 'reports' ? '1px solid rgba(16,185,129,0.45)' : '1px solid transparent',
+                        boxShadow: activeTab === 'reports' ? '0 8px 20px rgba(16,185,129,0.2)' : 'none',
+                        cursor: 'pointer',
+                        transition: 'all 200ms',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flex: 1,
+                        gap: 8,
+                    }}
+                >
+                    <FileText size={16} />
+                    Weekly Reports
+                </button>
+                <button
+                    onClick={() => setActiveTab('history')}
+                    style={{
+                        padding: '10px 18px',
+                        borderRadius: 999,
+                        background:
+                            activeTab === 'history'
+                                ? 'linear-gradient(135deg, rgba(16,185,129,0.35), rgba(16,185,129,0.15))'
+                                : 'transparent',
+                        color: activeTab === 'history' ? 'white' : 'var(--slate-400)',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        border: activeTab === 'history' ? '1px solid rgba(16,185,129,0.45)' : '1px solid transparent',
+                        boxShadow: activeTab === 'history' ? '0 8px 20px rgba(16,185,129,0.2)' : 'none',
+                        cursor: 'pointer',
+                        transition: 'all 200ms',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flex: 1,
+                        gap: 8,
+                    }}
+                >
+                    <History size={16} />
+                    Logs History
+                </button>
             </div>
 
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: 16,
-                padding: '0 4px',
-            }}>
-                <p style={{ fontSize: 13, color: 'var(--slate-500)' }}>
-                    {filteredLogs.length} {filteredLogs.length === 1 ? 'entry' : 'entries'} found
-                    {hasActiveFilters ? ' (filtered)' : ''}
-                </p>
-                <p style={{ fontSize: 13, color: 'var(--slate-500)' }}>
-                    Total: <span style={{ fontWeight: 700, color: 'var(--primary-300)' }}>{totalFilteredHours}h</span>
-                </p>
-            </div>
+            <LogsHistoryFilters
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                showFilters={showFilters}
+                setShowFilters={setShowFilters}
+                hasActiveFilters={!!hasActiveFilters}
+                clearFilters={clearFilters}
+                supervisors={supervisors}
+                filterSupervisor={filterSupervisor}
+                setFilterSupervisor={setFilterSupervisor}
+                filterActivity={filterActivity}
+                setFilterActivity={setFilterActivity}
+                filterDateFrom={filterDateFrom}
+                setFilterDateFrom={setFilterDateFrom}
+                filterDateTo={filterDateTo}
+                setFilterDateTo={setFilterDateTo}
+            />
 
-            {filteredLogs.length === 0 ? (
-                <div className="card" style={{ padding: '64px 32px', textAlign: 'center' }}>
-                    <History size={48} style={{ margin: '0 auto 16px', opacity: 0.2, color: 'var(--slate-400)' }} />
-                    <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: 'var(--slate-300)' }}>
-                        {logs.length === 0 ? 'No logs yet' : 'No matching entries'}
-                    </h3>
-                    <p style={{ fontSize: 14, color: 'var(--slate-500)' }}>
-                        {logs.length === 0
-                            ? 'Start logging your daily activities to build your history.'
-                            : 'Try adjusting your search or filter criteria.'}
-                    </p>
-                </div>
-            ) : (
-                <div className="card" style={{ overflow: 'hidden' }}>
-                    <div style={{ overflowX: 'auto' }}>
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Activity</th>
-                                    <th>Description</th>
-                                    <th>Supervisor</th>
-                                    <th>Hours</th>
-                                    <th style={{ textAlign: 'right' }}>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredLogs.map((log: DailyLog) => (
-                                    <tr key={log.id}>
-                                        <td style={{ whiteSpace: 'nowrap' }}>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                <Calendar size={14} style={{ color: 'var(--slate-500)' }} />
-                                                {format(parseISO(log.entryDate), 'MMM dd, yyyy')}
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                                                {log.activityType.map((t) => (
-                                                    <span key={t} className="tag" style={{ padding: '2px 8px', fontSize: 10 }}>
-                                                        {t}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </td>
-                                        <td style={{ maxWidth: 280 }}>
-                                            <p style={{
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                display: '-webkit-box',
-                                                WebkitLineClamp: 2,
-                                                WebkitBoxOrient: 'vertical',
-                                                fontSize: 13,
-                                            }}>
-                                                {log.taskDescription.replace(/<[^>]*>/g, '')}
-                                            </p>
-                                        </td>
-                                        <td>{log.supervisor}</td>
-                                        <td>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                <Clock size={13} style={{ color: 'var(--slate-500)' }} />
-                                                <span style={{ fontWeight: 700, color: 'var(--primary-300)' }}>{log.dailyHours}h</span>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                                                <button
-                                                    className="btn btn-ghost btn-icon btn-sm"
-                                                    onClick={() => openEditModal(log)}
-                                                    title="Edit"
-                                                    id={`history-edit-${log.id}`}
-                                                >
-                                                    <Edit3 size={15} />
-                                                </button>
-                                                <button
-                                                    className="btn btn-ghost btn-icon btn-sm"
-                                                    onClick={() => setDeleteConfirm(log.id)}
-                                                    title="Delete"
-                                                    style={{ color: 'var(--rose-400)' }}
-                                                    id={`history-delete-${log.id}`}
-                                                >
-                                                    <Trash2 size={15} />
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
+            <LogsHistoryTable
+                logs={logs}
+                filteredLogs={filteredLogs}
+                hasActiveFilters={!!hasActiveFilters}
+                totalFilteredHours={totalFilteredHours}
+                openEditModal={openEditModal}
+                setDeleteConfirm={setDeleteConfirm}
+            />
         </div>
     );
 }

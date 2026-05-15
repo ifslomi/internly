@@ -2,19 +2,19 @@
 import React, { useState } from 'react';
 import { useApp } from '@/lib/context';
 import AccountProfilePanel from '@/components/AccountProfilePanel';
-import { Clock, Bell, Save, Check, X, LogOut, User } from 'lucide-react';
+import { Building2, Bell, Save, Check, LogOut, User, Mail, Phone, MapPin, PencilLine, X } from 'lucide-react';
 
 export default function SettingsPage() {
     const { user, updateUser, logout } = useApp();
-    const [activeTab, setActiveTab] = useState<'internship' | 'account' | 'notifications'>('internship');
+    const [activeTab, setActiveTab] = useState<'company' | 'account' | 'notifications'>('company');
     const [saved, setSaved] = useState(false);
     const [showMobileLogout, setShowMobileLogout] = useState(false);
-    const [totalHours, setTotalHours] = useState(user?.totalRequiredHours || 480);
-    const [startDate, setStartDate] = useState(user?.startDate || '');
-    const [endDate, setEndDate] = useState(user?.endDate || '');
+    const [companyName, setCompanyName] = useState(user?.company?.name || user?.companyName || '');
+    const [companyAddress, setCompanyAddress] = useState(user?.company?.address || user?.companyAddress || '');
+    const [companyContactNumber, setCompanyContactNumber] = useState(user?.company?.contactNumber || user?.companyContactNumber || '');
+    const [companyEmail, setCompanyEmail] = useState(user?.company?.email || user?.companyEmail || '');
+    const [isEditingCompany, setIsEditingCompany] = useState(false);
     const [reminderEnabled, setReminderEnabled] = useState(user?.reminderEnabled ?? true);
-    const [supervisors, setSupervisors] = useState(user?.supervisors || []);
-    const [newSupervisor, setNewSupervisor] = useState('');
 
     if (!user) return null;
 
@@ -23,9 +23,30 @@ export default function SettingsPage() {
         setTimeout(() => setSaved(false), 2000);
     };
 
-    const handleSaveInternship = () => {
-        updateUser({ totalRequiredHours: totalHours, startDate, endDate: endDate || undefined });
+    const handleSaveCompany = () => {
+        updateUser({
+            companyName,
+            companyAddress,
+            companyContactNumber,
+            companyEmail,
+            company: {
+                ...(user.company || {}),
+                name: companyName,
+                address: companyAddress,
+                contactNumber: companyContactNumber,
+                email: companyEmail,
+                details: companyAddress,
+            },
+        });
+        setIsEditingCompany(false);
         showSaved();
+    };
+
+    const resetCompanyForm = () => {
+        setCompanyName(user?.company?.name || user?.companyName || '');
+        setCompanyAddress(user?.company?.address || user?.companyAddress || '');
+        setCompanyContactNumber(user?.company?.contactNumber || user?.companyContactNumber || '');
+        setCompanyEmail(user?.company?.email || user?.companyEmail || '');
     };
 
     const handleSaveNotifications = () => {
@@ -33,24 +54,8 @@ export default function SettingsPage() {
         showSaved();
     };
 
-    const addSupervisor = () => {
-        const trimmed = newSupervisor.trim();
-        if (trimmed && !supervisors.includes(trimmed)) {
-            const updated = [...supervisors, trimmed];
-            setSupervisors(updated);
-            updateUser({ supervisors: updated });
-            setNewSupervisor('');
-        }
-    };
-
-    const removeSupervisor = (name: string) => {
-        const updated = supervisors.filter((s) => s !== name);
-        setSupervisors(updated);
-        updateUser({ supervisors: updated });
-    };
-
     const tabs = [
-        { id: 'internship' as const, label: 'Internship Details', icon: Clock },
+        { id: 'company' as const, label: 'Company Details', icon: Building2 },
         { id: 'account' as const, label: 'Account', icon: User },
         { id: 'notifications' as const, label: 'Notifications', icon: Bell },
     ];
@@ -83,7 +88,7 @@ export default function SettingsPage() {
 
             <div style={{ marginBottom: 24 }}>
                 <h1 className="page-title" style={{ fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>Settings</h1>
-                <p style={{ color: 'var(--slate-400)', fontSize: 14 }}>Manage your internship details, account, and preferences</p>
+                <p style={{ color: 'var(--slate-400)', fontSize: 14 }}>Manage your student info, company details, and preferences</p>
             </div>
 
             <div className="settings-grid" style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 24, alignItems: 'start' }}>
@@ -107,69 +112,68 @@ export default function SettingsPage() {
                 </div>
 
                 <div>
-                    {activeTab === 'internship' && (
+                    {activeTab === 'company' && (
                         <div className="card-elevated">
                             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
                                 <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-400)' }}>
-                                    <Clock size={22} />
+                                    <Building2 size={22} />
                                 </div>
                                 <div>
-                                    <h2 style={{ fontSize: 18, fontWeight: 700 }}>Internship Details</h2>
-                                    <p style={{ fontSize: 13, color: 'var(--slate-500)' }}>Update your OJT hour requirements and dates</p>
+                                    <h2 style={{ fontSize: 18, fontWeight: 700 }}>Company Details</h2>
+                                    <p style={{ fontSize: 13, color: 'var(--slate-500)' }}>Update your internship company information</p>
                                 </div>
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
                                 <div className="input-group">
-                                    <label className="input-label" htmlFor="settings-total-hours">Total Required Hours</label>
-                                    <input id="settings-total-hours" className="input" type="number" min={1} max={5000} value={totalHours} onChange={(e) => setTotalHours(Number(e.target.value))} />
+                                    <label className="input-label" htmlFor="settings-company-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Building2 size={14} /> Company name</label>
+                                    <input id="settings-company-name" className="input" value={companyName} onChange={(e) => setCompanyName(e.target.value)} readOnly={!isEditingCompany} aria-readonly={!isEditingCompany} />
                                 </div>
-                                <div id="settings-dates-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                                <div className="input-group">
+                                    <label className="input-label" htmlFor="settings-company-address" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><MapPin size={14} /> Company full address</label>
+                                    <input id="settings-company-address" className="input" value={companyAddress} onChange={(e) => setCompanyAddress(e.target.value)} readOnly={!isEditingCompany} aria-readonly={!isEditingCompany} />
+                                </div>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                                     <div className="input-group">
-                                        <label className="input-label" htmlFor="settings-start-date">Internship Start Date</label>
-                                        <input id="settings-start-date" className="input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                                        <label className="input-label" htmlFor="settings-company-contact" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Phone size={14} /> Company contact number</label>
+                                        <input id="settings-company-contact" className="input" value={companyContactNumber} onChange={(e) => setCompanyContactNumber(e.target.value)} readOnly={!isEditingCompany} aria-readonly={!isEditingCompany} />
                                     </div>
                                     <div className="input-group">
-                                        <label className="input-label" htmlFor="settings-end-date">Expected End Date (optional)</label>
-                                        <input id="settings-end-date" className="input" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+                                        <label className="input-label" htmlFor="settings-company-email" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Mail size={14} /> Company email address</label>
+                                        <input id="settings-company-email" className="input" type="email" value={companyEmail} onChange={(e) => setCompanyEmail(e.target.value)} readOnly={!isEditingCompany} aria-readonly={!isEditingCompany} />
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="divider" style={{ margin: '24px 0' }} />
-
-                            <div style={{ marginBottom: 24 }}>
-                                <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 12 }}>Supervisor Directory</h3>
-                                <p style={{ fontSize: 13, color: 'var(--slate-500)', marginBottom: 16 }}>Save frequently used supervisor names for quick selection when logging.</p>
-                                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                                    <input className="input" placeholder="Add a supervisor name" value={newSupervisor} onChange={(e) => setNewSupervisor(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addSupervisor())} />
-                                    <button className="btn btn-secondary btn-sm" onClick={addSupervisor}>Add</button>
-                                </div>
-                                {supervisors.length > 0 ? (
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                                        {supervisors.map((s) => (
-                                            <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 'var(--radius-full)', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', fontSize: 13, color: 'var(--primary-300)' }}>
-                                                {s}
-                                                <button onClick={() => removeSupervisor(s)} style={{ background: 'none', border: 'none', color: 'var(--slate-500)', cursor: 'pointer', padding: 0, display: 'flex' }}>
-                                                    <X size={14} />
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
+                            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                                {!isEditingCompany ? (
+                                    <button className="btn btn-primary" onClick={() => setIsEditingCompany(true)} id="settings-edit-company">
+                                        <PencilLine size={16} /> Edit
+                                    </button>
                                 ) : (
-                                    <p style={{ fontSize: 13, color: 'var(--slate-600)', fontStyle: 'italic' }}>No supervisors saved yet. They&apos;ll be auto-added as you log.</p>
+                                    <>
+                                        <button
+                                            className="btn btn-secondary"
+                                            onClick={() => {
+                                                resetCompanyForm();
+                                                setIsEditingCompany(false);
+                                            }}
+                                            id="settings-cancel-company"
+                                        >
+                                            <X size={16} /> Cancel
+                                        </button>
+                                        <button className="btn btn-primary" onClick={handleSaveCompany} id="settings-save-company">
+                                            <Save size={16} /> Save Changes
+                                        </button>
+                                    </>
                                 )}
                             </div>
-
-                            <button className="btn btn-primary" onClick={handleSaveInternship} id="settings-save-internship">
-                                <Save size={16} /> Save Changes
-                            </button>
                         </div>
                     )}
 
                     {activeTab === 'account' && (
                         <div className="card-elevated">
-                            <AccountProfilePanel title="Account" description="The account tab and profile page now use the same shared UI." />
+                            <AccountProfilePanel title="Account" description="Manage your student profile details." />
                         </div>
                     )}
 

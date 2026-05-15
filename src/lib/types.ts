@@ -1,8 +1,30 @@
 export interface User {
   id: string;
   name: string;
+  fullName?: string;
   email: string;
   password: string;
+  address?: string;
+  phoneNumber?: string;
+  contact?: string;
+  guardianEmail?: string;
+  guardianPhone?: string;
+  guardian?: {
+    email?: string;
+    phone?: string;
+  };
+  course?: string;
+  companyName?: string;
+  companyAddress?: string;
+  companyContactNumber?: string;
+  companyEmail?: string;
+  company?: {
+    name?: string;
+    address?: string;
+    contactNumber?: string;
+    email?: string;
+    details?: string;
+  };
   totalRequiredHours: number;
   startDate: string;
   endDate?: string;
@@ -21,6 +43,20 @@ export interface DailyLog {
   supervisor: string;
   dailyHours: number;
   attachments?: Attachment[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Competency {
+  id: string;
+  userId: string;
+  date: string;
+  activity: string;
+  areaCovered: string;
+  outcome: string;
+  evidenceType: '' | 'link' | 'image' | 'video' | 'document';
+  evidenceUrl: string;
+  evidenceLabel: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -1,56 +1,117 @@
 "use client";
 import React, { useState, useMemo } from 'react';
 import { useApp } from '@/lib/context';
-import { Award, Plus, Calendar, Edit3, Trash2, AlertTriangle, X, Check, Save, Link as LinkIcon } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { Award, Plus, Calendar, Trash2, AlertTriangle, X, Save, Link as LinkIcon } from 'lucide-react';
+import { format } from 'date-fns';
 
-interface Competency {
-  id: string;
-  date: string;
-  activity: string;
-  areaCovered: string;
-  outcome: string;
-  evidenceLink: string;
-}
+const AREA_SECTIONS = [
+  {
+    key: 'A',
+    title: 'Problem Analysis and Knowledge for Solving Computing Problems',
+    items: [
+      'A.1 Analyze complex problems and identify computing requirements suitable to its solution.',
+      'A.2 Identify and analyze user requirements vital to implementation of computer-based solutions.',
+      'A.3 Develop critical thinking skills.',
+      'A.4 Be familiar with current best practices and modern tools in analyzing and solving computing problems.',
+    ],
+  },
+  {
+    key: 'B',
+    title: 'Individual/Teamwork and Communication',
+    items: [
+      'B.1 Develop teamwork and collaboration skills.',
+      'B.2 Develop desirable attitudes, good work habits and proper office decorum.',
+      'B.3 Develop into students sound oral and written communication skills.',
+      'B.4 Enhance conflict resolution skills.',
+      'B.5 Value corporate code of ethics.',
+    ],
+  },
+  {
+    key: 'C',
+    title: 'Design/Development of Solution',
+    items: [
+      'C.1 Design, implement and evaluate computer-based systems or programs to meet the needs and requirements of client.',
+      'C.2 Recognized and apply technical standards and interoperability.',
+      'C.3 Effectively integrate IT solutions into user environment.',
+    ],
+  },
+];
+
+const getAreaKey = (areaCovered: string) => {
+  const match = areaCovered.trim().match(/^([ABC])\b/);
+  return match ? match[1] : '';
+};
 
 export default function CompetenciesPage() {
-  const { user } = useApp();
-  const [competencies, setCompetencies] = useState<Competency[]>([]);
+  const { user, competencies, addCompetency, deleteCompetency } = useApp();
   const [showAddModal, setShowAddModal] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [activeAreaTab, setActiveAreaTab] = useState<'all' | 'A' | 'B' | 'C'>('all');
 
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     activity: '',
     areaCovered: '',
     outcome: '',
-    evidenceLink: '',
+    evidenceType: '' as '' | 'link' | 'image' | 'video' | 'document',
+    evidenceUrl: '',
+    evidenceLabel: '',
+    evidenceFile: null as File | null,
   });
 
-  const handleAddCompetency = () => {
+  const handleAddCompetency = async () => {
+    if (!user) return;
     if (!formData.activity || !formData.areaCovered || !formData.outcome) return;
 
-    const newCompetency: Competency = {
-      id: Math.random().toString(36).substr(2, 9),
-      ...formData,
+    let evidenceUrl = formData.evidenceUrl;
+    let evidenceLabel = formData.evidenceLabel;
+
+    if (formData.evidenceType && formData.evidenceType !== 'link') {
+      if (!formData.evidenceFile) return;
+      evidenceUrl = URL.createObjectURL(formData.evidenceFile);
+      evidenceLabel = formData.evidenceFile.name;
+    }
+
+    if (formData.evidenceType === 'link' && !formData.evidenceUrl) return;
+
+    const newCompetency = {
+      userId: user.id,
+      date: formData.date,
+      activity: formData.activity,
+      areaCovered: formData.areaCovered,
+      outcome: formData.outcome,
+      evidenceType: formData.evidenceType,
+      evidenceUrl,
+      evidenceLabel,
     };
 
-    setCompetencies([newCompetency, ...competencies]);
+    await addCompetency(newCompetency);
     setFormData({
       date: new Date().toISOString().split('T')[0],
       activity: '',
       areaCovered: '',
       outcome: '',
-      evidenceLink: '',
+      evidenceType: '',
+      evidenceUrl: '',
+      evidenceLabel: '',
+      evidenceFile: null,
     });
     setShowAddModal(false);
   };
 
-  const handleDeleteCompetency = (id: string) => {
-    setCompetencies(competencies.filter((c) => c.id !== id));
+  const handleDeleteCompetency = async (id: string) => {
+    const found = competencies.find((c) => c.id === id);
+    if (found?.evidenceUrl && found.evidenceUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(found.evidenceUrl);
+    }
+    await deleteCompetency(id);
     setDeleteConfirm(null);
   };
+
+  const filteredCompetencies = useMemo(() => {
+    if (activeAreaTab === 'all') return competencies;
+    return competencies.filter((c) => getAreaKey(c.areaCovered) === activeAreaTab);
+  }, [competencies, activeAreaTab]);
 
   if (!user) return null;
 
@@ -111,13 +172,22 @@ export default function CompetenciesPage() {
 
               <div className="input-group">
                 <label className="input-label">Area Covered</label>
-                <input
+                <select
                   className="input"
-                  type="text"
-                  placeholder="What area of competency was covered?"
                   value={formData.areaCovered}
                   onChange={(e) => setFormData({ ...formData, areaCovered: e.target.value })}
-                />
+                >
+                  <option value="">Select area covered</option>
+                  {AREA_SECTIONS.map((section) => (
+                    <optgroup key={section.key} label={`${section.key}. ${section.title}`}>
+                      {section.items.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
               </div>
 
               <div className="input-group">
@@ -132,14 +202,61 @@ export default function CompetenciesPage() {
               </div>
 
               <div className="input-group">
-                <label className="input-label">Evidence Link</label>
-                <input
-                  className="input"
-                  type="url"
-                  placeholder="Link to evidence (image, video, document, etc.)"
-                  value={formData.evidenceLink}
-                  onChange={(e) => setFormData({ ...formData, evidenceLink: e.target.value })}
-                />
+                <label className="input-label">Evidence</label>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <select
+                    className="input"
+                    value={formData.evidenceType}
+                    onChange={(e) => {
+                      const nextType = e.target.value as '' | 'link' | 'image' | 'video' | 'document';
+                      setFormData({
+                        ...formData,
+                        evidenceType: nextType,
+                        evidenceUrl: '',
+                        evidenceLabel: '',
+                        evidenceFile: null,
+                      });
+                    }}
+                  >
+                    <option value="">No evidence</option>
+                    <option value="link">Link</option>
+                    <option value="image">Image upload</option>
+                    <option value="video">Video upload</option>
+                    <option value="document">Document upload</option>
+                  </select>
+
+                  {formData.evidenceType === 'link' && (
+                    <input
+                      className="input"
+                      type="url"
+                      placeholder="Paste evidence link"
+                      value={formData.evidenceUrl}
+                      onChange={(e) => setFormData({ ...formData, evidenceUrl: e.target.value })}
+                    />
+                  )}
+
+                  {formData.evidenceType && formData.evidenceType !== 'link' && (
+                    <input
+                      className="input"
+                      type="file"
+                      accept={
+                        formData.evidenceType === 'image'
+                          ? 'image/*'
+                          : formData.evidenceType === 'video'
+                          ? 'video/*'
+                          : '.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx'
+                      }
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] || null;
+                        setFormData({
+                          ...formData,
+                          evidenceFile: file,
+                          evidenceLabel: file?.name || '',
+                        });
+                      }}
+                    />
+                  )}
+                </div>
               </div>
             </div>
 
@@ -156,7 +273,13 @@ export default function CompetenciesPage() {
               <button
                 className="btn btn-primary"
                 onClick={handleAddCompetency}
-                disabled={!formData.activity || !formData.areaCovered || !formData.outcome}
+                disabled={
+                  !formData.activity ||
+                  !formData.areaCovered ||
+                  !formData.outcome ||
+                  (formData.evidenceType === 'link' && !formData.evidenceUrl) ||
+                  (formData.evidenceType && formData.evidenceType !== 'link' && !formData.evidenceFile)
+                }
               >
                 <Save size={16} /> Add Entry
               </button>
@@ -220,12 +343,66 @@ export default function CompetenciesPage() {
         </button>
       </div>
 
+      {/* Area Tabs */}
+      <div
+        style={{
+          marginBottom: 16,
+          display: 'flex',
+          gap: 10,
+          padding: 6,
+          borderRadius: 999,
+          background: 'rgba(15,23,42,0.6)',
+          border: '1px solid rgba(255,255,255,0.06)',
+          width: '100%',
+          flexWrap: 'wrap',
+        }}
+      >
+        {[
+          { key: 'all', label: 'All Areas' },
+          { key: 'A', label: 'A. Problem Analysis' },
+          { key: 'B', label: 'B. Teamwork & Communication' },
+          { key: 'C', label: 'C. Design/Development' },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveAreaTab(tab.key as 'all' | 'A' | 'B' | 'C')}
+            style={{
+              padding: '10px 18px',
+              borderRadius: 999,
+              background:
+                activeAreaTab === tab.key
+                  ? 'linear-gradient(135deg, rgba(16,185,129,0.35), rgba(16,185,129,0.15))'
+                  : 'transparent',
+              color: activeAreaTab === tab.key ? 'white' : 'var(--slate-400)',
+              fontSize: 13,
+              fontWeight: 700,
+              border:
+                activeAreaTab === tab.key
+                  ? '1px solid rgba(16,185,129,0.45)'
+                  : '1px solid transparent',
+              boxShadow:
+                activeAreaTab === tab.key ? '0 8px 20px rgba(16,185,129,0.2)' : 'none',
+              cursor: 'pointer',
+              transition: 'all 200ms',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flex: 1,
+              gap: 8,
+              minWidth: 160,
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* Table */}
-      {competencies.length === 0 ? (
+      {filteredCompetencies.length === 0 ? (
         <div className="card" style={{ padding: '64px 32px', textAlign: 'center' }}>
           <Award size={48} style={{ margin: '0 auto 16px', opacity: 0.2, color: 'var(--slate-400)' }} />
           <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: 'var(--slate-300)' }}>
-            No competencies recorded
+            {activeAreaTab === 'all' ? 'No competencies recorded' : 'No entries for this area'}
           </h3>
           <p style={{ fontSize: 14, color: 'var(--slate-500)' }}>
             Start adding competency entries to track your learning and development.
@@ -233,7 +410,7 @@ export default function CompetenciesPage() {
         </div>
       ) : (
         <div className="card" style={{ overflow: 'hidden' }}>
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-scroll">
             <table className="data-table">
               <thead>
                 <tr>
@@ -246,7 +423,7 @@ export default function CompetenciesPage() {
                 </tr>
               </thead>
               <tbody>
-                {competencies.map((comp) => (
+                {filteredCompetencies.map((comp) => (
                   <tr key={comp.id}>
                     <td style={{ whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -255,7 +432,9 @@ export default function CompetenciesPage() {
                       </div>
                     </td>
                     <td>{comp.activity}</td>
-                    <td>{comp.areaCovered}</td>
+                    <td>
+                      {(comp.areaCovered.match(/[A-C]\.[0-9]+/i) || [comp.areaCovered])[0]}
+                    </td>
                     <td style={{ maxWidth: 280 }}>
                       <p style={{
                         overflow: 'hidden',
@@ -269,9 +448,9 @@ export default function CompetenciesPage() {
                       </p>
                     </td>
                     <td>
-                      {comp.evidenceLink ? (
+                      {comp.evidenceUrl ? (
                         <a
-                          href={comp.evidenceLink}
+                          href={comp.evidenceUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{
@@ -283,7 +462,10 @@ export default function CompetenciesPage() {
                             fontSize: 13,
                           }}
                         >
-                          <LinkIcon size={14} /> View
+                          <LinkIcon size={14} />
+                          {comp.evidenceType && comp.evidenceType !== 'link'
+                            ? comp.evidenceLabel || 'Open file'
+                            : 'View'}
                         </a>
                       ) : (
                         <span style={{ fontSize: 13, color: 'var(--slate-500)' }}>—</span>

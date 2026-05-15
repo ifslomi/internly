@@ -1,8 +1,7 @@
 "use client";
 import React, { useEffect, useState } from 'react';
 import { useApp } from '@/lib/context';
-import { uploadProfileImage } from '@/lib/intern';
-import { Building2, Save, Upload, User, GraduationCap, Mail, Phone, ImageIcon } from 'lucide-react';
+import { Save, User, GraduationCap, Mail, Phone, MapPin, ShieldCheck, Clock3, PencilLine, X } from 'lucide-react';
 
 type AccountProfilePanelProps = {
   title?: string;
@@ -16,15 +15,25 @@ export default function AccountProfilePanel({
   compact = false,
 }: AccountProfilePanelProps) {
   const { user, updateUser } = useApp();
-  const [name, setName] = useState('');
-  const [course, setCourse] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [fullName, setFullName] = useState('');
+  const [address, setAddress] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [guardianEmail, setGuardianEmail] = useState('');
+  const [guardianPhone, setGuardianPhone] = useState('');
+  const [programCourse, setProgramCourse] = useState('');
+  const [hoursToRender, setHoursToRender] = useState(480);
+  const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (user) {
-      setName(user.fullName || user.name || '');
-      setCourse(user.course || '');
+      setFullName(user.fullName || user.name || '');
+      setAddress(user.address || '');
+      setPhoneNumber(user.phoneNumber || user.contact || '');
+      setGuardianEmail(user.guardianEmail || user.guardian?.email || '');
+      setGuardianPhone(user.guardianPhone || user.guardian?.phone || '');
+      setProgramCourse(user.course || '');
+      setHoursToRender(user.totalRequiredHours || 480);
     }
   }, [user]);
 
@@ -35,13 +44,35 @@ export default function AccountProfilePanel({
   const handleSave = async () => {
     setSaving(true);
     try {
-      let photoUrl = user.profileImage;
-      if (file) photoUrl = await uploadProfileImage(file);
-      await updateUser({ fullName: name, course, profileImage: photoUrl });
-      setFile(null);
+      await updateUser({
+        name: fullName,
+        fullName,
+        address,
+        phoneNumber,
+        contact: phoneNumber,
+        guardianEmail,
+        guardianPhone,
+        guardian: {
+          email: guardianEmail,
+          phone: guardianPhone,
+        },
+        course: programCourse,
+        totalRequiredHours: Number(hoursToRender) || 0,
+      });
+      setIsEditing(false);
     } finally {
       setSaving(false);
     }
+  };
+
+  const resetFormToUser = () => {
+    setFullName(user.fullName || user.name || '');
+    setAddress(user.address || '');
+    setPhoneNumber(user.phoneNumber || user.contact || '');
+    setGuardianEmail(user.guardianEmail || user.guardian?.email || '');
+    setGuardianPhone(user.guardianPhone || user.guardian?.phone || '');
+    setProgramCourse(user.course || '');
+    setHoursToRender(user.totalRequiredHours || 480);
   };
 
   return (
@@ -53,68 +84,93 @@ export default function AccountProfilePanel({
 
       <div style={{ display: 'grid', gridTemplateColumns: compact ? '1fr' : '1.15fr 0.85fr', gap: 24, alignItems: 'start' }}>
         <div className="card" style={{ padding: 24 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-            <div style={{
-              width: 88,
-              height: 88,
-              borderRadius: 22,
-              background: 'rgba(16,185,129,0.12)',
-              border: '1px solid rgba(16,185,129,0.15)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'hidden',
-              flexShrink: 0,
-            }}>
-              {user.profileImage ? (
-                <img src={user.profileImage} alt={user.fullName || user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <User size={34} style={{ color: 'var(--primary-300)' }} />
-              )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-400)' }}>
+              <User size={18} />
             </div>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <p style={{ fontSize: 24, fontWeight: 800, color: 'white', lineHeight: 1.1 }}>
-                {user.fullName || user.name}
-              </p>
-              <p style={{ fontSize: 14, color: 'var(--slate-400)', marginTop: 6 }}>
-                {user.email}
-              </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 14 }}>
-                <span className="badge badge-success"><GraduationCap size={12} /> {user.course || 'Course not set'}</span>
-                <span className="badge badge-primary"><Building2 size={12} /> {user.company?.name || 'No company yet'}</span>
-              </div>
-            </div>
+            <h3 style={{ fontSize: 16, fontWeight: 700 }}>Student Information</h3>
           </div>
 
-          <div style={{ marginTop: 22, display: 'grid', gap: 16 }}>
+          <div style={{ display: 'grid', gap: 16 }}>
             <div>
               <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <User size={16} /> Full name
               </label>
-              <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+              <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} readOnly={!isEditing} aria-readonly={!isEditing} />
             </div>
 
             <div>
               <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <GraduationCap size={16} /> Course
+                <MapPin size={16} /> Address
               </label>
-              <input className="input" value={course} onChange={(e) => setCourse(e.target.value)} />
+              <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} readOnly={!isEditing} aria-readonly={!isEditing} />
             </div>
 
             <div>
               <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <Upload size={16} /> Profile image
+                <Mail size={16} /> Contact info: email
               </label>
-              <input className="input" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} style={{ paddingTop: 10, paddingBottom: 10 }} />
+              <input className="input" value={user.email} readOnly aria-readonly="true" />
+            </div>
+
+            <div>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Phone size={16} /> Contact info: phone number
+              </label>
+              <input className="input" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} readOnly={!isEditing} aria-readonly={!isEditing} />
+            </div>
+
+            <div>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <ShieldCheck size={16} /> Guardian: email
+              </label>
+              <input className="input" value={guardianEmail} onChange={(e) => setGuardianEmail(e.target.value)} readOnly={!isEditing} aria-readonly={!isEditing} />
+            </div>
+
+            <div>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <ShieldCheck size={16} /> Guardian: phone number
+              </label>
+              <input className="input" value={guardianPhone} onChange={(e) => setGuardianPhone(e.target.value)} readOnly={!isEditing} aria-readonly={!isEditing} />
+            </div>
+
+            <div>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <GraduationCap size={16} /> Program/Course
+              </label>
+              <input className="input" value={programCourse} onChange={(e) => setProgramCourse(e.target.value)} readOnly={!isEditing} aria-readonly={!isEditing} />
+            </div>
+
+            <div>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Clock3 size={16} /> Hours of duty to render
+              </label>
+              <input className="input" type="number" min={1} max={5000} value={hoursToRender} onChange={(e) => setHoursToRender(Number(e.target.value))} readOnly={!isEditing} aria-readonly={!isEditing} />
             </div>
 
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" type="button" onClick={() => { setName(user.fullName || user.name || ''); setCourse(user.course || ''); setFile(null); }}>
-                Reset
-              </button>
-              <button className="btn btn-primary" type="button" onClick={handleSave} disabled={saving}>
-                <Save size={16} /> {saving ? 'Saving...' : 'Save changes'}
-              </button>
+              {!isEditing ? (
+                <button className="btn btn-primary" type="button" onClick={() => setIsEditing(true)}>
+                  <PencilLine size={16} /> Edit
+                </button>
+              ) : (
+                <>
+                  <button
+                    className="btn btn-secondary"
+                    type="button"
+                    onClick={() => {
+                      resetFormToUser();
+                      setIsEditing(false);
+                    }}
+                    disabled={saving}
+                  >
+                    <X size={16} /> Cancel
+                  </button>
+                  <button className="btn btn-primary" type="button" onClick={handleSave} disabled={saving}>
+                    <Save size={16} /> {saving ? 'Saving...' : 'Save changes'}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -123,32 +179,54 @@ export default function AccountProfilePanel({
           <div className="card" style={{ padding: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
               <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-400)' }}>
-                <ImageIcon size={18} />
+                <User size={18} />
               </div>
-              <h3 style={{ fontSize: 16, fontWeight: 700 }}>Profile Details</h3>
+              <h3 style={{ fontSize: 16, fontWeight: 700 }}>Student Snapshot</h3>
             </div>
 
             <div style={{ display: 'grid', gap: 14 }}>
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <User size={18} style={{ color: 'var(--slate-500)', marginTop: 2, flexShrink: 0 }} />
+                <div>
+                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Full name</p>
+                  <p style={{ fontSize: 14, color: 'white' }}>{fullName || '—'}</p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <MapPin size={18} style={{ color: 'var(--slate-500)', marginTop: 2, flexShrink: 0 }} />
+                <div>
+                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Address</p>
+                  <p style={{ fontSize: 14, color: 'white' }}>{address || '—'}</p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                 <Mail size={18} style={{ color: 'var(--slate-500)', marginTop: 2, flexShrink: 0 }} />
                 <div>
-                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>OJT Contact Email</p>
+                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Contact info</p>
                   <p style={{ fontSize: 14, color: 'white' }}>{user.email}</p>
+                  <p style={{ fontSize: 13, color: 'var(--slate-400)', marginTop: 4 }}>{phoneNumber || 'No phone number yet.'}</p>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <Phone size={18} style={{ color: 'var(--slate-500)', marginTop: 2, flexShrink: 0 }} />
+                <ShieldCheck size={18} style={{ color: 'var(--slate-500)', marginTop: 2, flexShrink: 0 }} />
                 <div>
-                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>OJT Contact Info</p>
-                  <p style={{ fontSize: 14, color: 'white' }}>{user.contact || '—'}</p>
+                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Guardian</p>
+                  <p style={{ fontSize: 14, color: 'white' }}>{guardianEmail || '—'}</p>
+                  <p style={{ fontSize: 13, color: 'var(--slate-400)', marginTop: 4 }}>{guardianPhone || 'No guardian phone yet.'}</p>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                <Building2 size={18} style={{ color: 'var(--slate-500)', marginTop: 2, flexShrink: 0 }} />
+                <GraduationCap size={18} style={{ color: 'var(--slate-500)', marginTop: 2, flexShrink: 0 }} />
                 <div>
-                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Company Details</p>
-                  <p style={{ fontSize: 14, color: 'white' }}>{user.company?.name || '—'}</p>
-                  <p style={{ fontSize: 13, color: 'var(--slate-400)', marginTop: 4 }}>{user.company?.details || 'No company details added yet.'}</p>
+                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Program/Course</p>
+                  <p style={{ fontSize: 14, color: 'white' }}>{programCourse || '—'}</p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <Clock3 size={18} style={{ color: 'var(--slate-500)', marginTop: 2, flexShrink: 0 }} />
+                <div>
+                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Hours of duty to render</p>
+                  <p style={{ fontSize: 14, color: 'white' }}>{hoursToRender || 0}</p>
                 </div>
               </div>
             </div>

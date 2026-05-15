@@ -1,12 +1,10 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { 
-  LayoutDashboard, 
-  History, 
-  FileText, 
-  Settings, 
-  PlusCircle,
+import {
+  LayoutDashboard,
+  FileText,
+  Settings,
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
@@ -20,8 +18,6 @@ interface SidebarProps {
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/dashboard/log', icon: PlusCircle, label: 'Log Hours' },
-  { href: '/dashboard/history', icon: History, label: 'History' },
   { href: '/dashboard/reports', icon: FileText, label: 'Reports' },
   { href: '/dashboard/settings', icon: Settings, label: 'Settings' },
 ];

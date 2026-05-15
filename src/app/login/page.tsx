@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/context';
 import { getRememberedEmail } from '@/lib/storage';
-import { ArrowLeft, Eye, EyeOff, LogIn } from 'lucide-react';
+import { Eye, EyeOff, LogIn } from 'lucide-react';
 
 export default function LoginPage() {
     const { login, user, loading, loginWithGoogle } = useApp();
@@ -65,16 +65,6 @@ export default function LoginPage() {
             <div className="hero-glow" style={{ background: '#14b8a6', bottom: '20%', right: '10%', width: 400, height: 400 }} />
 
             <div style={{ maxWidth: 440, width: '100%', position: 'relative', zIndex: 1, padding: '0 4px' }}>
-                {/* Back link */}
-                <button
-                    className="btn btn-ghost"
-                    onClick={() => router.push('/')}
-                    style={{ marginBottom: 32, color: 'var(--slate-400)' }}
-                    id="login-back"
-                >
-                    <ArrowLeft size={18} /> Back to home
-                </button>
-
                 <div className="card-elevated auth-card" style={{}}>
                     {/* Header */}
                     <div style={{ textAlign: 'center', marginBottom: 32 }}>
