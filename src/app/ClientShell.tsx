@@ -3,6 +3,9 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import SplashScreen from './SplashScreen';
 import type { ToastKind, ToastPayload } from '@/lib/toast';
+import { showToast } from '@/lib/toast';
+import { useApp } from '@/lib/context';
+import { createPortal } from 'react-dom';
 
 type UiToast = {
     id: string;
@@ -13,9 +16,15 @@ type UiToast = {
 };
 
 export default function ClientShell({ children }: { children: React.ReactNode }) {
+    const { user, loading: authLoading, requiresPasswordCredentialSetup, setupPasswordCredential, logout } = useApp();
     const [showSplash, setShowSplash] = useState(true);
     const [showRouteLoader, setShowRouteLoader] = useState(false);
     const [toasts, setToasts] = useState<UiToast[]>([]);
+    const [passwordSetupValue, setPasswordSetupValue] = useState('');
+    const [passwordSetupConfirm, setPasswordSetupConfirm] = useState('');
+    const [passwordSetupSaving, setPasswordSetupSaving] = useState(false);
+    const [passwordSetupError, setPasswordSetupError] = useState('');
+    const [mounted, setMounted] = useState(false);
     const pathname = usePathname();
     const searchParams = useSearchParams();
 
@@ -38,6 +47,10 @@ export default function ClientShell({ children }: { children: React.ReactNode })
 
     const handleFinish = useCallback(() => {
         setShowSplash(false);
+    }, []);
+
+    useEffect(() => {
+        setMounted(true);
     }, []);
 
     const clearTimers = useCallback(() => {
@@ -223,6 +236,44 @@ export default function ClientShell({ children }: { children: React.ReactNode })
         };
     }, [showSplash]);
 
+    useEffect(() => {
+        if (!requiresPasswordCredentialSetup) {
+            setPasswordSetupValue('');
+            setPasswordSetupConfirm('');
+            setPasswordSetupSaving(false);
+            setPasswordSetupError('');
+        }
+    }, [requiresPasswordCredentialSetup]);
+
+    const handlePasswordSetupSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
+        setPasswordSetupError('');
+
+        if (passwordSetupValue.length < 6) {
+            setPasswordSetupError('Password must be at least 6 characters.');
+            return;
+        }
+
+        if (passwordSetupValue !== passwordSetupConfirm) {
+            setPasswordSetupError('Passwords do not match.');
+            return;
+        }
+
+        setPasswordSetupSaving(true);
+        try {
+            await setupPasswordCredential(passwordSetupValue);
+            showToast({ kind: 'success', title: 'Password Setup Complete', message: 'You can now log in with UB Mail or email and password.' });
+            setPasswordSetupValue('');
+            setPasswordSetupConfirm('');
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Failed to set password. Please try again.';
+            setPasswordSetupError(message);
+            showToast({ kind: 'error', title: 'Password Setup Failed', message });
+        } finally {
+            setPasswordSetupSaving(false);
+        }
+    };
+
     return (
         <>
             {showSplash && <SplashScreen onFinish={handleFinish} />}
@@ -239,7 +290,18 @@ export default function ClientShell({ children }: { children: React.ReactNode })
             </div>
 
             {toasts.length > 0 && !showSplash && (
-                <div className="app-toast-stack" aria-live="polite" aria-atomic="false">
+                <div
+                    className="app-toast-stack"
+                    aria-live="polite"
+                    aria-atomic="false"
+                    style={{
+                        position: 'fixed',
+                        right: 20,
+                        bottom: 20,
+                        left: 'auto',
+                        top: 'auto',
+                    }}
+                >
                     {toasts.map((toast) => (
                         <div key={toast.id} className={`app-toast app-toast-${toast.kind}`} role="status">
                             <div className="app-toast-head">
@@ -257,6 +319,109 @@ export default function ClientShell({ children }: { children: React.ReactNode })
                         </div>
                     ))}
                 </div>
+            )}
+
+            {mounted && user && !authLoading && !showSplash && requiresPasswordCredentialSetup && createPortal(
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        width: '100vw',
+                        height: '100vh',
+                        zIndex: 13000,
+                        background: 'rgba(0, 0, 0, 0.62)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                    }}
+                >
+                    <div
+                        style={{
+                            position: 'fixed',
+                            top: '50%',
+                            left: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            width: 'min(520px, calc(100vw - 32px))',
+                            background: 'rgba(24, 24, 27, 0.95)',
+                            border: '1px solid rgba(255,255,255,0.12)',
+                            borderRadius: 18,
+                            boxShadow: 'var(--shadow-xl), var(--shadow-glow-lg)',
+                            padding: 24,
+                        }}
+                    >
+                        <h3 style={{ fontSize: 22, fontWeight: 700, color: 'white', marginBottom: 6 }}>
+                            Set Your Password
+                        </h3>
+                        <p style={{ fontSize: 14, color: 'var(--slate-300)', marginBottom: 16, lineHeight: 1.6 }}>
+                            Your UB Mail login is active. Add an email password now so both sign-in methods work.
+                        </p>
+
+                        <form onSubmit={handlePasswordSetupSubmit}>
+                            <div className="input-group" style={{ marginBottom: 10 }}>
+                                <label className="input-label" htmlFor="setup-password">New Password</label>
+                                <input
+                                    id="setup-password"
+                                    className="input"
+                                    type="password"
+                                    autoComplete="new-password"
+                                    value={passwordSetupValue}
+                                    onChange={(e) => setPasswordSetupValue(e.target.value)}
+                                    placeholder="At least 6 characters"
+                                    required
+                                />
+                            </div>
+
+                            <div className="input-group" style={{ marginBottom: 14 }}>
+                                <label className="input-label" htmlFor="setup-password-confirm">Confirm Password</label>
+                                <input
+                                    id="setup-password-confirm"
+                                    className="input"
+                                    type="password"
+                                    autoComplete="new-password"
+                                    value={passwordSetupConfirm}
+                                    onChange={(e) => setPasswordSetupConfirm(e.target.value)}
+                                    placeholder="Re-enter password"
+                                    required
+                                />
+                            </div>
+
+                            {passwordSetupError && (
+                                <div style={{
+                                    marginBottom: 14,
+                                    borderRadius: 10,
+                                    padding: '10px 12px',
+                                    border: '1px solid rgba(244,63,94,0.28)',
+                                    background: 'rgba(244,63,94,0.12)',
+                                    color: 'var(--rose-300)',
+                                    fontSize: 13,
+                                }}>
+                                    {passwordSetupError}
+                                </div>
+                            )}
+
+                            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                                <button
+                                    type="button"
+                                    className="btn"
+                                    disabled={passwordSetupSaving}
+                                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)' }}
+                                    onClick={() => {
+                                        logout();
+                                        setPasswordSetupValue('');
+                                        setPasswordSetupConfirm('');
+                                        setPasswordSetupError('');
+                                    }}
+                                >
+                                    Sign Out
+                                </button>
+                                <button type="submit" className="btn btn-primary" disabled={passwordSetupSaving}>
+                                    {passwordSetupSaving ? 'Saving...' : 'Save Password'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>,
+                document.body,
             )}
         </>
     );

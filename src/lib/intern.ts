@@ -1,6 +1,5 @@
-import { db, storage } from './firebase';
+import { db } from './firebase';
 import { doc, setDoc, collection, addDoc, Timestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 export async function createOrUpdateInternProfile(internId: string, data: Record<string, any>) {
   const refDoc = doc(db, 'interns', internId);
@@ -18,8 +17,30 @@ export async function addReport(internId: string, report: Record<string, any>) {
 }
 
 export async function uploadProfileImage(file: File, path = 'profiles') {
-  const storageRef = ref(storage, `${path}/${Date.now()}_${file.name}`);
-  const snapshot = await uploadBytes(storageRef, file);
-  const url = await getDownloadURL(snapshot.ref);
-  return url;
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+  if (!cloudName || !uploadPreset) {
+    throw new Error(
+      'Profile image upload is not configured. Add NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME and NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET to .env.local',
+    );
+  }
+
+  const formData = new FormData();
+  formData.append('file', file, file.name || `profile_${Date.now()}.jpg`);
+  formData.append('upload_preset', uploadPreset);
+  formData.append('folder', path);
+
+  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: { message: 'Upload failed' } }));
+    throw new Error(err.error?.message || 'Profile image upload failed');
+  }
+
+  const data = await response.json();
+  return data.secure_url as string;
 }

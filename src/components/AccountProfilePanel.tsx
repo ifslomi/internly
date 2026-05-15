@@ -1,7 +1,9 @@
 "use client";
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '@/lib/context';
 import { Save, User, GraduationCap, Mail, Phone, MapPin, ShieldCheck, Clock3, PencilLine, X } from 'lucide-react';
+import { showToast } from '@/lib/toast';
+import { uploadProfileImage } from '@/lib/intern';
 
 type AccountProfilePanelProps = {
   title?: string;
@@ -24,6 +26,9 @@ export default function AccountProfilePanel({
   const [hoursToRender, setHoursToRender] = useState(480);
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarLoadError, setAvatarLoadError] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -36,6 +41,10 @@ export default function AccountProfilePanel({
       setHoursToRender(user.totalRequiredHours || 480);
     }
   }, [user]);
+
+  useEffect(() => {
+    setAvatarLoadError(false);
+  }, [user?.profileImage]);
 
   if (!user) {
     return <div className="card" style={{ padding: 24 }}>Please log in to view your account.</div>;
@@ -75,6 +84,37 @@ export default function AccountProfilePanel({
     setHoursToRender(user.totalRequiredHours || 480);
   };
 
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast({ kind: 'error', title: 'Invalid File', message: 'Please select an image file.' });
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      showToast({ kind: 'error', title: 'Image Too Large', message: 'Please use an image smaller than 5MB.' });
+      event.target.value = '';
+      return;
+    }
+
+    setUploadingAvatar(true);
+    try {
+      const imageUrl = await uploadProfileImage(file, `profiles/${user.id}`);
+      await updateUser({ profileImage: imageUrl });
+      setAvatarLoadError(false);
+      showToast({ kind: 'success', title: 'Profile Updated', message: 'Your profile picture has been updated.' });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to upload profile picture.';
+      showToast({ kind: 'error', title: 'Upload Failed', message });
+    } finally {
+      setUploadingAvatar(false);
+      event.target.value = '';
+    }
+  };
+
   return (
     <div>
       <div className="dash-header" style={{ marginBottom: 24 }}>
@@ -84,6 +124,44 @@ export default function AccountProfilePanel({
 
       <div style={{ display: 'grid', gridTemplateColumns: compact ? '1fr' : '1.15fr 0.85fr', gap: 24, alignItems: 'start' }}>
         <div className="card" style={{ padding: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 18, padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+              {user.profileImage && !avatarLoadError ? (
+                <img
+                  src={user.profileImage}
+                  alt={user.name}
+                  style={{ width: 54, height: 54, borderRadius: 14, objectFit: 'cover', flexShrink: 0 }}
+                  onError={() => setAvatarLoadError(true)}
+                />
+              ) : (
+                <div style={{ width: 54, height: 54, borderRadius: 14, background: 'linear-gradient(135deg, #34d399, #10b981)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 20, color: 'white', flexShrink: 0 }}>
+                  {(user.name || 'U').charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontSize: 14, fontWeight: 700, color: 'white', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name}</p>
+                <p style={{ fontSize: 12, color: 'var(--slate-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.email}</p>
+              </div>
+            </div>
+            <div>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarUpload}
+                style={{ display: 'none' }}
+              />
+              <button
+                className="btn btn-secondary"
+                type="button"
+                disabled={uploadingAvatar}
+                onClick={() => avatarInputRef.current?.click()}
+              >
+                {uploadingAvatar ? 'Uploading...' : 'Upload Photo'}
+              </button>
+            </div>
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-400)' }}>
               <User size={18} />

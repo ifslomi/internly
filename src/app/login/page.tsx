@@ -5,6 +5,7 @@ import { useApp } from '@/lib/context';
 import { getRememberedEmail } from '@/lib/storage';
 import { Eye, EyeOff, LogIn, Mail, UserPlus, X } from 'lucide-react';
 import { showToast } from '@/lib/toast';
+import { createPortal } from 'react-dom';
 
 type AuthMode = 'login' | 'signup';
 
@@ -27,15 +28,19 @@ export default function LoginPage() {
     const [policyModal, setPolicyModal] = useState<'Privacy' | 'Terms' | null>(null);
 
     const [showPassword, setShowPassword] = useState(false);
-    const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [googleLoading, setGoogleLoading] = useState(false);
     const [showUbPopupModal, setShowUbPopupModal] = useState(false);
     const [ubPopupTimedOut, setUbPopupTimedOut] = useState(false);
+    const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
         setMode(requestedMode);
     }, [requestedMode]);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     useEffect(() => {
         if (!googleLoading || mode !== 'login') {
@@ -64,7 +69,6 @@ export default function LoginPage() {
 
     const switchAuthMode = (nextMode: AuthMode) => {
         if (nextMode === mode) return;
-        setError('');
         setShowPassword(false);
         setGoogleLoading(false);
         setShowUbPopupModal(false);
@@ -76,7 +80,6 @@ export default function LoginPage() {
 
     const handleLoginSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError('');
         setSubmitting(true);
         window.dispatchEvent(new CustomEvent('app:route-loading-start'));
         try {
@@ -86,16 +89,12 @@ export default function LoginPage() {
         } catch (err: unknown) {
             const firebaseErr = err as { code?: string; message?: string };
             if (firebaseErr.code === 'auth/wrong-password' || firebaseErr.code === 'auth/invalid-credential') {
-                setError('Invalid email or password.');
                 showToast({ kind: 'error', title: 'Login Failed', message: 'Invalid email or password.' });
             } else if (firebaseErr.code === 'auth/user-not-found') {
-                setError('No account found with this email.');
                 showToast({ kind: 'error', title: 'Login Failed', message: 'No account found with this email.' });
             } else if (firebaseErr.code === 'auth/too-many-requests') {
-                setError('Too many attempts. Please try again later.');
                 showToast({ kind: 'warning', title: 'Too Many Attempts', message: 'Please try again later.' });
             } else {
-                setError(firebaseErr.message || 'Login failed');
                 showToast({ kind: 'error', title: 'Login Failed', message: firebaseErr.message || 'Login failed.' });
             }
             window.dispatchEvent(new CustomEvent('app:route-loading-stop'));
@@ -106,26 +105,25 @@ export default function LoginPage() {
 
     const handleSignUpSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError('');
 
         if (!agreedTerms) {
-            setError('You must agree to the Terms of Service and Privacy Policy.');
+            showToast({ kind: 'error', title: 'Sign Up Failed', message: 'You must agree to the Terms of Service and Privacy Policy.' });
             return;
         }
         if (!isUbEmail(email)) {
-            setError('Please use your @ub.edu.ph email address.');
+            showToast({ kind: 'error', title: 'Sign Up Failed', message: 'Please use your @ub.edu.ph email address.' });
             return;
         }
         if (password !== confirmPassword) {
-            setError('Passwords do not match.');
+            showToast({ kind: 'error', title: 'Sign Up Failed', message: 'Passwords do not match.' });
             return;
         }
         if (password.length < 6) {
-            setError('Password must be at least 6 characters.');
+            showToast({ kind: 'error', title: 'Sign Up Failed', message: 'Password must be at least 6 characters.' });
             return;
         }
         if (totalHours < 1) {
-            setError('Total required hours must be at least 1.');
+            showToast({ kind: 'error', title: 'Sign Up Failed', message: 'Total required hours must be at least 1.' });
             return;
         }
 
@@ -137,9 +135,9 @@ export default function LoginPage() {
         } catch (err: unknown) {
             const firebaseErr = err as { code?: string; message?: string };
             if (firebaseErr.code === 'auth/email-already-in-use') {
-                setError('An account with this email already exists.');
+                showToast({ kind: 'error', title: 'Sign Up Failed', message: 'An account with this email already exists.' });
             } else {
-                setError(firebaseErr.message || 'Sign up failed');
+                showToast({ kind: 'error', title: 'Sign Up Failed', message: firebaseErr.message || 'Sign up failed' });
             }
         } finally {
             setSubmitting(false);
@@ -241,22 +239,6 @@ export default function LoginPage() {
                                     {mode === 'login' ? 'Access your Internly account' : 'Create your Internly account'}
                                 </p>
                             </div>
-
-                            {error && (
-                                <div
-                                    style={{
-                                        padding: '10px 14px',
-                                        borderRadius: 'var(--radius-sm)',
-                                        background: 'rgba(244,63,94,0.1)',
-                                        border: '1px solid rgba(244,63,94,0.2)',
-                                        color: 'var(--rose-400)',
-                                        fontSize: 13,
-                                        marginBottom: 14,
-                                    }}
-                                >
-                                    {error}
-                                </div>
-                            )}
 
                             {mode === 'login' ? (
                                 <form onSubmit={handleLoginSubmit}>
@@ -531,19 +513,17 @@ export default function LoginPage() {
                             <button
                                 type="button"
                                 onClick={async () => {
-                                    setError('');
-
                                     if (mode === 'signup') {
                                         if (!agreedTerms) {
-                                            setError('You must agree to the Terms of Service and Privacy Policy.');
+                                            showToast({ kind: 'error', title: 'UB Mail Sign-up Failed', message: 'You must agree to the Terms of Service and Privacy Policy.' });
                                             return;
                                         }
                                         if (password !== confirmPassword) {
-                                            setError('Passwords do not match.');
+                                            showToast({ kind: 'error', title: 'UB Mail Sign-up Failed', message: 'Passwords do not match.' });
                                             return;
                                         }
                                         if (password.length < 6) {
-                                            setError('Password must be at least 6 characters.');
+                                            showToast({ kind: 'error', title: 'UB Mail Sign-up Failed', message: 'Password must be at least 6 characters.' });
                                             return;
                                         }
                                     }
@@ -577,7 +557,6 @@ export default function LoginPage() {
                                                         : mode === 'login'
                                                             ? 'UB Mail sign-in failed. Please try again.'
                                                             : 'UB Mail sign-up failed. Please try again.';
-                                        setError(msg);
                                         showToast({ kind: 'error', title: mode === 'login' ? 'UB Mail Sign-in Failed' : 'UB Mail Sign-up Failed', message: msg });
                                         if (mode === 'login') {
                                             window.dispatchEvent(new CustomEvent('app:route-loading-stop'));
@@ -633,42 +612,6 @@ export default function LoginPage() {
                                     </>
                                 )}
                             </button>
-
-                            {mode === 'login' && showUbPopupModal && (
-                                <div className="modal-overlay" onClick={() => { if (!googleLoading) setShowUbPopupModal(false); }}>
-                                    <div
-                                        className="modal-content"
-                                        onClick={(e) => e.stopPropagation()}
-                                        style={{
-                                            maxWidth: 420,
-                                            minHeight: 180,
-                                            padding: 28,
-                                            display: 'flex',
-                                            flexDirection: 'column',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            gap: 16,
-                                        }}
-                                    >
-                                        <span
-                                            aria-hidden
-                                            style={{
-                                                width: 46,
-                                                height: 46,
-                                                border: '3px solid rgba(255,255,255,0.2)',
-                                                borderTopColor: 'var(--primary-400)',
-                                                borderRadius: '50%',
-                                                animation: 'spin 0.8s linear infinite',
-                                            }}
-                                        />
-                                        <p style={{ fontSize: 14, color: 'var(--slate-300)', textAlign: 'center', lineHeight: 1.5, margin: 0 }}>
-                                            {ubPopupTimedOut
-                                                ? 'Still waiting. If the popup is open, finish sign-in there. If it was closed, try UB Mail again.'
-                                                : 'Signing in with UB Mail. Please complete sign-in in the popup window.'}
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
 
                             <div style={{ height: 14 }} />
 
@@ -777,6 +720,64 @@ export default function LoginPage() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {mode === 'login' && showUbPopupModal && mounted && createPortal(
+                <div
+                    style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        width: '100vw',
+                        height: '100vh',
+                        zIndex: 12000,
+                        background: 'rgba(0, 0, 0, 0.58)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                    }}
+                    onClick={() => { if (!googleLoading) setShowUbPopupModal(false); }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            position: 'fixed',
+                            top: '50%',
+                            left: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            maxWidth: 420,
+                            width: 'calc(100vw - 40px)',
+                            minHeight: 180,
+                            padding: 28,
+                            borderRadius: 20,
+                            background: 'rgba(24, 24, 27, 0.92)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            boxShadow: 'var(--shadow-xl), var(--shadow-glow-lg)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 16,
+                        }}
+                    >
+                        <span
+                            aria-hidden
+                            style={{
+                                width: 46,
+                                height: 46,
+                                border: '3px solid rgba(255,255,255,0.2)',
+                                borderTopColor: 'var(--primary-400)',
+                                borderRadius: '50%',
+                                animation: 'spin 0.8s linear infinite',
+                            }}
+                        />
+                        <p style={{ fontSize: 14, color: 'var(--slate-300)', textAlign: 'center', lineHeight: 1.5, margin: 0 }}>
+                            {ubPopupTimedOut
+                                ? 'Still waiting. If the popup is open, finish sign-in there. If it was closed, try UB Mail again.'
+                                : 'Signing in with UB Mail. Please complete sign-in in the popup window.'}
+                        </p>
+                    </div>
+                </div>,
+                document.body,
             )}
 
             <style>{`

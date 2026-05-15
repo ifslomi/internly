@@ -1,12 +1,14 @@
 'use client';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
+import type { User as FirebaseAuthUser } from 'firebase/auth';
 import { User, DailyLog, WeeklyReport, HourStats, Competency } from './types';
 import * as storage from './storage';
 import { calculateHourStats } from './calculations';
 import {
     saveUserToFirestore,
     getUserFromFirestore,
+    findUserByEmailInFirestore,
     updateUserInFirestore,
     getDailyLogsFromFirestore,
     addDailyLogToFirestore,
@@ -20,6 +22,7 @@ import {
     migrateLocalDataToFirestore,
     migrateFromFlatToSubcollections,
 } from './firestore';
+import { upsertChatUser, syncChatUserProfileInConversations } from './chat';
 import { auth } from './firebase';
 
 interface AppContextType {
@@ -44,6 +47,8 @@ interface AppContextType {
     resendCode: () => Promise<void>;
     saveWeeklyReport: (report: Omit<WeeklyReport, 'id' | 'createdAt'>) => Promise<WeeklyReport>;
     getWeeklyReports: (userId: string) => Promise<WeeklyReport[]>;
+    requiresPasswordCredentialSetup: boolean;
+    setupPasswordCredential: (password: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -60,12 +65,36 @@ const emptyStats: HourStats = {
 
 const isUbEmail = (value: string) => value.trim().toLowerCase().endsWith('@ub.edu.ph');
 
+const isValidProfileImage = (value?: string | null) => {
+    if (!value) return false;
+    const normalized = value.trim();
+    return normalized.startsWith('https://') || normalized.startsWith('http://') || normalized.startsWith('data:image/');
+};
+
+const getGoogleProfileImage = (firebaseUser: FirebaseAuthUser | null): string | undefined => {
+    if (!firebaseUser) return undefined;
+    const fromUser = firebaseUser.photoURL || '';
+    if (isValidProfileImage(fromUser)) return fromUser;
+
+    const fromProvider = firebaseUser.providerData.find((p) => isValidProfileImage(p.photoURL || ''))?.photoURL;
+    return isValidProfileImage(fromProvider || '') ? (fromProvider as string) : undefined;
+};
+
+const needsPasswordCredentialSetup = (firebaseUser: FirebaseAuthUser | null) => {
+    if (!firebaseUser) return false;
+    const email = (firebaseUser.email || '').trim().toLowerCase();
+    if (!isUbEmail(email)) return false;
+    const providerIds = firebaseUser.providerData.map((p) => p.providerId);
+    return !providerIds.includes('password');
+};
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [logs, setLogs] = useState<DailyLog[]>([]);
     const [competencies, setCompetencies] = useState<Competency[]>([]);
     const [stats, setStats] = useState<HourStats>(emptyStats);
     const [loading, setLoading] = useState(true);
+    const [requiresPasswordCredentialSetup, setRequiresPasswordCredentialSetup] = useState(false);
     const initializedRef = useRef(false);
 
     // ─── Refresh: Firestore is the source of truth ──────
@@ -92,6 +121,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         try {
             // Load user from Firestore
             let firestoreUser = await getUserFromFirestore(firebaseUser.uid);
+            const googlePhoto = getGoogleProfileImage(firebaseUser);
 
             if (!firestoreUser) {
                 // New login on another device or first time — check localStorage for migration
@@ -105,6 +135,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (firestoreUser) {
+                if (googlePhoto && !isValidProfileImage(firestoreUser.profileImage)) {
+                    firestoreUser = { ...firestoreUser, profileImage: googlePhoto };
+                    await updateUserInFirestore(firebaseUser.uid, { profileImage: googlePhoto });
+                }
+
                 // Cache to localStorage
                 storage.cacheUser(firestoreUser);
                 setUser(firestoreUser);
@@ -150,8 +185,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
             if (firebaseUser) {
+                setRequiresPasswordCredentialSetup(needsPasswordCredentialSetup(firebaseUser));
                 await refreshData();
             } else {
+                setRequiresPasswordCredentialSetup(false);
                 // Check if there's a localStorage-only session (legacy)
                 const localUser = storage.getCurrentUser();
                 if (localUser) {
@@ -306,9 +343,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // ─── Login ──────────────────────────────────────────
     const handleLogin = async (email: string, password: string, rememberMe: boolean) => {
         const { signInWithEmailAndPassword } = await import('firebase/auth');
+        const normalizedEmail = email.trim().toLowerCase();
+
+        // Fast path for legacy/local accounts to avoid unnecessary Firebase 400 noise.
+        const localUser = storage.findUserByEmail(normalizedEmail);
+        if (localUser && Boolean(localUser.password)) {
+            if (localUser.password !== password) {
+                const invalidCredentialError = Object.assign(new Error('Invalid email or password.'), {
+                    code: 'auth/invalid-credential',
+                });
+                throw invalidCredentialError;
+            }
+
+            const loggedUser = storage.login(normalizedEmail, password, rememberMe);
+            setUser(loggedUser);
+            const localLogs = storage.getDailyLogs(loggedUser.id);
+            setLogs(localLogs);
+            setStats(calculateHourStats(localLogs, loggedUser.totalRequiredHours));
+            return;
+        }
 
         try {
-            const credential = await signInWithEmailAndPassword(auth, email, password);
+            const credential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
             const uid = credential.user.uid;
 
             // Load user from Firestore
@@ -316,18 +372,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
             if (!firestoreUser) {
                 // Try to migrate localStorage data
-                const localUser = storage.findUserByEmail(email);
-                if (localUser) {
-                    const localLogs = storage.getDailyLogs(localUser.id);
-                    const localReports = storage.getWeeklyReports(localUser.id);
-                    await migrateLocalDataToFirestore({ ...localUser, id: uid }, localLogs, localReports);
+                const migratedLocalUser = storage.findUserByEmail(normalizedEmail);
+                if (migratedLocalUser) {
+                    const localLogs = storage.getDailyLogs(migratedLocalUser.id);
+                    const localReports = storage.getWeeklyReports(migratedLocalUser.id);
+                    await migrateLocalDataToFirestore({ ...migratedLocalUser, id: uid }, localLogs, localReports);
                     firestoreUser = await getUserFromFirestore(uid);
                 }
             }
 
             if (firestoreUser) {
                 storage.cacheUser(firestoreUser);
-                if (rememberMe) storage.setRememberedEmail(email);
+                if (rememberMe) storage.setRememberedEmail(normalizedEmail);
                 else storage.clearRememberedEmail();
                 setUser(firestoreUser);
 
@@ -343,11 +399,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const firebaseError = err as { code?: string; message?: string };
             if (firebaseError.code === 'auth/user-not-found' || firebaseError.code === 'auth/invalid-credential') {
                 // Fallback: legacy localStorage-only user
-                const loggedUser = storage.login(email, password, rememberMe);
-                setUser(loggedUser);
-                const localLogs = storage.getDailyLogs(loggedUser.id);
-                setLogs(localLogs);
-                setStats(calculateHourStats(localLogs, loggedUser.totalRequiredHours));
+                try {
+                    const loggedUser = storage.login(normalizedEmail, password, rememberMe);
+                    setUser(loggedUser);
+                    const localLogs = storage.getDailyLogs(loggedUser.id);
+                    setLogs(localLogs);
+                    setStats(calculateHourStats(localLogs, loggedUser.totalRequiredHours));
+                } catch {
+                    const invalidCredentialError = Object.assign(new Error('Invalid email or password.'), {
+                        code: 'auth/invalid-credential',
+                    });
+                    throw invalidCredentialError;
+                }
             } else {
                 throw err;
             }
@@ -421,8 +484,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const { googleProvider } = await import('./firebase');
         const result = await signInWithPopup(auth, googleProvider);
         const firebaseUser = result.user;
-        const email = firebaseUser.email || '';
+        const email = (firebaseUser.email || '').trim().toLowerCase();
         const uid = firebaseUser.uid;
+        const googlePhoto = getGoogleProfileImage(firebaseUser);
 
         if (!isUbEmail(email)) {
             try {
@@ -432,8 +496,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             throw new Error('Please use your @ub.edu.ph email address.');
         }
 
-        // Check Firestore by UID, then fall back to localStorage migration
+        // Check Firestore by UID first.
         let firestoreUser = await getUserFromFirestore(uid);
+
+        if (!firestoreUser) {
+            // Fallback: profile exists in Firestore by email but UID doc hasn't been created yet.
+            const byEmail = await findUserByEmailInFirestore(email);
+            if (byEmail) {
+                const rebasedUser: User = {
+                    ...byEmail,
+                    id: uid,
+                    email,
+                    name: byEmail.name || firebaseUser.displayName || email.split('@')[0] || 'User',
+                    profileImage: byEmail.profileImage || googlePhoto,
+                    password: byEmail.password || '',
+                };
+                await saveUserToFirestore(rebasedUser);
+                firestoreUser = rebasedUser;
+            }
+        }
 
         if (!firestoreUser) {
             // Try localStorage migration
@@ -447,7 +528,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (!firestoreUser) {
-            throw new Error('No account found with this email. Please sign up first.');
+            // Auto-provision first-time UB Mail sign-in.
+            const now = new Date().toISOString();
+            const newUser: User = {
+                id: uid,
+                name: firebaseUser.displayName || email.split('@')[0] || 'User',
+                email,
+                password: '',
+                totalRequiredHours: 480,
+                startDate: now.split('T')[0],
+                createdAt: now,
+                supervisors: [],
+                reminderEnabled: true,
+                profileImage: googlePhoto,
+            };
+
+            await saveUserToFirestore(newUser);
+            firestoreUser = newUser;
+        }
+
+        if (googlePhoto && !isValidProfileImage(firestoreUser.profileImage)) {
+            firestoreUser = { ...firestoreUser, profileImage: googlePhoto };
+            await updateUserInFirestore(uid, { profileImage: googlePhoto });
         }
 
         storage.cacheUser(firestoreUser);
@@ -461,6 +563,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const firestoreCompetencies = await getCompetenciesFromFirestore(uid);
         storage.cacheCompetencies(uid, firestoreCompetencies);
         setCompetencies(firestoreCompetencies);
+    };
+
+    const handleSetupPasswordCredential = async (password: string) => {
+        if (password.length < 6) {
+            throw new Error('Password must be at least 6 characters.');
+        }
+
+        const currentUser = auth.currentUser;
+        if (!currentUser || !currentUser.email) {
+            throw new Error('You need to be signed in to set a password.');
+        }
+
+        const providerIds = currentUser.providerData.map((p) => p.providerId);
+        if (providerIds.includes('password')) {
+            setRequiresPasswordCredentialSetup(false);
+            return;
+        }
+
+        const normalizedEmail = currentUser.email.trim().toLowerCase();
+        const { EmailAuthProvider, linkWithCredential } = await import('firebase/auth');
+
+        try {
+            const credential = EmailAuthProvider.credential(normalizedEmail, password);
+            await linkWithCredential(currentUser, credential);
+            setRequiresPasswordCredentialSetup(false);
+        } catch (err: unknown) {
+            const code = (err as { code?: string })?.code || '';
+            if (code === 'auth/provider-already-linked') {
+                setRequiresPasswordCredentialSetup(false);
+                return;
+            }
+            if (code === 'auth/requires-recent-login') {
+                throw new Error('Session expired. Please sign in with UB Mail again, then set your password.');
+            }
+            if (code === 'auth/weak-password') {
+                throw new Error('Password is too weak. Use at least 6 characters.');
+            }
+            if (code === 'auth/email-already-in-use' || code === 'auth/credential-already-in-use') {
+                throw new Error('This email already has another credential. Try Forgot Password to recover access.');
+            }
+            throw err;
+        }
     };
 
     // ─── Update User ────────────────────────────────────
@@ -478,6 +622,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (uid) {
             try {
                 await updateUserInFirestore(uid, updates);
+
+                // Keep chat profile surfaces in sync for all users in real-time.
+                const sourceUser = updatedLocal || user;
+                if (sourceUser) {
+                    const name = updates.name ?? sourceUser.name;
+                    const email = updates.email ?? sourceUser.email;
+                    const profileImage = updates.profileImage ?? sourceUser.profileImage;
+
+                    await upsertChatUser({
+                        uid,
+                        name,
+                        email,
+                        profileImage,
+                    });
+
+                    await syncChatUserProfileInConversations(uid, {
+                        name,
+                        email,
+                        profileImage,
+                    });
+                }
             } catch (err) {
                 console.error('[Context] Failed to update user in Firestore:', err);
             }
@@ -643,6 +808,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 resendCode: handleResendCode,
                 saveWeeklyReport: handleSaveWeeklyReport,
                 getWeeklyReports: handleGetWeeklyReports,
+                requiresPasswordCredentialSetup,
+                setupPasswordCredential: handleSetupPasswordCredential,
             }}
         >
             {children}

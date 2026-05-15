@@ -92,6 +92,58 @@ export async function getAllChatUsers(): Promise<ChatUser[]> {
         .map(d => d.data() as ChatUser);
 }
 
+export function subscribeToAllChatUsers(
+    callback: (users: ChatUser[]) => void,
+    onError?: (error: Error) => void,
+) {
+    const q = query(collection(db, 'chatUsers'));
+    return onSnapshot(q, (snapshot) => {
+        const users = snapshot.docs
+            .filter(d => !d.id.startsWith('_schema') && d.data().uid)
+            .map(d => d.data() as ChatUser);
+        callback(users);
+    }, (error) => {
+        console.error('Chat users subscription error:', error);
+        onError?.(error);
+    });
+}
+
+export async function syncChatUserProfileInConversations(
+    uid: string,
+    updates: { name?: string; email?: string; profileImage?: string },
+): Promise<void> {
+    const effectiveUid = auth.currentUser?.uid || uid;
+
+    const fields: Record<string, unknown> = {};
+    if (updates.name !== undefined) fields[`participantDetails.${effectiveUid}.name`] = updates.name;
+    if (updates.email !== undefined) fields[`participantDetails.${effectiveUid}.email`] = updates.email;
+    if (updates.profileImage !== undefined) fields[`participantDetails.${effectiveUid}.profileImage`] = updates.profileImage || null;
+
+    if (Object.keys(fields).length === 0) return;
+
+    const q = query(collection(db, 'conversations'), where('participants', 'array-contains', effectiveUid));
+    const snap = await getDocs(q);
+    if (snap.empty) return;
+
+    let batch = writeBatch(db);
+    let ops = 0;
+
+    for (const convo of snap.docs) {
+        batch.update(doc(db, 'conversations', convo.id), fields);
+        ops += 1;
+
+        if (ops >= 400) {
+            await batch.commit();
+            batch = writeBatch(db);
+            ops = 0;
+        }
+    }
+
+    if (ops > 0) {
+        await batch.commit();
+    }
+}
+
 export async function setUserOnlineStatus(uid: string, online: boolean): Promise<void> {
     const effectiveUid = auth.currentUser?.uid || uid;
     const userRef = doc(db, 'chatUsers', effectiveUid);

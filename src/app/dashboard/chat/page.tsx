@@ -8,7 +8,7 @@ import {
     Conversation,
     Message,
     upsertChatUser,
-    getAllChatUsers,
+    subscribeToAllChatUsers,
     getChatUser,
     getOrCreateConversation,
     createGroupConversation,
@@ -798,14 +798,19 @@ export default function ChatPage() {
         };
     }, [user, firebaseUser]);
 
-    // Load all users (only after Firebase Auth is ready)
+    // Realtime: all users list updates live when profile info changes.
     useEffect(() => {
         if (!user || !firebaseUser) return;
-        getAllChatUsers().then(users => {
-            setAllUsers(users.filter(u => u.uid !== currentUserId));
-        }).catch(err => {
-            console.error('Failed to load users:', err);
-        });
+        const unsub = subscribeToAllChatUsers(
+            (users) => {
+                setAllUsers(users.filter(u => u.uid !== currentUserId));
+            },
+            (err) => {
+                console.error('Failed to subscribe users:', err);
+            },
+        );
+
+        return () => unsub();
     }, [user, firebaseUser, currentUserId]);
 
     // Subscribe to conversations (only after Firebase Auth is ready)

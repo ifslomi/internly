@@ -42,12 +42,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+    const [avatarLoadError, setAvatarLoadError] = useState(false);
 
     useEffect(() => {
         if (!loading && !user) {
             router.push('/login');
         }
     }, [user, loading, router]);
+
+    useEffect(() => {
+        setAvatarLoadError(false);
+    }, [user?.profileImage]);
 
     if (loading || !user) {
         return (
@@ -242,11 +247,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     gap: sidebarCollapsed ? 0 : 10,
                     overflow: 'hidden',
                 }}>
-                    {user.profileImage ? (
+                    {user.profileImage && !avatarLoadError ? (
                         <img
                             src={user.profileImage}
                             alt={user.name}
                             title={sidebarCollapsed ? `${user.name}\n${user.email}` : undefined}
+                            onError={() => setAvatarLoadError(true)}
                             style={{
                                 width: 36,
                                 height: 36,
