@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '@/lib/context';
-import { Save, User, GraduationCap, Building2, Mail, Phone, MapPin, ShieldCheck, Clock3, PencilLine, X } from 'lucide-react';
+import { Save, User, GraduationCap, Building2, Mail, Phone, MapPin, ShieldCheck, Clock3 } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { uploadProfileImage } from '@/lib/intern';
 
@@ -25,7 +25,6 @@ export default function AccountProfilePanel({
   const [programCourse, setProgramCourse] = useState('');
   const [department, setDepartment] = useState('');
   const [hoursToRender, setHoursToRender] = useState(480);
-  const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarLoadError, setAvatarLoadError] = useState(false);
@@ -71,21 +70,9 @@ export default function AccountProfilePanel({
         department,
         totalRequiredHours: Number(hoursToRender) || 0,
       });
-      setIsEditing(false);
     } finally {
       setSaving(false);
     }
-  };
-
-  const resetFormToUser = () => {
-    setFullName(user.fullName || user.name || '');
-    setAddress(user.address || '');
-    setPhoneNumber(user.phoneNumber || user.contact || '');
-    setGuardianEmail(user.guardianEmail || user.guardian?.email || '');
-    setGuardianPhone(user.guardianPhone || user.guardian?.phone || '');
-    setProgramCourse(user.course || '');
-    setDepartment(user.department || '');
-    setHoursToRender(user.totalRequiredHours || 480);
   };
 
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -121,13 +108,15 @@ export default function AccountProfilePanel({
 
   return (
     <div>
-      <div className="dash-header" style={{ marginBottom: 24 }}>
-        <h1 className="page-title" style={{ fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>{title}</h1>
-        <p style={{ color: 'var(--slate-400)', fontSize: 14 }}>{description}</p>
-      </div>
+      {!compact && (
+        <div className="dash-header" style={{ marginBottom: 24 }}>
+          <h1 className="page-title" style={{ fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>{title}</h1>
+          <p style={{ color: 'var(--slate-400)', fontSize: 14 }}>{description}</p>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: compact ? '1fr' : '1.15fr 0.85fr', gap: 24, alignItems: 'start' }}>
-        <div className="card" style={{ padding: 24 }}>
+        <div className="card" style={{ padding: compact ? 18 : 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 18, padding: 12, borderRadius: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
               {user.profileImage && !avatarLoadError ? (
@@ -166,101 +155,156 @@ export default function AccountProfilePanel({
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: compact ? 12 : 16 }}>
             <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-400)' }}>
               <User size={18} />
             </div>
-            <h3 style={{ fontSize: 16, fontWeight: 700 }}>Student Information</h3>
+            <h3 style={{ fontSize: 16, fontWeight: 700 }}>{compact ? 'Quick Profile Edit' : 'Student Information'}</h3>
           </div>
 
-          <div style={{ display: 'grid', gap: 16 }}>
-            <div>
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <User size={16} /> Full name
-              </label>
-              <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} readOnly={!isEditing} aria-readonly={!isEditing} />
+          {compact ? (
+            <div style={{ display: 'grid', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                <div>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <User size={16} /> Full Name
+                  </label>
+                  <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <Phone size={16} /> Phone Number
+                  </label>
+                  <input className="input" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <MapPin size={16} /> Home Address
+                  </label>
+                  <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <Mail size={16} /> Guardian Email
+                  </label>
+                  <input className="input" value={guardianEmail} onChange={(e) => setGuardianEmail(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <ShieldCheck size={16} /> Guardian Phone
+                  </label>
+                  <input className="input" value={guardianPhone} onChange={(e) => setGuardianPhone(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <GraduationCap size={16} /> Program or Course
+                  </label>
+                  <input className="input" value={programCourse} onChange={(e) => setProgramCourse(e.target.value)} />
+                </div>
+                <div>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <Building2 size={16} /> Department
+                  </label>
+                  <input className="input" value={department} onChange={(e) => setDepartment(e.target.value)} />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <Clock3 size={16} /> Required OJT Hours
+                  </label>
+                  <input className="input" type="number" min={1} max={5000} value={hoursToRender} onChange={(e) => setHoursToRender(Number(e.target.value))} />
+                </div>
+              </div>
             </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 14 }}>
+              <div style={{ padding: 14, borderRadius: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <h4 style={{ fontSize: 13, color: 'var(--slate-400)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Personal</h4>
+                <div style={{ display: 'grid', gap: 12 }}>
+                  <div>
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <User size={16} /> Full Name
+                    </label>
+                    <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <MapPin size={16} /> Home Address
+                    </label>
+                    <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} />
+                  </div>
+                </div>
+              </div>
 
-            <div>
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <MapPin size={16} /> Address
-              </label>
-              <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} readOnly={!isEditing} aria-readonly={!isEditing} />
-            </div>
+              <div style={{ padding: 14, borderRadius: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <h4 style={{ fontSize: 13, color: 'var(--slate-400)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Contact</h4>
+                <div style={{ display: 'grid', gap: 12 }}>
+                  <div>
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <Mail size={16} /> Email Address
+                    </label>
+                    <input className="input" value={user.email} readOnly aria-readonly="true" />
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <Phone size={16} /> Phone Number
+                    </label>
+                    <input className="input" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} />
+                  </div>
+                </div>
+              </div>
 
-            <div>
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <Mail size={16} /> Contact info: email
-              </label>
-              <input className="input" value={user.email} readOnly aria-readonly="true" />
-            </div>
+              <div style={{ padding: 14, borderRadius: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <h4 style={{ fontSize: 13, color: 'var(--slate-400)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Guardian</h4>
+                <div style={{ display: 'grid', gap: 12 }}>
+                  <div>
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <ShieldCheck size={16} /> Guardian Email
+                    </label>
+                    <input className="input" value={guardianEmail} onChange={(e) => setGuardianEmail(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <ShieldCheck size={16} /> Guardian Phone Number
+                    </label>
+                    <input className="input" value={guardianPhone} onChange={(e) => setGuardianPhone(e.target.value)} />
+                  </div>
+                </div>
+              </div>
 
-            <div>
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <Phone size={16} /> Contact info: phone number
-              </label>
-              <input className="input" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} readOnly={!isEditing} aria-readonly={!isEditing} />
-            </div>
+              <div style={{ padding: 14, borderRadius: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <h4 style={{ fontSize: 13, color: 'var(--slate-400)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Academic</h4>
+                <div style={{ display: 'grid', gap: 12 }}>
+                  <div>
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <GraduationCap size={16} /> Program or Course
+                    </label>
+                    <input className="input" value={programCourse} onChange={(e) => setProgramCourse(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <Building2 size={16} /> Department
+                    </label>
+                    <input className="input" value={department} onChange={(e) => setDepartment(e.target.value)} />
+                  </div>
+                </div>
+              </div>
 
-            <div>
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <ShieldCheck size={16} /> Guardian: email
-              </label>
-              <input className="input" value={guardianEmail} onChange={(e) => setGuardianEmail(e.target.value)} readOnly={!isEditing} aria-readonly={!isEditing} />
+              <div style={{ padding: 14, borderRadius: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <h4 style={{ fontSize: 13, color: 'var(--slate-400)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>OJT Requirement</h4>
+                <div>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <Clock3 size={16} /> Required OJT Hours
+                  </label>
+                  <input className="input" type="number" min={1} max={5000} value={hoursToRender} onChange={(e) => setHoursToRender(Number(e.target.value))} />
+                </div>
+              </div>
             </div>
+          )}
 
-            <div>
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <ShieldCheck size={16} /> Guardian: phone number
-              </label>
-              <input className="input" value={guardianPhone} onChange={(e) => setGuardianPhone(e.target.value)} readOnly={!isEditing} aria-readonly={!isEditing} />
-            </div>
-
-            <div>
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <GraduationCap size={16} /> Program/Course
-              </label>
-              <input className="input" value={programCourse} onChange={(e) => setProgramCourse(e.target.value)} readOnly={!isEditing} aria-readonly={!isEditing} />
-            </div>
-
-            <div>
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <Building2 size={16} /> Department
-              </label>
-              <input className="input" value={department} onChange={(e) => setDepartment(e.target.value)} readOnly={!isEditing} aria-readonly={!isEditing} />
-            </div>
-
-            <div>
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <Clock3 size={16} /> Hours of duty to render
-              </label>
-              <input className="input" type="number" min={1} max={5000} value={hoursToRender} onChange={(e) => setHoursToRender(Number(e.target.value))} readOnly={!isEditing} aria-readonly={!isEditing} />
-            </div>
-
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-              {!isEditing ? (
-                <button className="btn btn-primary" type="button" onClick={() => setIsEditing(true)}>
-                  <PencilLine size={16} /> Edit
-                </button>
-              ) : (
-                <>
-                  <button
-                    className="btn btn-secondary"
-                    type="button"
-                    onClick={() => {
-                      resetFormToUser();
-                      setIsEditing(false);
-                    }}
-                    disabled={saving}
-                  >
-                    <X size={16} /> Cancel
-                  </button>
-                  <button className="btn btn-primary" type="button" onClick={handleSave} disabled={saving}>
-                    <Save size={16} /> {saving ? 'Saving...' : 'Save changes'}
-                  </button>
-                </>
-              )}
-            </div>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: compact ? 12 : 4 }}>
+            <button className="btn btn-primary" type="button" onClick={handleSave} disabled={saving}>
+              <Save size={16} /> {saving ? 'Saving...' : 'Save changes'}
+            </button>
           </div>
         </div>
 
@@ -277,21 +321,21 @@ export default function AccountProfilePanel({
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                 <User size={18} style={{ color: 'var(--slate-500)', marginTop: 2, flexShrink: 0 }} />
                 <div>
-                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Full name</p>
+                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Full Name</p>
                   <p style={{ fontSize: 14, color: 'white' }}>{fullName || '—'}</p>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                 <MapPin size={18} style={{ color: 'var(--slate-500)', marginTop: 2, flexShrink: 0 }} />
                 <div>
-                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Address</p>
+                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Home Address</p>
                   <p style={{ fontSize: 14, color: 'white' }}>{address || '—'}</p>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                 <Mail size={18} style={{ color: 'var(--slate-500)', marginTop: 2, flexShrink: 0 }} />
                 <div>
-                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Contact info</p>
+                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Contact Information</p>
                   <p style={{ fontSize: 14, color: 'white' }}>{user.email}</p>
                   <p style={{ fontSize: 13, color: 'var(--slate-400)', marginTop: 4 }}>{phoneNumber || 'No phone number yet.'}</p>
                 </div>
@@ -299,7 +343,7 @@ export default function AccountProfilePanel({
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                 <ShieldCheck size={18} style={{ color: 'var(--slate-500)', marginTop: 2, flexShrink: 0 }} />
                 <div>
-                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Guardian</p>
+                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Guardian Contact</p>
                   <p style={{ fontSize: 14, color: 'white' }}>{guardianEmail || '—'}</p>
                   <p style={{ fontSize: 13, color: 'var(--slate-400)', marginTop: 4 }}>{guardianPhone || 'No guardian phone yet.'}</p>
                 </div>
@@ -307,7 +351,7 @@ export default function AccountProfilePanel({
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                 <GraduationCap size={18} style={{ color: 'var(--slate-500)', marginTop: 2, flexShrink: 0 }} />
                 <div>
-                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Program/Course</p>
+                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Program or Course</p>
                   <p style={{ fontSize: 14, color: 'white' }}>{programCourse || '—'}</p>
                 </div>
               </div>
@@ -321,7 +365,7 @@ export default function AccountProfilePanel({
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                 <Clock3 size={18} style={{ color: 'var(--slate-500)', marginTop: 2, flexShrink: 0 }} />
                 <div>
-                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Hours of duty to render</p>
+                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Required OJT Hours</p>
                   <p style={{ fontSize: 14, color: 'white' }}>{hoursToRender || 0}</p>
                 </div>
               </div>
@@ -332,3 +376,5 @@ export default function AccountProfilePanel({
     </div>
   );
 }
+
+

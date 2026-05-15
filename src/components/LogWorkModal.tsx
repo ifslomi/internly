@@ -218,7 +218,7 @@ export default function LogWorkModal({ open, onClose }: LogWorkModalProps) {
                             </label>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                                 <input
-                                    className="input"
+                                    className="hours-range"
                                     type="range"
                                     min={0.5}
                                     max={12}

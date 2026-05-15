@@ -1,8 +1,10 @@
 "use client";
-import React, { useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { useApp } from '@/lib/context';
-import { Award, Plus, Calendar, Trash2, AlertTriangle, X, Save, Link as LinkIcon } from 'lucide-react';
+import { Award, Plus, Calendar, Trash2, AlertTriangle, X, Save, Link as LinkIcon, Image as ImageIcon, Video, FileText, ExternalLink, Eye } from 'lucide-react';
 import { format } from 'date-fns';
+import { showToast } from '@/lib/toast';
+import { uploadEvidenceFile } from '@/lib/intern';
 
 const AREA_SECTIONS = [
   {
@@ -45,8 +47,16 @@ const getAreaKey = (areaCovered: string) => {
 export default function CompetenciesPage() {
   const { user, competencies, addCompetency, deleteCompetency } = useApp();
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEvidenceModal, setShowEvidenceModal] = useState(false);
+  const evidenceFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [selectedEvidence, setSelectedEvidence] = useState<{
+    type: '' | 'link' | 'image' | 'video' | 'document';
+    url: string;
+    label: string;
+  } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [activeAreaTab, setActiveAreaTab] = useState<'all' | 'A' | 'B' | 'C'>('all');
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
 
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -61,18 +71,38 @@ export default function CompetenciesPage() {
 
   const handleAddCompetency = async () => {
     if (!user) return;
-    if (!formData.activity || !formData.areaCovered || !formData.outcome) return;
+    if (!formData.activity || !formData.areaCovered || !formData.outcome) {
+      showToast({ kind: 'warning', title: 'Incomplete Form', message: 'Please complete activity, area covered, and outcome.' });
+      return;
+    }
 
     let evidenceUrl = formData.evidenceUrl;
     let evidenceLabel = formData.evidenceLabel;
 
     if (formData.evidenceType && formData.evidenceType !== 'link') {
-      if (!formData.evidenceFile) return;
-      evidenceUrl = URL.createObjectURL(formData.evidenceFile);
-      evidenceLabel = formData.evidenceFile.name;
+      if (!formData.evidenceFile) {
+        showToast({ kind: 'warning', title: 'Missing Evidence', message: 'Please choose a file for your selected evidence type.' });
+        return;
+      }
+
+      setUploadingEvidence(true);
+      try {
+        evidenceUrl = await uploadEvidenceFile(formData.evidenceFile, `competencies/${user.id}`);
+        evidenceLabel = formData.evidenceFile.name;
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Failed to upload evidence file.';
+        showToast({ kind: 'error', title: 'Upload Failed', message });
+        setUploadingEvidence(false);
+        return;
+      } finally {
+        setUploadingEvidence(false);
+      }
     }
 
-    if (formData.evidenceType === 'link' && !formData.evidenceUrl) return;
+    if (formData.evidenceType === 'link' && !formData.evidenceUrl) {
+      showToast({ kind: 'warning', title: 'Missing Link', message: 'Please provide an evidence URL.' });
+      return;
+    }
 
     const newCompetency = {
       userId: user.id,
@@ -86,6 +116,7 @@ export default function CompetenciesPage() {
     };
 
     await addCompetency(newCompetency);
+    showToast({ kind: 'success', title: 'Competency Added', message: 'Your competency entry was saved.' });
     setFormData({
       date: new Date().toISOString().split('T')[0],
       activity: '',
@@ -100,12 +131,19 @@ export default function CompetenciesPage() {
   };
 
   const handleDeleteCompetency = async (id: string) => {
-    const found = competencies.find((c) => c.id === id);
-    if (found?.evidenceUrl && found.evidenceUrl.startsWith('blob:')) {
-      URL.revokeObjectURL(found.evidenceUrl);
-    }
     await deleteCompetency(id);
+    showToast({ kind: 'success', title: 'Entry Deleted', message: 'Competency entry removed.' });
     setDeleteConfirm(null);
+  };
+
+  const openEvidenceModal = (comp: typeof competencies[number]) => {
+    if (!comp.evidenceUrl) return;
+    setSelectedEvidence({
+      type: comp.evidenceType,
+      url: comp.evidenceUrl,
+      label: comp.evidenceLabel || 'Evidence',
+    });
+    setShowEvidenceModal(true);
   };
 
   const filteredCompetencies = useMemo(() => {
@@ -204,26 +242,52 @@ export default function CompetenciesPage() {
               <div className="input-group">
                 <label className="input-label">Evidence</label>
                 <div style={{ display: 'grid', gap: 10 }}>
-                  <select
-                    className="input"
-                    value={formData.evidenceType}
-                    onChange={(e) => {
-                      const nextType = e.target.value as '' | 'link' | 'image' | 'video' | 'document';
-                      setFormData({
-                        ...formData,
-                        evidenceType: nextType,
-                        evidenceUrl: '',
-                        evidenceLabel: '',
-                        evidenceFile: null,
-                      });
-                    }}
-                  >
-                    <option value="">No evidence</option>
-                    <option value="link">Link</option>
-                    <option value="image">Image upload</option>
-                    <option value="video">Video upload</option>
-                    <option value="document">Document upload</option>
-                  </select>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {[
+                      { key: '', label: 'No Evidence', icon: null },
+                      { key: 'link', label: 'Link', icon: LinkIcon },
+                      { key: 'image', label: 'Image', icon: ImageIcon },
+                      { key: 'video', label: 'Video', icon: Video },
+                      { key: 'document', label: 'PDF/Document', icon: FileText },
+                    ].map((option) => {
+                      const Icon = option.icon;
+                      const active = formData.evidenceType === option.key;
+                      return (
+                        <button
+                          key={option.key || 'none'}
+                          type="button"
+                          onClick={() =>
+                            {
+                              if (evidenceFileInputRef.current) evidenceFileInputRef.current.value = '';
+                              setFormData({
+                                ...formData,
+                                evidenceType: option.key as '' | 'link' | 'image' | 'video' | 'document',
+                                evidenceUrl: '',
+                                evidenceLabel: '',
+                                evidenceFile: null,
+                              });
+                            }
+                          }
+                          style={{
+                            padding: '8px 12px',
+                            borderRadius: 10,
+                            border: active ? '1px solid rgba(16,185,129,0.6)' : '1px solid rgba(255,255,255,0.12)',
+                            background: active ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.03)',
+                            color: active ? 'var(--primary-300)' : 'var(--slate-300)',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            fontSize: 12,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {Icon ? <Icon size={14} /> : null}
+                          {option.label}
+                        </button>
+                      );
+                    })}
+                  </div>
 
                   {formData.evidenceType === 'link' && (
                     <input
@@ -236,25 +300,65 @@ export default function CompetenciesPage() {
                   )}
 
                   {formData.evidenceType && formData.evidenceType !== 'link' && (
-                    <input
-                      className="input"
-                      type="file"
-                      accept={
-                        formData.evidenceType === 'image'
-                          ? 'image/*'
-                          : formData.evidenceType === 'video'
-                          ? 'video/*'
-                          : '.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx'
-                      }
-                      onChange={(e) => {
-                        const file = e.target.files?.[0] || null;
-                        setFormData({
-                          ...formData,
-                          evidenceFile: file,
-                          evidenceLabel: file?.name || '',
-                        });
-                      }}
-                    />
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      <input
+                        ref={evidenceFileInputRef}
+                        type="file"
+                        style={{ display: 'none' }}
+                        accept={
+                          formData.evidenceType === 'image'
+                            ? 'image/*'
+                            : formData.evidenceType === 'video'
+                            ? 'video/*'
+                            : '.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt'
+                        }
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          setFormData({
+                            ...formData,
+                            evidenceFile: file,
+                            evidenceLabel: file?.name || '',
+                          });
+                        }}
+                      />
+                      <div
+                        style={{
+                          border: '1px solid rgba(16,185,129,0.5)',
+                          borderRadius: 10,
+                          minHeight: 50,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          padding: '8px 12px',
+                          background: 'rgba(255,255,255,0.02)',
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => evidenceFileInputRef.current?.click()}
+                        >
+                          Choose File
+                        </button>
+                        <span
+                          style={{
+                            fontSize: 14,
+                            color: formData.evidenceFile ? 'var(--slate-200)' : 'var(--slate-400)',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
+                          {formData.evidenceFile
+                            ? formData.evidenceFile.name
+                            : formData.evidenceType === 'image'
+                            ? 'No image selected'
+                            : formData.evidenceType === 'video'
+                            ? 'No video selected'
+                            : 'No document selected'}
+                        </span>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -274,6 +378,7 @@ export default function CompetenciesPage() {
                 className="btn btn-primary"
                 onClick={handleAddCompetency}
                 disabled={
+                  uploadingEvidence ||
                   !formData.activity ||
                   !formData.areaCovered ||
                   !formData.outcome ||
@@ -281,7 +386,82 @@ export default function CompetenciesPage() {
                   (formData.evidenceType && formData.evidenceType !== 'link' && !formData.evidenceFile)
                 }
               >
-                <Save size={16} /> Add Entry
+                <Save size={16} /> {uploadingEvidence ? 'Uploading evidence...' : 'Add Entry'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Evidence Viewer Modal */}
+      {showEvidenceModal && selectedEvidence && (
+        <div className="modal-overlay" onClick={() => setShowEvidenceModal(false)}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 920, width: 'calc(100% - 40px)', padding: 0, overflow: 'hidden' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ minWidth: 0 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 2 }}>Evidence Preview</h3>
+                <p style={{ fontSize: 12, color: 'var(--slate-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {selectedEvidence.label}
+                </p>
+              </div>
+              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setShowEvidenceModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: 16 }}>
+              {selectedEvidence.type === 'image' && (
+                <img
+                  src={selectedEvidence.url}
+                  alt={selectedEvidence.label}
+                  style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 12, background: 'rgba(0,0,0,0.35)' }}
+                />
+              )}
+
+              {selectedEvidence.type === 'video' && (
+                <video
+                  controls
+                  style={{ width: '100%', maxHeight: '70vh', borderRadius: 12, background: 'rgba(0,0,0,0.35)' }}
+                  src={selectedEvidence.url}
+                />
+              )}
+
+              {selectedEvidence.type === 'document' && (
+                <iframe
+                  src={selectedEvidence.url}
+                  title={selectedEvidence.label}
+                  style={{ width: '100%', height: '70vh', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, background: 'rgba(255,255,255,0.02)' }}
+                />
+              )}
+
+              {selectedEvidence.type === 'link' && (
+                <div style={{ display: 'grid', gap: 12 }}>
+                  <p style={{ fontSize: 13, color: 'var(--slate-300)', wordBreak: 'break-all' }}>{selectedEvidence.url}</p>
+                  <iframe
+                    src={selectedEvidence.url}
+                    title={selectedEvidence.label}
+                    style={{ width: '100%', height: '58vh', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, background: 'rgba(255,255,255,0.02)' }}
+                  />
+                </div>
+              )}
+
+              {selectedEvidence.type === '' && (
+                <div style={{ display: 'grid', gap: 12 }}>
+                  <p style={{ fontSize: 13, color: 'var(--slate-300)', wordBreak: 'break-all' }}>{selectedEvidence.url}</p>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <a href={selectedEvidence.url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary">
+                <ExternalLink size={16} /> Open in new tab
+              </a>
+              <button className="btn btn-primary" onClick={() => setShowEvidenceModal(false)}>
+                Close
               </button>
             </div>
           </div>
@@ -407,6 +587,9 @@ export default function CompetenciesPage() {
           <p style={{ fontSize: 14, color: 'var(--slate-500)' }}>
             Start adding competency entries to track your learning and development.
           </p>
+          <button className="btn btn-primary" onClick={() => setShowAddModal(true)} style={{ marginTop: 16 }}>
+            <Plus size={16} /> Add Competency
+          </button>
         </div>
       ) : (
         <div className="card" style={{ overflow: 'hidden' }}>
@@ -418,7 +601,7 @@ export default function CompetenciesPage() {
                   <th>Activity</th>
                   <th>Area Covered</th>
                   <th>Outcome</th>
-                  <th>Evidence Link</th>
+                  <th>Evidence</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
@@ -449,10 +632,9 @@ export default function CompetenciesPage() {
                     </td>
                     <td>
                       {comp.evidenceUrl ? (
-                        <a
-                          href={comp.evidenceUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => openEvidenceModal(comp)}
                           style={{
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -460,13 +642,17 @@ export default function CompetenciesPage() {
                             color: 'var(--primary-400)',
                             textDecoration: 'none',
                             fontSize: 13,
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: 0,
                           }}
                         >
-                          <LinkIcon size={14} />
+                          <Eye size={14} />
                           {comp.evidenceType && comp.evidenceType !== 'link'
-                            ? comp.evidenceLabel || 'Open file'
-                            : 'View'}
-                        </a>
+                            ? comp.evidenceLabel || 'View evidence'
+                            : 'View link'}
+                        </button>
                       ) : (
                         <span style={{ fontSize: 13, color: 'var(--slate-500)' }}>—</span>
                       )}

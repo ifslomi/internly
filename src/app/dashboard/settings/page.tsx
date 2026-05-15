@@ -2,21 +2,29 @@
 import React, { useState } from 'react';
 import { useApp } from '@/lib/context';
 import AccountProfilePanel from '@/components/AccountProfilePanel';
-import { Building2, Bell, Save, LogOut, User, Mail, Phone, MapPin, PencilLine, X } from 'lucide-react';
+import { auth } from '@/lib/firebase';
+import { Building2, Bell, Save, LogOut, User, Mail, Phone, MapPin, ShieldCheck, LockKeyhole, Eye, EyeOff } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 
 export default function SettingsPage() {
     const { user, updateUser, logout } = useApp();
-    const [activeTab, setActiveTab] = useState<'company' | 'account' | 'notifications'>('company');
+    const [activeTab, setActiveTab] = useState<'company' | 'account' | 'notifications' | 'security'>('account');
     const [showMobileLogout, setShowMobileLogout] = useState(false);
     const [companyName, setCompanyName] = useState(user?.company?.name || user?.companyName || '');
     const [companyAddress, setCompanyAddress] = useState(user?.company?.address || user?.companyAddress || '');
     const [companyContactNumber, setCompanyContactNumber] = useState(user?.company?.contactNumber || user?.companyContactNumber || '');
     const [companyEmail, setCompanyEmail] = useState(user?.company?.email || user?.companyEmail || '');
-    const [isEditingCompany, setIsEditingCompany] = useState(false);
     const [reminderEnabled, setReminderEnabled] = useState(user?.reminderEnabled ?? true);
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [savingPassword, setSavingPassword] = useState(false);
 
     if (!user) return null;
+    const hasPasswordProvider = auth.currentUser?.providerData.some((provider) => provider.providerId === 'password') ?? false;
 
     const handleSaveCompany = () => {
         updateUser({
@@ -33,15 +41,7 @@ export default function SettingsPage() {
                 details: companyAddress,
             },
         });
-        setIsEditingCompany(false);
         showToast({ kind: 'success', title: 'Saved', message: 'Company details updated.' });
-    };
-
-    const resetCompanyForm = () => {
-        setCompanyName(user?.company?.name || user?.companyName || '');
-        setCompanyAddress(user?.company?.address || user?.companyAddress || '');
-        setCompanyContactNumber(user?.company?.contactNumber || user?.companyContactNumber || '');
-        setCompanyEmail(user?.company?.email || user?.companyEmail || '');
     };
 
     const handleSaveNotifications = () => {
@@ -49,9 +49,77 @@ export default function SettingsPage() {
         showToast({ kind: 'success', title: 'Saved', message: 'Notification preferences updated.' });
     };
 
+    const handleUpdatePassword = async () => {
+        if (!auth.currentUser || !auth.currentUser.email) {
+            showToast({ kind: 'error', title: 'Password Update Failed', message: 'No authenticated user found. Please sign in again.' });
+            return;
+        }
+
+        if (newPassword.length < 6) {
+            showToast({ kind: 'error', title: 'Password Update Failed', message: 'New password must be at least 6 characters.' });
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            showToast({ kind: 'error', title: 'Password Update Failed', message: 'New password and confirmation do not match.' });
+            return;
+        }
+
+        if (hasPasswordProvider && !currentPassword) {
+            showToast({ kind: 'error', title: 'Password Update Failed', message: 'Please enter your current password.' });
+            return;
+        }
+
+        setSavingPassword(true);
+        try {
+            const firebaseUser = auth.currentUser;
+            if (!firebaseUser || !firebaseUser.email) throw new Error('No authenticated user found.');
+
+            const { EmailAuthProvider, reauthenticateWithCredential, updatePassword, linkWithCredential } = await import('firebase/auth');
+
+            if (hasPasswordProvider) {
+                const credential = EmailAuthProvider.credential(firebaseUser.email, currentPassword);
+                await reauthenticateWithCredential(firebaseUser, credential);
+                await updatePassword(firebaseUser, newPassword);
+                showToast({ kind: 'success', title: 'Password Updated', message: 'Your password has been changed successfully.' });
+            } else {
+                const credential = EmailAuthProvider.credential(firebaseUser.email, newPassword);
+                await linkWithCredential(firebaseUser, credential);
+                showToast({ kind: 'success', title: 'Password Set', message: 'Password login is now enabled for your account.' });
+            }
+
+            setCurrentPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
+            setShowCurrentPassword(false);
+            setShowNewPassword(false);
+            setShowConfirmPassword(false);
+        } catch (err: unknown) {
+            const firebaseError = err as { code?: string; message?: string };
+            let message = firebaseError.message || 'Unable to update password.';
+
+            if (firebaseError.code === 'auth/wrong-password' || firebaseError.code === 'auth/invalid-credential') {
+                message = 'Current password is incorrect.';
+            } else if (firebaseError.code === 'auth/weak-password') {
+                message = 'New password is too weak. Use at least 6 characters.';
+            } else if (firebaseError.code === 'auth/requires-recent-login') {
+                message = 'Please sign out and sign in again before changing your password.';
+            } else if (firebaseError.code === 'auth/provider-already-linked') {
+                message = 'Password provider is already linked. Please use Change Password.';
+            } else if (firebaseError.code === 'auth/too-many-requests') {
+                message = 'Too many attempts. Please try again later.';
+            }
+
+            showToast({ kind: 'error', title: 'Password Update Failed', message });
+        } finally {
+            setSavingPassword(false);
+        }
+    };
+
     const tabs = [
-        { id: 'company' as const, label: 'Company Details', icon: Building2 },
         { id: 'account' as const, label: 'Account', icon: User },
+        { id: 'security' as const, label: 'Security', icon: ShieldCheck },
+        { id: 'company' as const, label: 'Company Details', icon: Building2 },
         { id: 'notifications' as const, label: 'Notifications', icon: Bell },
     ];
 
@@ -63,7 +131,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="settings-grid" style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 24, alignItems: 'start' }}>
-                <div className="card settings-tab-nav" style={{ padding: 12, position: 'sticky', top: 32, zIndex: 10, background: 'rgba(24, 24, 27, 0.9)' }}>
+                <div className="card settings-tab-nav" style={{ padding: 12, background: 'rgba(24, 24, 27, 0.9)' }}>
                     {tabs.map((tab) => {
                         const Icon = tab.icon;
                         const isActive = activeTab === tab.id;
@@ -98,53 +166,35 @@ export default function SettingsPage() {
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
                                 <div className="input-group">
                                     <label className="input-label" htmlFor="settings-company-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Building2 size={14} /> Company name</label>
-                                    <input id="settings-company-name" className="input" value={companyName} onChange={(e) => setCompanyName(e.target.value)} readOnly={!isEditingCompany} aria-readonly={!isEditingCompany} />
+                                    <input id="settings-company-name" className="input" value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
                                 </div>
                                 <div className="input-group">
                                     <label className="input-label" htmlFor="settings-company-address" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><MapPin size={14} /> Company full address</label>
-                                    <input id="settings-company-address" className="input" value={companyAddress} onChange={(e) => setCompanyAddress(e.target.value)} readOnly={!isEditingCompany} aria-readonly={!isEditingCompany} />
+                                    <input id="settings-company-address" className="input" value={companyAddress} onChange={(e) => setCompanyAddress(e.target.value)} />
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                                     <div className="input-group">
                                         <label className="input-label" htmlFor="settings-company-contact" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Phone size={14} /> Company contact number</label>
-                                        <input id="settings-company-contact" className="input" value={companyContactNumber} onChange={(e) => setCompanyContactNumber(e.target.value)} readOnly={!isEditingCompany} aria-readonly={!isEditingCompany} />
+                                        <input id="settings-company-contact" className="input" value={companyContactNumber} onChange={(e) => setCompanyContactNumber(e.target.value)} />
                                     </div>
                                     <div className="input-group">
                                         <label className="input-label" htmlFor="settings-company-email" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Mail size={14} /> Company email address</label>
-                                        <input id="settings-company-email" className="input" type="email" value={companyEmail} onChange={(e) => setCompanyEmail(e.target.value)} readOnly={!isEditingCompany} aria-readonly={!isEditingCompany} />
+                                        <input id="settings-company-email" className="input" type="email" value={companyEmail} onChange={(e) => setCompanyEmail(e.target.value)} />
                                     </div>
                                 </div>
                             </div>
 
-                            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                                {!isEditingCompany ? (
-                                    <button className="btn btn-primary" onClick={() => setIsEditingCompany(true)} id="settings-edit-company">
-                                        <PencilLine size={16} /> Edit
-                                    </button>
-                                ) : (
-                                    <>
-                                        <button
-                                            className="btn btn-secondary"
-                                            onClick={() => {
-                                                resetCompanyForm();
-                                                setIsEditingCompany(false);
-                                            }}
-                                            id="settings-cancel-company"
-                                        >
-                                            <X size={16} /> Cancel
-                                        </button>
-                                        <button className="btn btn-primary" onClick={handleSaveCompany} id="settings-save-company">
-                                            <Save size={16} /> Save Changes
-                                        </button>
-                                    </>
-                                )}
+                            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12 }}>
+                                <button className="btn btn-primary" onClick={handleSaveCompany} id="settings-save-company">
+                                    <Save size={16} /> Save Changes
+                                </button>
                             </div>
                         </div>
                     )}
 
                     {activeTab === 'account' && (
                         <div className="card-elevated">
-                            <AccountProfilePanel title="Account" description="Manage your student profile details." />
+                            <AccountProfilePanel title="Account" description="Manage your student profile details." compact />
                         </div>
                     )}
 
@@ -173,6 +223,115 @@ export default function SettingsPage() {
                             <button className="btn btn-primary" onClick={handleSaveNotifications} id="settings-save-notifications">
                                 <Save size={16} /> Save Notification Settings
                             </button>
+                        </div>
+                    )}
+
+                    {activeTab === 'security' && (
+                        <div className="card-elevated">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+                                <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(34,197,94,0.16)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-400)' }}>
+                                    <ShieldCheck size={22} />
+                                </div>
+                                <div>
+                                    <h2 style={{ fontSize: 18, fontWeight: 700 }}>Security</h2>
+                                    <p style={{ fontSize: 13, color: 'var(--slate-500)' }}>Manage sign-in credentials and account protection</p>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gap: 16 }}>
+                                <div className="input-group">
+                                    <label className="input-label" htmlFor="security-email" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <Mail size={14} /> Email Address (Read-only)
+                                    </label>
+                                    <input id="security-email" className="input" type="email" value={user.email} readOnly aria-readonly="true" />
+                                    <p style={{ fontSize: 12, color: 'var(--slate-500)', marginTop: 6 }}>
+                                        Email cannot be changed.
+                                    </p>
+                                </div>
+
+                                {hasPasswordProvider && (
+                                    <div className="input-group">
+                                        <label className="input-label" htmlFor="security-current-password" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <LockKeyhole size={14} /> Current Password
+                                        </label>
+                                        <div style={{ position: 'relative' }}>
+                                            <input
+                                                id="security-current-password"
+                                                className="input"
+                                                type={showCurrentPassword ? 'text' : 'password'}
+                                                value={currentPassword}
+                                                onChange={(e) => setCurrentPassword(e.target.value)}
+                                                placeholder="Enter your current password"
+                                                style={{ paddingRight: 44 }}
+                                                autoComplete="current-password"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowCurrentPassword((v) => !v)}
+                                                style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--slate-500)', cursor: 'pointer', padding: 4 }}
+                                            >
+                                                {showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="input-group">
+                                    <label className="input-label" htmlFor="security-new-password" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <LockKeyhole size={14} /> {hasPasswordProvider ? 'New Password' : 'Set Password'}
+                                    </label>
+                                    <div style={{ position: 'relative' }}>
+                                        <input
+                                            id="security-new-password"
+                                            className="input"
+                                            type={showNewPassword ? 'text' : 'password'}
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            placeholder="At least 6 characters"
+                                            style={{ paddingRight: 44 }}
+                                            autoComplete="new-password"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowNewPassword((v) => !v)}
+                                            style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--slate-500)', cursor: 'pointer', padding: 4 }}
+                                        >
+                                            {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="input-group">
+                                    <label className="input-label" htmlFor="security-confirm-password" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <LockKeyhole size={14} /> Confirm {hasPasswordProvider ? 'New Password' : 'Password'}
+                                    </label>
+                                    <div style={{ position: 'relative' }}>
+                                        <input
+                                            id="security-confirm-password"
+                                            className="input"
+                                            type={showConfirmPassword ? 'text' : 'password'}
+                                            value={confirmPassword}
+                                            onChange={(e) => setConfirmPassword(e.target.value)}
+                                            placeholder="Re-enter password"
+                                            style={{ paddingRight: 44 }}
+                                            autoComplete="new-password"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowConfirmPassword((v) => !v)}
+                                            style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--slate-500)', cursor: 'pointer', padding: 4 }}
+                                        >
+                                            {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24 }}>
+                                <button className="btn btn-primary" onClick={handleUpdatePassword} disabled={savingPassword} id="settings-save-security">
+                                    <Save size={16} /> {savingPassword ? 'Saving...' : hasPasswordProvider ? 'Update Password' : 'Set Password'}
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>

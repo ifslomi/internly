@@ -27,11 +27,10 @@ export default function ClientShell({ children }: { children: React.ReactNode })
     const [mounted, setMounted] = useState(false);
     const pathname = usePathname();
     const searchParams = useSearchParams();
-    const routeKey = `${pathname || ''}?${searchParams?.toString() || ''}`;
 
     const START_THROTTLE_MS = 180;
-    const SHOW_DELAY_MS = 80;
-    const MIN_VISIBLE_MS = 420;
+    const SHOW_DELAY_MS = 0;
+    const MIN_VISIBLE_MS = 520;
     const MAX_VISIBLE_MS = 12000;
 
     const navActiveRef = useRef(false);
@@ -114,10 +113,16 @@ export default function ClientShell({ children }: { children: React.ReactNode })
         navActiveRef.current = true;
 
         if (showTimerRef.current) clearTimeout(showTimerRef.current);
-        showTimerRef.current = setTimeout(() => {
+        if (SHOW_DELAY_MS <= 0) {
             visibleSinceRef.current = Date.now();
             setShowRouteLoader(true);
-        }, SHOW_DELAY_MS);
+            showTimerRef.current = null;
+        } else {
+            showTimerRef.current = setTimeout(() => {
+                visibleSinceRef.current = Date.now();
+                setShowRouteLoader(true);
+            }, SHOW_DELAY_MS);
+        }
 
         if (safetyTimerRef.current) clearTimeout(safetyTimerRef.current);
         safetyTimerRef.current = setTimeout(() => {
@@ -149,7 +154,9 @@ export default function ClientShell({ children }: { children: React.ReactNode })
 
     useEffect(() => {
         const key = `${pathname || ''}?${searchParams?.toString() || ''}`;
-        if (key) stopRouteLoader();
+        if (key) {
+            stopRouteLoader();
+        }
     }, [pathname, searchParams, stopRouteLoader]);
 
     useEffect(() => {
@@ -288,7 +295,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
             )}
 
             <div style={{ display: showSplash ? 'none' : 'block' }} className="route-content-host">
-                <div key={routeKey} className="route-change-stage">
+                <div className="route-change-stage">
                     {children}
                 </div>
             </div>
