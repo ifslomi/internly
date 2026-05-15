@@ -61,6 +61,7 @@ import {
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import type { Area } from 'react-easy-crop';
+import { beginGlobalLoading } from '@/lib/global-loading';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const Cropper = dynamic(() => import('react-easy-crop').then(mod => mod.default), { ssr: false }) as React.ComponentType<any>;
@@ -989,6 +990,7 @@ export default function ChatPage() {
 
     const handleStartConversation = async (otherUser: ChatUser) => {
         if (!user) return;
+        const endGlobalLoading = beginGlobalLoading();
         try {
             const chatUser: ChatUser = {
                 uid: currentUserId || user.id,
@@ -1003,11 +1005,14 @@ export default function ChatPage() {
         } catch (err) {
             console.error('Failed to start conversation:', err);
             setChatError('Failed to start conversation. Check Firestore permissions.');
+        } finally {
+            endGlobalLoading();
         }
     };
 
     const handleCreateGroup = async () => {
         if (!user || !groupName.trim() || selectedGroupMembers.length < 2) return;
+        const endGlobalLoading = beginGlobalLoading();
         setCreatingGroup(true);
         try {
             const chatUser: ChatUser = {
@@ -1026,8 +1031,10 @@ export default function ChatPage() {
         } catch (err) {
             console.error('Failed to create group:', err);
             setChatError('Failed to create group. Check Firestore permissions.');
+        } finally {
+            setCreatingGroup(false);
+            endGlobalLoading();
         }
-        setCreatingGroup(false);
     };
 
     const toggleGroupMember = (u: ChatUser) => {
@@ -1047,6 +1054,7 @@ export default function ChatPage() {
 
     const handleSaveNickname = async () => {
         if (!activeConversationId || !nicknameTarget) return;
+        const endGlobalLoading = beginGlobalLoading();
         setSavingNickname(true);
         try {
             await setNickname(activeConversationId, nicknameTarget, nicknameValue);
@@ -1054,8 +1062,10 @@ export default function ChatPage() {
         } catch (err) {
             console.error('Failed to set nickname:', err);
             setChatError('Failed to set nickname.');
+        } finally {
+            setSavingNickname(false);
+            endGlobalLoading();
         }
-        setSavingNickname(false);
     };
 
     const clearAllPendingImages = () => {
@@ -1078,6 +1088,7 @@ export default function ChatPage() {
         const hasImages = pendingImages.length > 0;
         const hasFile = pendingFile !== null;
         if ((!hasText && !hasImages && !hasFile) || !activeConversationId || !activeConversation) return;
+        const endGlobalLoading = beginGlobalLoading();
         const text = messageText.trim();
         setMessageText('');
         setSending(true);
@@ -1130,9 +1141,11 @@ export default function ChatPage() {
             if (text) setMessageText(text);
             const errorMsg = err instanceof Error ? err.message : 'Unknown error';
             setChatError(`Failed to send message: ${errorMsg}`);
+        } finally {
+            setSending(false);
+            messageInputRef.current?.focus();
+            endGlobalLoading();
         }
-        setSending(false);
-        messageInputRef.current?.focus();
     };
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1199,8 +1212,13 @@ export default function ChatPage() {
     };
 
     const handleViewProfile = async (uid: string) => {
-        const profile = await getChatUser(uid);
-        if (profile) setSelectedProfile(profile);
+        const endGlobalLoading = beginGlobalLoading();
+        try {
+            const profile = await getChatUser(uid);
+            if (profile) setSelectedProfile(profile);
+        } finally {
+            endGlobalLoading();
+        }
     };
 
     const filteredUsers = allUsers.filter(u =>
@@ -3672,6 +3690,7 @@ export default function ChatPage() {
                                                     <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                                                         <button
                                                             onClick={async () => {
+                                                                const endGlobalLoading = beginGlobalLoading();
                                                                 try {
                                                                     await kickGroupMember(activeConversation.id, uid);
                                                                     setKickingUid(null);
@@ -3682,6 +3701,8 @@ export default function ChatPage() {
                                                                     console.error('Kick failed:', err);
                                                                     setChatError('Failed to remove member. Please try again.');
                                                                     setKickingUid(null);
+                                                                } finally {
+                                                                    endGlobalLoading();
                                                                 }
                                                             }}
                                                             style={{

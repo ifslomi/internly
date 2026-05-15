@@ -1,7 +1,7 @@
 "use client";
 import React, { useRef, useState, useMemo } from 'react';
 import { useApp } from '@/lib/context';
-import { Award, Plus, Calendar, Trash2, AlertTriangle, X, Save, Link as LinkIcon, Image as ImageIcon, Video, FileText, ExternalLink, Eye } from 'lucide-react';
+import { Award, Plus, Calendar, Trash2, AlertTriangle, X, Save, Link as LinkIcon, Image as ImageIcon, Video, FileText, ExternalLink, Eye, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { showToast } from '@/lib/toast';
 import { uploadEvidenceFile } from '@/lib/intern';
@@ -57,6 +57,8 @@ export default function CompetenciesPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [activeAreaTab, setActiveAreaTab] = useState<'all' | 'A' | 'B' | 'C'>('all');
   const [uploadingEvidence, setUploadingEvidence] = useState(false);
+  const [savingEntry, setSavingEntry] = useState(false);
+  const [deletingCompetencyId, setDeletingCompetencyId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -70,11 +72,12 @@ export default function CompetenciesPage() {
   });
 
   const handleAddCompetency = async () => {
-    if (!user) return;
+    if (!user || savingEntry) return;
     if (!formData.activity || !formData.areaCovered || !formData.outcome) {
       showToast({ kind: 'warning', title: 'Incomplete Form', message: 'Please complete activity, area covered, and outcome.' });
       return;
     }
+    setSavingEntry(true);
 
     let evidenceUrl = formData.evidenceUrl;
     let evidenceLabel = formData.evidenceLabel;
@@ -92,7 +95,7 @@ export default function CompetenciesPage() {
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Failed to upload evidence file.';
         showToast({ kind: 'error', title: 'Upload Failed', message });
-        setUploadingEvidence(false);
+        setSavingEntry(false);
         return;
       } finally {
         setUploadingEvidence(false);
@@ -101,6 +104,7 @@ export default function CompetenciesPage() {
 
     if (formData.evidenceType === 'link' && !formData.evidenceUrl) {
       showToast({ kind: 'warning', title: 'Missing Link', message: 'Please provide an evidence URL.' });
+      setSavingEntry(false);
       return;
     }
 
@@ -115,25 +119,39 @@ export default function CompetenciesPage() {
       evidenceLabel,
     };
 
-    await addCompetency(newCompetency);
-    showToast({ kind: 'success', title: 'Competency Added', message: 'Your competency entry was saved.' });
-    setFormData({
-      date: new Date().toISOString().split('T')[0],
-      activity: '',
-      areaCovered: '',
-      outcome: '',
-      evidenceType: '',
-      evidenceUrl: '',
-      evidenceLabel: '',
-      evidenceFile: null,
-    });
-    setShowAddModal(false);
+    try {
+      await addCompetency(newCompetency);
+      showToast({ kind: 'success', title: 'Competency Added', message: 'Your competency entry was saved.' });
+      setFormData({
+        date: new Date().toISOString().split('T')[0],
+        activity: '',
+        areaCovered: '',
+        outcome: '',
+        evidenceType: '',
+        evidenceUrl: '',
+        evidenceLabel: '',
+        evidenceFile: null,
+      });
+      setShowAddModal(false);
+    } catch {
+      showToast({ kind: 'error', title: 'Save Failed', message: 'Could not add competency. Please try again.' });
+    } finally {
+      setSavingEntry(false);
+    }
   };
 
   const handleDeleteCompetency = async (id: string) => {
-    await deleteCompetency(id);
-    showToast({ kind: 'success', title: 'Entry Deleted', message: 'Competency entry removed.' });
-    setDeleteConfirm(null);
+    if (deletingCompetencyId) return;
+    setDeletingCompetencyId(id);
+    try {
+      await deleteCompetency(id);
+      showToast({ kind: 'success', title: 'Entry Deleted', message: 'Competency entry removed.' });
+      setDeleteConfirm(null);
+    } catch {
+      showToast({ kind: 'error', title: 'Delete Failed', message: 'Could not delete competency entry. Please try again.' });
+    } finally {
+      setDeletingCompetencyId(null);
+    }
   };
 
   const openEvidenceModal = (comp: typeof competencies[number]) => {
@@ -378,7 +396,7 @@ export default function CompetenciesPage() {
                 className="btn btn-primary"
                 onClick={handleAddCompetency}
                 disabled={
-                  uploadingEvidence ||
+                  savingEntry ||
                   !formData.activity ||
                   !formData.areaCovered ||
                   !formData.outcome ||
@@ -386,7 +404,7 @@ export default function CompetenciesPage() {
                   (!!formData.evidenceType && formData.evidenceType !== 'link' && !formData.evidenceFile)
                 }
               >
-                <Save size={16} /> {uploadingEvidence ? 'Uploading evidence...' : 'Add Entry'}
+                {savingEntry ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Save size={16} />} {uploadingEvidence ? 'Uploading evidence...' : savingEntry ? 'Saving entry...' : 'Add Entry'}
               </button>
             </div>
           </div>
@@ -495,9 +513,10 @@ export default function CompetenciesPage() {
                 </button>
                 <button
                   className="btn btn-danger"
+                  disabled={deletingCompetencyId === deleteConfirm}
                   onClick={() => handleDeleteCompetency(deleteConfirm)}
                 >
-                  <Trash2 size={16} /> Delete
+                  {deletingCompetencyId === deleteConfirm ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Trash2 size={16} />} {deletingCompetencyId === deleteConfirm ? 'Deleting...' : 'Delete'}
                 </button>
               </div>
             </div>
@@ -629,6 +648,7 @@ export default function CompetenciesPage() {
                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                         <button
                           className="btn btn-ghost btn-icon btn-sm"
+                          disabled={!!deletingCompetencyId}
                           onClick={() => setDeleteConfirm(comp.id)}
                           title="Delete"
                           style={{ color: 'var(--rose-400)' }}

@@ -3,8 +3,9 @@ import React, { useState } from 'react';
 import { useApp } from '@/lib/context';
 import AccountProfilePanel from '@/components/AccountProfilePanel';
 import { auth } from '@/lib/firebase';
-import { Building2, Bell, Save, LogOut, User, Mail, Phone, MapPin, ShieldCheck, LockKeyhole, Eye, EyeOff } from 'lucide-react';
+import { Building2, Bell, Save, LogOut, User, Mail, Phone, MapPin, ShieldCheck, LockKeyhole, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { showToast } from '@/lib/toast';
+import { beginGlobalLoading } from '@/lib/global-loading';
 
 export default function SettingsPage() {
     const { user, updateUser, logout } = useApp();
@@ -22,51 +23,72 @@ export default function SettingsPage() {
     const [showNewPassword, setShowNewPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [savingPassword, setSavingPassword] = useState(false);
+    const [savingCompany, setSavingCompany] = useState(false);
+    const [savingNotifications, setSavingNotifications] = useState(false);
 
     if (!user) return null;
     const hasPasswordProvider = auth.currentUser?.providerData.some((provider) => provider.providerId === 'password') ?? false;
 
-    const handleSaveCompany = () => {
-        updateUser({
-            companyName,
-            companyAddress,
-            companyContactNumber,
-            companyEmail,
-            company: {
-                ...(user.company || {}),
-                name: companyName,
-                address: companyAddress,
-                contactNumber: companyContactNumber,
-                email: companyEmail,
-                details: companyAddress,
-            },
-        });
-        showToast({ kind: 'success', title: 'Saved', message: 'Company details updated.' });
+    const handleSaveCompany = async () => {
+        setSavingCompany(true);
+        try {
+            await updateUser({
+                companyName,
+                companyAddress,
+                companyContactNumber,
+                companyEmail,
+                company: {
+                    ...(user.company || {}),
+                    name: companyName,
+                    address: companyAddress,
+                    contactNumber: companyContactNumber,
+                    email: companyEmail,
+                    details: companyAddress,
+                },
+            });
+            showToast({ kind: 'success', title: 'Saved', message: 'Company details updated.' });
+        } catch {
+            showToast({ kind: 'error', title: 'Save Failed', message: 'Could not update company details. Please try again.' });
+        } finally {
+            setSavingCompany(false);
+        }
     };
 
-    const handleSaveNotifications = () => {
-        updateUser({ reminderEnabled });
-        showToast({ kind: 'success', title: 'Saved', message: 'Notification preferences updated.' });
+    const handleSaveNotifications = async () => {
+        setSavingNotifications(true);
+        try {
+            await updateUser({ reminderEnabled });
+            showToast({ kind: 'success', title: 'Saved', message: 'Notification preferences updated.' });
+        } catch {
+            showToast({ kind: 'error', title: 'Save Failed', message: 'Could not update notification settings. Please try again.' });
+        } finally {
+            setSavingNotifications(false);
+        }
     };
 
     const handleUpdatePassword = async () => {
+        const endGlobalLoading = beginGlobalLoading();
         if (!auth.currentUser || !auth.currentUser.email) {
             showToast({ kind: 'error', title: 'Password Update Failed', message: 'No authenticated user found. Please sign in again.' });
+            endGlobalLoading();
             return;
         }
 
         if (newPassword.length < 6) {
             showToast({ kind: 'error', title: 'Password Update Failed', message: 'New password must be at least 6 characters.' });
+            endGlobalLoading();
             return;
         }
 
         if (newPassword !== confirmPassword) {
             showToast({ kind: 'error', title: 'Password Update Failed', message: 'New password and confirmation do not match.' });
+            endGlobalLoading();
             return;
         }
 
         if (hasPasswordProvider && !currentPassword) {
             showToast({ kind: 'error', title: 'Password Update Failed', message: 'Please enter your current password.' });
+            endGlobalLoading();
             return;
         }
 
@@ -113,6 +135,7 @@ export default function SettingsPage() {
             showToast({ kind: 'error', title: 'Password Update Failed', message });
         } finally {
             setSavingPassword(false);
+            endGlobalLoading();
         }
     };
 
@@ -185,8 +208,8 @@ export default function SettingsPage() {
                             </div>
 
                             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12 }}>
-                                <button className="btn btn-primary" onClick={handleSaveCompany} id="settings-save-company">
-                                    <Save size={16} /> Save Changes
+                                <button className="btn btn-primary" onClick={handleSaveCompany} disabled={savingCompany} id="settings-save-company">
+                                    {savingCompany ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Save size={16} />} {savingCompany ? 'Saving...' : 'Save Changes'}
                                 </button>
                             </div>
                         </div>
@@ -215,13 +238,13 @@ export default function SettingsPage() {
                                     <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>Reminder Notifications</h3>
                                     <p style={{ fontSize: 13, color: 'var(--slate-500)' }}>Receive reminders for pending logs and reports</p>
                                 </div>
-                                <button onClick={() => setReminderEnabled(!reminderEnabled)} style={{ width: 56, height: 32, borderRadius: 'var(--radius-full)', background: reminderEnabled ? 'var(--primary-500)' : 'rgba(255,255,255,0.1)', border: 'none', position: 'relative', cursor: 'pointer' }} id="settings-toggle-reminders">
+                                <button disabled={savingNotifications} onClick={() => setReminderEnabled(!reminderEnabled)} style={{ width: 56, height: 32, borderRadius: 'var(--radius-full)', background: reminderEnabled ? 'var(--primary-500)' : 'rgba(255,255,255,0.1)', border: 'none', position: 'relative', cursor: savingNotifications ? 'not-allowed' : 'pointer', opacity: savingNotifications ? 0.7 : 1 }} id="settings-toggle-reminders">
                                     <span style={{ position: 'absolute', top: 4, left: reminderEnabled ? 28 : 4, width: 24, height: 24, borderRadius: '50%', background: 'white', transition: 'left 150ms ease' }} />
                                 </button>
                             </div>
 
-                            <button className="btn btn-primary" onClick={handleSaveNotifications} id="settings-save-notifications">
-                                <Save size={16} /> Save Notification Settings
+                            <button className="btn btn-primary" disabled={savingNotifications} onClick={handleSaveNotifications} id="settings-save-notifications">
+                                {savingNotifications ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Save size={16} />} {savingNotifications ? 'Saving...' : 'Save Notification Settings'}
                             </button>
                         </div>
                     )}
@@ -329,7 +352,7 @@ export default function SettingsPage() {
 
                             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24 }}>
                                 <button className="btn btn-primary" onClick={handleUpdatePassword} disabled={savingPassword} id="settings-save-security">
-                                    <Save size={16} /> {savingPassword ? 'Saving...' : hasPasswordProvider ? 'Update Password' : 'Set Password'}
+                                    {savingPassword ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Save size={16} />} {savingPassword ? 'Saving...' : hasPasswordProvider ? 'Update Password' : 'Set Password'}
                                 </button>
                             </div>
                         </div>

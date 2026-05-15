@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '@/lib/context';
 import { ACTIVITY_TYPES, ActivityType } from '@/lib/types';
-import { Calendar, Tag, FileText, User, Clock, Check, X } from 'lucide-react';
+import { Calendar, Tag, FileText, User, Clock, Check, X, Loader2 } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 
 interface LogWorkModalProps {
@@ -19,6 +19,7 @@ export default function LogWorkModal({ open, onClose }: LogWorkModalProps) {
     const [dailyHours, setDailyHours] = useState(8);
     const [showSupervisorList, setShowSupervisorList] = useState(false);
     const [showConfirm, setShowConfirm] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
         if (!open) return;
@@ -43,7 +44,8 @@ export default function LogWorkModal({ open, onClose }: LogWorkModalProps) {
     };
 
     const handleConfirmSubmit = () => {
-        if (!user) return;
+        if (!user || submitting) return;
+        setSubmitting(true);
         addLog({
             userId: user.id,
             entryDate,
@@ -51,10 +53,18 @@ export default function LogWorkModal({ open, onClose }: LogWorkModalProps) {
             taskDescription,
             supervisor,
             dailyHours,
-        });
-        showToast({ kind: 'success', title: 'Work Logged', message: 'Daily work entry added successfully.' });
-        setShowConfirm(false);
-        onClose();
+        })
+            .then(() => {
+                showToast({ kind: 'success', title: 'Work Logged', message: 'Daily work entry added successfully.' });
+                setShowConfirm(false);
+                onClose();
+            })
+            .catch(() => {
+                showToast({ kind: 'error', title: 'Failed', message: 'Could not submit log entry. Please try again.' });
+            })
+            .finally(() => {
+                setSubmitting(false);
+            });
     };
 
     if (!open || !user) return null;
@@ -81,7 +91,7 @@ export default function LogWorkModal({ open, onClose }: LogWorkModalProps) {
                             Record activities and hours for today
                         </p>
                     </div>
-                    <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose}>
+                    <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose} disabled={submitting}>
                         <X size={18} />
                     </button>
                 </div>
@@ -260,15 +270,15 @@ export default function LogWorkModal({ open, onClose }: LogWorkModalProps) {
                         padding: '16px 24px',
                         borderTop: '1px solid rgba(255,255,255,0.06)',
                     }}>
-                        <button type="button" className="btn btn-secondary" onClick={onClose}>
+                        <button type="button" className="btn btn-secondary" onClick={onClose} disabled={submitting}>
                             Cancel
                         </button>
                         <button
                             type="submit"
                             className="btn btn-success"
-                            disabled={activityTypes.length === 0}
+                            disabled={activityTypes.length === 0 || submitting}
                         >
-                            <Check size={16} /> Submit Log
+                            {submitting ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Check size={16} />} {submitting ? 'Submitting...' : 'Submit Log'}
                         </button>
                     </div>
                 </form>
@@ -407,6 +417,7 @@ export default function LogWorkModal({ open, onClose }: LogWorkModalProps) {
                                     type="button"
                                     onClick={() => setShowConfirm(false)}
                                     className="btn btn-secondary"
+                                    disabled={submitting}
                                 >
                                     Go Back
                                 </button>
@@ -414,8 +425,9 @@ export default function LogWorkModal({ open, onClose }: LogWorkModalProps) {
                                     type="button"
                                     onClick={handleConfirmSubmit}
                                     className="btn btn-success"
+                                    disabled={submitting}
                                 >
-                                    <Check size={16} /> Confirm & Submit
+                                    {submitting ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Check size={16} />} {submitting ? 'Submitting...' : 'Confirm & Submit'}
                                 </button>
                             </div>
                         </div>

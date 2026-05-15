@@ -42,6 +42,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
     const recentToastRef = useRef<Map<string, number>>(new Map());
     const routeStageRef = useRef<HTMLDivElement | null>(null);
     const routeAnimationRef = useRef<Animation | null>(null);
+    const globalLoadingCountRef = useRef(0);
 
     const TOAST_MAX = 5;
     const TOAST_RATE_LIMIT_MS = 900;
@@ -145,14 +146,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
         toastTimersRef.current.set(id, timer);
     }, [TOAST_MAX, TOAST_RATE_LIMIT_MS, removeToast]);
 
-    const startRouteLoader = useCallback(() => {
-        const now = Date.now();
-        if (navActiveRef.current) return;
-        if (now - lastStartRef.current < START_THROTTLE_MS) return;
-
-        lastStartRef.current = now;
-        navActiveRef.current = true;
-
+    const showVisualLoader = useCallback(() => {
         if (showTimerRef.current) clearTimeout(showTimerRef.current);
         if (SHOW_DELAY_MS <= 0) {
             visibleSinceRef.current = Date.now();
@@ -168,13 +162,13 @@ export default function ClientShell({ children }: { children: React.ReactNode })
         if (safetyTimerRef.current) clearTimeout(safetyTimerRef.current);
         safetyTimerRef.current = setTimeout(() => {
             navActiveRef.current = false;
-            setShowRouteLoader(false);
+            if (globalLoadingCountRef.current === 0) {
+                setShowRouteLoader(false);
+            }
         }, MAX_VISIBLE_MS);
-    }, [MAX_VISIBLE_MS, SHOW_DELAY_MS, START_THROTTLE_MS]);
+    }, [MAX_VISIBLE_MS, SHOW_DELAY_MS]);
 
-    const stopRouteLoader = useCallback(() => {
-        navActiveRef.current = false;
-
+    const hideVisualLoader = useCallback(() => {
         if (showTimerRef.current) {
             clearTimeout(showTimerRef.current);
             showTimerRef.current = null;
@@ -192,6 +186,34 @@ export default function ClientShell({ children }: { children: React.ReactNode })
             }
         }, remaining);
     }, [MIN_VISIBLE_MS]);
+
+    const startRouteLoader = useCallback(() => {
+        const now = Date.now();
+        if (navActiveRef.current) return;
+        if (now - lastStartRef.current < START_THROTTLE_MS) return;
+
+        lastStartRef.current = now;
+        navActiveRef.current = true;
+        showVisualLoader();
+    }, [START_THROTTLE_MS, showVisualLoader]);
+
+    const stopRouteLoader = useCallback(() => {
+        navActiveRef.current = false;
+        if (globalLoadingCountRef.current > 0) return;
+        hideVisualLoader();
+    }, [hideVisualLoader]);
+
+    const startGlobalLoader = useCallback(() => {
+        globalLoadingCountRef.current += 1;
+        showVisualLoader();
+    }, [showVisualLoader]);
+
+    const stopGlobalLoader = useCallback(() => {
+        globalLoadingCountRef.current = Math.max(0, globalLoadingCountRef.current - 1);
+        if (globalLoadingCountRef.current > 0) return;
+        if (navActiveRef.current) return;
+        hideVisualLoader();
+    }, [hideVisualLoader]);
 
     useEffect(() => {
         if (pathname) {
@@ -248,6 +270,14 @@ export default function ClientShell({ children }: { children: React.ReactNode })
             stopRouteLoader();
         };
 
+        const handleGlobalStart = () => {
+            startGlobalLoader();
+        };
+
+        const handleGlobalStop = () => {
+            stopGlobalLoader();
+        };
+
         const handleDocumentClick = (event: MouseEvent) => {
             const target = event.target as HTMLElement | null;
             const anchor = target?.closest('a[href]') as HTMLAnchorElement | null;
@@ -272,6 +302,8 @@ export default function ClientShell({ children }: { children: React.ReactNode })
         window.addEventListener('popstate', handlePopState);
         window.addEventListener('app:route-loading-start', handleManualStart as EventListener);
         window.addEventListener('app:route-loading-stop', handleManualStop as EventListener);
+        window.addEventListener('app:global-loading-start', handleGlobalStart as EventListener);
+        window.addEventListener('app:global-loading-stop', handleGlobalStop as EventListener);
         document.addEventListener('click', handleDocumentClick, true);
 
         return () => {
@@ -280,10 +312,12 @@ export default function ClientShell({ children }: { children: React.ReactNode })
             window.removeEventListener('popstate', handlePopState);
             window.removeEventListener('app:route-loading-start', handleManualStart as EventListener);
             window.removeEventListener('app:route-loading-stop', handleManualStop as EventListener);
+            window.removeEventListener('app:global-loading-start', handleGlobalStart as EventListener);
+            window.removeEventListener('app:global-loading-stop', handleGlobalStop as EventListener);
             document.removeEventListener('click', handleDocumentClick, true);
             clearTimers();
         };
-    }, [clearTimers, startRouteLoader, stopRouteLoader]);
+    }, [clearTimers, startGlobalLoader, startRouteLoader, stopGlobalLoader, stopRouteLoader]);
 
     useEffect(() => {
         const handleToast = (event: Event) => {

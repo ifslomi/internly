@@ -24,6 +24,7 @@ import {
 } from './firestore';
 import { upsertChatUser, syncChatUserProfileInConversations } from './chat';
 import { auth } from './firebase';
+import { beginGlobalLoading } from './global-loading';
 
 interface AppContextType {
     user: User | null;
@@ -609,170 +610,205 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // ─── Update User ────────────────────────────────────
     const handleUpdateUser = async (updates: Partial<User>) => {
+        const endGlobalLoading = beginGlobalLoading();
         // Update localStorage cache immediately for snappy UI
-        storage.updateUser(updates);
-        const updatedLocal = storage.getCurrentUser();
-        if (updatedLocal) {
-            setUser(updatedLocal);
-            setStats(calculateHourStats(logs, updatedLocal.totalRequiredHours));
-        }
-
-        // Persist to Firestore
-        const uid = auth.currentUser?.uid || user?.id;
-        if (uid) {
-            try {
-                await updateUserInFirestore(uid, updates);
-
-                // Keep chat profile surfaces in sync for all users in real-time.
-                const sourceUser = updatedLocal || user;
-                if (sourceUser) {
-                    const name = updates.name ?? sourceUser.name;
-                    const email = updates.email ?? sourceUser.email;
-                    const profileImage = updates.profileImage ?? sourceUser.profileImage;
-
-                    await upsertChatUser({
-                        uid,
-                        name,
-                        email,
-                        profileImage,
-                    });
-
-                    await syncChatUserProfileInConversations(uid, {
-                        name,
-                        email,
-                        profileImage,
-                    });
-                }
-            } catch (err) {
-                console.error('[Context] Failed to update user in Firestore:', err);
+        try {
+            storage.updateUser(updates);
+            const updatedLocal = storage.getCurrentUser();
+            if (updatedLocal) {
+                setUser(updatedLocal);
+                setStats(calculateHourStats(logs, updatedLocal.totalRequiredHours));
             }
+
+            // Persist to Firestore
+            const uid = auth.currentUser?.uid || user?.id;
+            if (uid) {
+                try {
+                    await updateUserInFirestore(uid, updates);
+
+                    // Keep chat profile surfaces in sync for all users in real-time.
+                    const sourceUser = updatedLocal || user;
+                    if (sourceUser) {
+                        const name = updates.name ?? sourceUser.name;
+                        const email = updates.email ?? sourceUser.email;
+                        const profileImage = updates.profileImage ?? sourceUser.profileImage;
+
+                        await upsertChatUser({
+                            uid,
+                            name,
+                            email,
+                            profileImage,
+                        });
+
+                        await syncChatUserProfileInConversations(uid, {
+                            name,
+                            email,
+                            profileImage,
+                        });
+                    }
+                } catch (err) {
+                    console.error('[Context] Failed to update user in Firestore:', err);
+                }
+            }
+        } finally {
+            endGlobalLoading();
         }
     };
 
     // ─── Add Log ────────────────────────────────────────
     const handleAddLog = async (log: Omit<DailyLog, 'id' | 'createdAt' | 'updatedAt'>) => {
+        const endGlobalLoading = beginGlobalLoading();
         // Optimistic: add to localStorage immediately
-        const localLog = storage.addDailyLog(log);
+        try {
+            const localLog = storage.addDailyLog(log);
 
-        // Update UI
-        setLogs((prev) => {
-            const updatedLogs = [...prev, localLog];
-            if (user) setStats(calculateHourStats(updatedLogs, user.totalRequiredHours));
-            return updatedLogs;
-        });
+            // Update UI
+            setLogs((prev) => {
+                const updatedLogs = [...prev, localLog];
+                if (user) setStats(calculateHourStats(updatedLogs, user.totalRequiredHours));
+                return updatedLogs;
+            });
 
-        // Persist to Firestore
-        if (auth.currentUser) {
-            try {
-                const fsLog = await addDailyLogToFirestore(log);
-                // Replace local ID with Firestore ID if different
-                if (fsLog.id !== localLog.id) {
-                    storage.replaceDailyLogId(localLog.id, fsLog.id);
-                    setLogs((prev) => prev.map((l) =>
-                        l.id === localLog.id ? { ...l, id: fsLog.id } : l
-                    ));
-                }
-                // Refresh supervisors from Firestore if auto-saved
-                if (log.supervisor && user) {
-                    const fsUser = await getUserFromFirestore(auth.currentUser.uid);
-                    if (fsUser) {
-                        storage.cacheUser(fsUser);
-                        setUser(fsUser);
+            // Persist to Firestore
+            if (auth.currentUser) {
+                try {
+                    const fsLog = await addDailyLogToFirestore(log);
+                    // Replace local ID with Firestore ID if different
+                    if (fsLog.id !== localLog.id) {
+                        storage.replaceDailyLogId(localLog.id, fsLog.id);
+                        setLogs((prev) => prev.map((l) =>
+                            l.id === localLog.id ? { ...l, id: fsLog.id } : l
+                        ));
                     }
+                    // Refresh supervisors from Firestore if auto-saved
+                    if (log.supervisor && user) {
+                        const fsUser = await getUserFromFirestore(auth.currentUser.uid);
+                        if (fsUser) {
+                            storage.cacheUser(fsUser);
+                            setUser(fsUser);
+                        }
+                    }
+                } catch (err) {
+                    console.error('[Context] Failed to save log to Firestore:', err);
                 }
-            } catch (err) {
-                console.error('[Context] Failed to save log to Firestore:', err);
             }
+        } finally {
+            endGlobalLoading();
         }
     };
 
     // ─── Update Log ─────────────────────────────────────
     const handleUpdateLog = async (id: string, updates: Partial<DailyLog>) => {
+        const endGlobalLoading = beginGlobalLoading();
         // Optimistic update
-        storage.updateDailyLog(id, updates);
-        setLogs((prev) => {
-            const updatedLogs = prev.map((l) => (l.id === id ? { ...l, ...updates, updatedAt: new Date().toISOString() } : l));
-            if (user) setStats(calculateHourStats(updatedLogs, user.totalRequiredHours));
-            return updatedLogs;
-        });
+        try {
+            storage.updateDailyLog(id, updates);
+            setLogs((prev) => {
+                const updatedLogs = prev.map((l) => (l.id === id ? { ...l, ...updates, updatedAt: new Date().toISOString() } : l));
+                if (user) setStats(calculateHourStats(updatedLogs, user.totalRequiredHours));
+                return updatedLogs;
+            });
 
-        // Persist to Firestore
-        if (auth.currentUser) {
-            try {
-                await updateDailyLogInFirestore(id, updates);
-            } catch (err) {
-                console.error('[Context] Failed to update log in Firestore:', err);
+            // Persist to Firestore
+            if (auth.currentUser) {
+                try {
+                    await updateDailyLogInFirestore(id, updates);
+                } catch (err) {
+                    console.error('[Context] Failed to update log in Firestore:', err);
+                }
             }
+        } finally {
+            endGlobalLoading();
         }
     };
 
     // ─── Delete Log ─────────────────────────────────────
     const handleDeleteLog = async (id: string) => {
+        const endGlobalLoading = beginGlobalLoading();
         // Optimistic delete
-        storage.deleteDailyLog(id);
-        setLogs((prev) => {
-            const updatedLogs = prev.filter((l) => l.id !== id);
-            if (user) setStats(calculateHourStats(updatedLogs, user.totalRequiredHours));
-            return updatedLogs;
-        });
+        try {
+            storage.deleteDailyLog(id);
+            setLogs((prev) => {
+                const updatedLogs = prev.filter((l) => l.id !== id);
+                if (user) setStats(calculateHourStats(updatedLogs, user.totalRequiredHours));
+                return updatedLogs;
+            });
 
-        // Persist to Firestore
-        if (auth.currentUser) {
-            try {
-                await deleteDailyLogFromFirestore(id);
-            } catch (err) {
-                console.error('[Context] Failed to delete log from Firestore:', err);
+            // Persist to Firestore
+            if (auth.currentUser) {
+                try {
+                    await deleteDailyLogFromFirestore(id);
+                } catch (err) {
+                    console.error('[Context] Failed to delete log from Firestore:', err);
+                }
             }
+        } finally {
+            endGlobalLoading();
         }
     };
 
     // ─── Competencies ─────────────────────────────────
     const handleAddCompetency = async (competency: Omit<Competency, 'id' | 'createdAt' | 'updatedAt'>) => {
-        const localCompetency = storage.addCompetency(competency);
-        setCompetencies((prev) => [localCompetency, ...prev]);
+        const endGlobalLoading = beginGlobalLoading();
+        try {
+            const localCompetency = storage.addCompetency(competency);
+            setCompetencies((prev) => [localCompetency, ...prev]);
 
-        if (auth.currentUser) {
-            try {
-                const fsCompetency = await addCompetencyToFirestore(competency);
-                if (fsCompetency.id !== localCompetency.id) {
-                    storage.replaceCompetencyId(localCompetency.id, fsCompetency.id);
-                    setCompetencies((prev) =>
-                        prev.map((c) => (c.id === localCompetency.id ? { ...c, id: fsCompetency.id } : c))
-                    );
+            if (auth.currentUser) {
+                try {
+                    const fsCompetency = await addCompetencyToFirestore(competency);
+                    if (fsCompetency.id !== localCompetency.id) {
+                        storage.replaceCompetencyId(localCompetency.id, fsCompetency.id);
+                        setCompetencies((prev) =>
+                            prev.map((c) => (c.id === localCompetency.id ? { ...c, id: fsCompetency.id } : c))
+                        );
+                    }
+                } catch (err) {
+                    console.error('[Context] Failed to save competency to Firestore:', err);
                 }
-            } catch (err) {
-                console.error('[Context] Failed to save competency to Firestore:', err);
             }
+        } finally {
+            endGlobalLoading();
         }
     };
 
     const handleDeleteCompetency = async (id: string) => {
-        storage.deleteCompetency(id);
-        setCompetencies((prev) => prev.filter((c) => c.id !== id));
+        const endGlobalLoading = beginGlobalLoading();
+        try {
+            storage.deleteCompetency(id);
+            setCompetencies((prev) => prev.filter((c) => c.id !== id));
 
-        if (auth.currentUser) {
-            try {
-                await deleteCompetencyFromFirestore(id);
-            } catch (err) {
-                console.error('[Context] Failed to delete competency from Firestore:', err);
+            if (auth.currentUser) {
+                try {
+                    await deleteCompetencyFromFirestore(id);
+                } catch (err) {
+                    console.error('[Context] Failed to delete competency from Firestore:', err);
+                }
             }
+        } finally {
+            endGlobalLoading();
         }
     };
 
     // ─── Weekly Reports (Firestore-backed) ──────────────
     const handleSaveWeeklyReport = async (report: Omit<WeeklyReport, 'id' | 'createdAt'>): Promise<WeeklyReport> => {
-        // Save to localStorage cache
-        const localReport = storage.saveWeeklyReport(report);
+        const endGlobalLoading = beginGlobalLoading();
+        try {
+            // Save to localStorage cache
+            const localReport = storage.saveWeeklyReport(report);
 
-        // Persist to Firestore
-        if (auth.currentUser) {
-            try {
-                return await saveWeeklyReportToFirestore(report);
-            } catch (err) {
-                console.error('[Context] Failed to save report to Firestore:', err);
+            // Persist to Firestore
+            if (auth.currentUser) {
+                try {
+                    return await saveWeeklyReportToFirestore(report);
+                } catch (err) {
+                    console.error('[Context] Failed to save report to Firestore:', err);
+                }
             }
+            return localReport;
+        } finally {
+            endGlobalLoading();
         }
-        return localReport;
     };
 
     const handleGetWeeklyReports = async (userId: string): Promise<WeeklyReport[]> => {

@@ -28,6 +28,7 @@ import {
     X,
     Eye,
     ExternalLink,
+    Loader2,
 } from 'lucide-react';
 
 type WeekRange = { start: Date; end: Date; label: string };
@@ -185,6 +186,8 @@ export default function ReportsPage() {
     const [editDescription, setEditDescription] = useState('');
     const [editSupervisor, setEditSupervisor] = useState('');
     const [editHours, setEditHours] = useState(8);
+    const [savingEdit, setSavingEdit] = useState(false);
+    const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
 
     const weeks = useMemo(
         () =>
@@ -238,17 +241,24 @@ export default function ReportsPage() {
         );
     };
 
-    const handleSaveEdit = () => {
-        if (!editingLog || editActivities.length === 0) return;
-        updateLog(editingLog.id, {
-            entryDate: editDate,
-            activityType: editActivities,
-            taskDescription: editDescription,
-            supervisor: editSupervisor,
-            dailyHours: editHours,
-        });
-        showToast({ kind: 'success', title: 'Updated', message: 'Log entry updated successfully.' });
-        closeEditModal();
+    const handleSaveEdit = async () => {
+        if (!editingLog || editActivities.length === 0 || savingEdit) return;
+        setSavingEdit(true);
+        try {
+            await updateLog(editingLog.id, {
+                entryDate: editDate,
+                activityType: editActivities,
+                taskDescription: editDescription,
+                supervisor: editSupervisor,
+                dailyHours: editHours,
+            });
+            showToast({ kind: 'success', title: 'Updated', message: 'Log entry updated successfully.' });
+            closeEditModal();
+        } catch {
+            showToast({ kind: 'error', title: 'Update Failed', message: 'Could not update this log entry. Please try again.' });
+        } finally {
+            setSavingEdit(false);
+        }
     };
 
     const supervisors = useMemo(() => {
@@ -590,13 +600,13 @@ export default function ReportsPage() {
                             padding: '16px 24px',
                             borderTop: '1px solid rgba(255,255,255,0.06)',
                         }}>
-                            <button className="btn btn-secondary" onClick={closeEditModal}>Cancel</button>
+                            <button className="btn btn-secondary" onClick={closeEditModal} disabled={savingEdit}>Cancel</button>
                             <button
                                 className="btn btn-primary"
                                 onClick={handleSaveEdit}
-                                disabled={editActivities.length === 0}
+                                disabled={editActivities.length === 0 || savingEdit}
                             >
-                                <Save size={16} /> Save Changes
+                                {savingEdit ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Save size={16} />} {savingEdit ? 'Saving...' : 'Save Changes'}
                             </button>
                         </div>
                     </div>
@@ -625,15 +635,25 @@ export default function ReportsPage() {
                                 This action cannot be undone. The hours from this entry will be removed from your total.
                             </p>
                             <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-                                <button className="btn btn-secondary" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+                                <button className="btn btn-secondary" onClick={() => setDeleteConfirm(null)} disabled={!!deletingLogId}>Cancel</button>
                                 <button
                                     className="btn btn-danger"
-                                    onClick={() => {
-                                        deleteLog(deleteConfirm);
-                                        setDeleteConfirm(null);
+                                    disabled={deletingLogId === deleteConfirm}
+                                    onClick={async () => {
+                                        if (!deleteConfirm || deletingLogId) return;
+                                        setDeletingLogId(deleteConfirm);
+                                        try {
+                                            await deleteLog(deleteConfirm);
+                                            setDeleteConfirm(null);
+                                            showToast({ kind: 'success', title: 'Deleted', message: 'Log entry deleted.' });
+                                        } catch {
+                                            showToast({ kind: 'error', title: 'Delete Failed', message: 'Could not delete this log entry.' });
+                                        } finally {
+                                            setDeletingLogId(null);
+                                        }
                                     }}
                                 >
-                                    <Trash2 size={16} /> Delete
+                                    {deletingLogId === deleteConfirm ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Trash2 size={16} />} {deletingLogId === deleteConfirm ? 'Deleting...' : 'Delete'}
                                 </button>
                             </div>
                         </div>
@@ -671,7 +691,7 @@ export default function ReportsPage() {
                                         setDeleteImportedPdfConfirm(false);
                                     }}
                                 >
-                                    <Trash2 size={16} /> {importingPdf ? 'Deleting...' : 'Delete'}
+                                    {importingPdf ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Trash2 size={16} />} {importingPdf ? 'Deleting...' : 'Delete'}
                                 </button>
                             </div>
                         </div>
@@ -697,7 +717,7 @@ export default function ReportsPage() {
                                     setShowExportOptions(false);
                                 }}
                             >
-                                <Download size={16} /> Export Paper View PDF
+                                {generating ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Download size={16} />} {generating ? 'Generating...' : 'Export Paper View PDF'}
                             </button>
                             <button
                                 className="btn btn-secondary"
@@ -707,7 +727,7 @@ export default function ReportsPage() {
                                     setShowExportOptions(false);
                                 }}
                             >
-                                <Download size={16} /> Export Simple PDF
+                                {generating ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Download size={16} />} {generating ? 'Generating...' : 'Export Simple PDF'}
                             </button>
                             <button className="btn btn-ghost" disabled={generating} onClick={() => setShowExportOptions(false)}>
                                 Cancel
@@ -933,15 +953,7 @@ function ReportsContent({
                     >
                         {generating ? (
                             <>
-                                <span style={{
-                                    width: 14,
-                                    height: 14,
-                                    border: '2px solid rgba(255,255,255,0.3)',
-                                    borderTopColor: 'white',
-                                    borderRadius: '50%',
-                                    animation: 'spin 0.8s linear infinite',
-                                    display: 'inline-block',
-                                }} />
+                                <Loader2 size={16} className="spin-smooth btn-loading-icon" />
                                 Generating...
                             </>
                         ) : (
@@ -951,7 +963,6 @@ function ReportsContent({
                         )}
                     </button>
                 </div>
-                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </div>
 
             <div

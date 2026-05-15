@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '@/lib/context';
-import { Save, User, GraduationCap, Building2, Mail, Phone, MapPin, ShieldCheck, Clock3, CalendarDays } from 'lucide-react';
+import { Save, User, GraduationCap, Building2, Mail, Phone, MapPin, ShieldCheck, Clock3, CalendarDays, Loader2 } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { uploadProfileImage } from '@/lib/intern';
 
@@ -163,6 +163,7 @@ export default function AccountProfilePanel({
                 disabled={uploadingAvatar}
                 onClick={() => avatarInputRef.current?.click()}
               >
+                {uploadingAvatar ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : null}
                 {uploadingAvatar ? 'Uploading...' : 'Upload Photo'}
               </button>
             </div>
@@ -330,7 +331,7 @@ export default function AccountProfilePanel({
 
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: compact ? 12 : 4 }}>
             <button className="btn btn-primary" type="button" onClick={handleSave} disabled={saving}>
-              <Save size={16} /> {saving ? 'Saving...' : 'Save changes'}
+              {saving ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Save size={16} />} {saving ? 'Saving...' : 'Save changes'}
             </button>
           </div>
         </div>

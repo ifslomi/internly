@@ -2352,3 +2352,21 @@ select.input {
     transform: rotate(360deg);
   }
 }
+
+@keyframes spinSmooth {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.spin-smooth {
+  animation: spinSmooth 0.8s linear infinite;
+}
+
+.btn-loading-icon {
+  opacity: 0.9;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.2));
+}
