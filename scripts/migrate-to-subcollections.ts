@@ -21,7 +21,7 @@
 import { createAdminFirestore } from './firebase-admin';
 
 // ─── Initialize Firebase Admin ─────────────────────────
-const { db, projectId: PROJECT_ID } = createAdminFirestore();
+const { db } = createAdminFirestore();
 
 // ─── Config ────────────────────────────────────────────
 const BATCH_LIMIT = 490; // Firestore batch max is 500

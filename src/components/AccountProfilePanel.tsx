@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '@/lib/context';
-import { Save, User, GraduationCap, Building2, Mail, Phone, MapPin, ShieldCheck, Clock3 } from 'lucide-react';
+import { Save, User, GraduationCap, Building2, Mail, Phone, MapPin, ShieldCheck, Clock3, CalendarDays } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { uploadProfileImage } from '@/lib/intern';
 
@@ -25,6 +25,7 @@ export default function AccountProfilePanel({
   const [programCourse, setProgramCourse] = useState('');
   const [department, setDepartment] = useState('');
   const [hoursToRender, setHoursToRender] = useState(480);
+  const [startDate, setStartDate] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarLoadError, setAvatarLoadError] = useState(false);
@@ -40,6 +41,7 @@ export default function AccountProfilePanel({
       setProgramCourse(user.course || '');
       setDepartment(user.department || '');
       setHoursToRender(user.totalRequiredHours || 480);
+      setStartDate(user.startDate || new Date().toISOString().split('T')[0]);
     }
   }, [user]);
 
@@ -52,6 +54,15 @@ export default function AccountProfilePanel({
   }
 
   const handleSave = async () => {
+    if (!startDate) {
+      showToast({ kind: 'error', title: 'Missing Start Date', message: 'Please set your OJT start date.' });
+      return;
+    }
+    if (user.endDate && startDate > user.endDate) {
+      showToast({ kind: 'error', title: 'Invalid Date Range', message: 'Start date cannot be later than end date.' });
+      return;
+    }
+
     setSaving(true);
     try {
       await updateUser({
@@ -69,7 +80,9 @@ export default function AccountProfilePanel({
         course: programCourse,
         department,
         totalRequiredHours: Number(hoursToRender) || 0,
+        startDate,
       });
+      showToast({ kind: 'success', title: 'Saved', message: 'Account profile updated.' });
     } finally {
       setSaving(false);
     }
@@ -213,6 +226,12 @@ export default function AccountProfilePanel({
                   </label>
                   <input className="input" type="number" min={1} max={5000} value={hoursToRender} onChange={(e) => setHoursToRender(Number(e.target.value))} />
                 </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <CalendarDays size={16} /> OJT Start Date
+                  </label>
+                  <input className="input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                </div>
               </div>
             </div>
           ) : (
@@ -291,11 +310,19 @@ export default function AccountProfilePanel({
 
               <div style={{ padding: 14, borderRadius: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <h4 style={{ fontSize: 13, color: 'var(--slate-400)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>OJT Requirement</h4>
-                <div>
-                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <Clock3 size={16} /> Required OJT Hours
-                  </label>
-                  <input className="input" type="number" min={1} max={5000} value={hoursToRender} onChange={(e) => setHoursToRender(Number(e.target.value))} />
+                <div style={{ display: 'grid', gap: 12 }}>
+                  <div>
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <Clock3 size={16} /> Required OJT Hours
+                    </label>
+                    <input className="input" type="number" min={1} max={5000} value={hoursToRender} onChange={(e) => setHoursToRender(Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <CalendarDays size={16} /> OJT Start Date
+                    </label>
+                    <input className="input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                  </div>
                 </div>
               </div>
             </div>
@@ -367,6 +394,13 @@ export default function AccountProfilePanel({
                 <div>
                   <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Required OJT Hours</p>
                   <p style={{ fontSize: 14, color: 'white' }}>{hoursToRender || 0}</p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <CalendarDays size={18} style={{ color: 'var(--slate-500)', marginTop: 2, flexShrink: 0 }} />
+                <div>
+                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>OJT Start Date</p>
+                  <p style={{ fontSize: 14, color: 'white' }}>{startDate || '—'}</p>
                 </div>
               </div>
             </div>

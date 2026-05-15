@@ -69,6 +69,11 @@ export interface WeeklyReport {
   weekEnd: string;
   reflection: string;
   logs: DailyLog[];
+  importedPdfUrl?: string;
+  importedPdfName?: string;
+  importedPdfUploadedAt?: string;
+  importedPdfPublicId?: string;
+  importedPdfResourceType?: 'raw' | 'image' | 'video';
   createdAt: string;
 }
 

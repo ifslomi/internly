@@ -247,10 +247,12 @@ export function saveWeeklyReport(report: Omit<WeeklyReport, 'id' | 'createdAt'>)
     const existingIdx = reports.findIndex(
         (r) => r.userId === report.userId && r.weekStart === report.weekStart
     );
+    const existingReport = existingIdx >= 0 ? reports[existingIdx] : null;
     const newReport: WeeklyReport = {
+        ...(existingReport || {}),
         ...report,
-        id: existingIdx >= 0 ? reports[existingIdx].id : uuidv4(),
-        createdAt: existingIdx >= 0 ? reports[existingIdx].createdAt : new Date().toISOString(),
+        id: existingReport?.id || uuidv4(),
+        createdAt: existingReport?.createdAt || new Date().toISOString(),
     };
     if (existingIdx >= 0) {
         reports[existingIdx] = newReport;

@@ -351,6 +351,11 @@ export async function getWeeklyReportsFromFirestore(userId: string): Promise<Wee
             weekEnd: data.weekEnd,
             reflection: data.reflection || '',
             logs: data.logs || [],
+            importedPdfUrl: data.importedPdfUrl || undefined,
+            importedPdfName: data.importedPdfName || undefined,
+            importedPdfUploadedAt: data.importedPdfUploadedAt || undefined,
+            importedPdfPublicId: data.importedPdfPublicId || undefined,
+            importedPdfResourceType: data.importedPdfResourceType || undefined,
             createdAt: data.createdAt || '',
         } as WeeklyReport;
     });

@@ -193,7 +193,7 @@ async function initializeCollections() {
     try {
         await signInAnonymously(auth);
         console.log('✅ Authenticated\n');
-    } catch (err) {
+    } catch {
         console.log('⚠️  Anonymous auth not enabled. Proceeding without auth (may fail on secured collections).\n');
     }
 

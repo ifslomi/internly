@@ -23,7 +23,6 @@ const navItems = [
     { href: '/dashboard/competencies', label: 'Competencies', icon: Award },
     { href: '/dashboard/sanctions', label: 'Sanctions', icon: Calendar },
     { href: '/dashboard/chat', label: 'Messages', icon: MessageCircle },
-    { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 
 const mobileNavItems = [
@@ -78,7 +77,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     };
 
     return (
-        <div style={{ display: 'flex', minHeight: '100vh', background: 'radial-gradient(circle at top, rgba(16,185,129,0.05), transparent 32%), var(--slate-950)' }}>
+        <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'radial-gradient(circle at top, rgba(16,185,129,0.05), transparent 32%), var(--slate-950)' }}>
             {/* Mobile overlay */}
             {sidebarOpen && (
                 <div
@@ -208,6 +207,31 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         );
                     })}
                 </nav>
+
+                {/* Settings */}
+                <button
+                    className={`nav-link ${pathname === '/dashboard/settings' ? 'active' : ''}`}
+                    onClick={() => {
+                        navigateWithLoader(router, '/dashboard/settings');
+                        setSidebarOpen(false);
+                    }}
+                    style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+                        border: pathname === '/dashboard/settings' ? undefined : 'none',
+                        marginTop: 12,
+                        padding: sidebarCollapsed ? '10px 0' : undefined,
+                    }}
+                    title={sidebarCollapsed ? 'Settings' : undefined}
+                    id="nav-settings"
+                >
+                    <Settings size={18} />
+                    {!sidebarCollapsed && 'Settings'}
+                    {!sidebarCollapsed && pathname === '/dashboard/settings' && (
+                        <ChevronRight size={14} style={{ marginLeft: 'auto', opacity: 0.5 }} />
+                    )}
+                </button>
 
                 {/* Logout */}
                 <button

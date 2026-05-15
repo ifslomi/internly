@@ -46,6 +46,15 @@ export async function uploadProfileImage(file: File, path = 'profiles') {
 }
 
 export async function uploadEvidenceFile(file: File, path = 'competencies') {
+  const result = await uploadEvidenceFileWithMeta(file, path);
+  return result.secureUrl;
+}
+
+export async function uploadEvidenceFileWithMeta(file: File, path = 'competencies'): Promise<{
+  secureUrl: string;
+  publicId?: string;
+  resourceType?: 'raw' | 'image' | 'video';
+}> {
   const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
   const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
 
@@ -71,5 +80,9 @@ export async function uploadEvidenceFile(file: File, path = 'competencies') {
   }
 
   const data = await response.json();
-  return data.secure_url as string;
+  return {
+    secureUrl: data.secure_url as string,
+    publicId: (data.public_id as string | undefined) || undefined,
+    resourceType: (data.resource_type as 'raw' | 'image' | 'video' | undefined) || undefined,
+  };
 }

@@ -383,7 +383,7 @@ export default function CompetenciesPage() {
                   !formData.areaCovered ||
                   !formData.outcome ||
                   (formData.evidenceType === 'link' && !formData.evidenceUrl) ||
-                  (formData.evidenceType && formData.evidenceType !== 'link' && !formData.evidenceFile)
+                  (!!formData.evidenceType && formData.evidenceType !== 'link' && !formData.evidenceFile)
                 }
               >
                 <Save size={16} /> {uploadingEvidence ? 'Uploading evidence...' : 'Add Entry'}
@@ -524,19 +524,7 @@ export default function CompetenciesPage() {
       </div>
 
       {/* Area Tabs */}
-      <div
-        style={{
-          marginBottom: 16,
-          display: 'flex',
-          gap: 10,
-          padding: 6,
-          borderRadius: 999,
-          background: 'rgba(24,24,27,0.72)',
-          border: '1px solid rgba(255,255,255,0.06)',
-          width: '100%',
-          flexWrap: 'wrap',
-        }}
-      >
+      <div className="area-tabs ui-anim-in" style={{ marginBottom: 16 }}>
         {[
           { key: 'all', label: 'All Areas' },
           { key: 'A', label: 'A. Problem Analysis' },
@@ -545,30 +533,10 @@ export default function CompetenciesPage() {
         ].map((tab) => (
           <button
             key={tab.key}
+            className="area-tab"
+            data-active={activeAreaTab === tab.key}
             onClick={() => setActiveAreaTab(tab.key as 'all' | 'A' | 'B' | 'C')}
             style={{
-              padding: '10px 18px',
-              borderRadius: 999,
-              background:
-                activeAreaTab === tab.key
-                  ? 'linear-gradient(135deg, rgba(16,185,129,0.35), rgba(16,185,129,0.15))'
-                  : 'transparent',
-              color: activeAreaTab === tab.key ? 'white' : 'var(--slate-400)',
-              fontSize: 13,
-              fontWeight: 700,
-              border:
-                activeAreaTab === tab.key
-                  ? '1px solid rgba(16,185,129,0.45)'
-                  : '1px solid transparent',
-              boxShadow:
-                activeAreaTab === tab.key ? '0 8px 20px rgba(16,185,129,0.2)' : 'none',
-              cursor: 'pointer',
-              transition: 'all 200ms',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flex: 1,
-              gap: 8,
               minWidth: 160,
             }}
           >
@@ -579,7 +547,7 @@ export default function CompetenciesPage() {
 
       {/* Table */}
       {filteredCompetencies.length === 0 ? (
-        <div className="card" style={{ padding: '64px 32px', textAlign: 'center' }}>
+        <div className="card ui-anim-in" style={{ padding: '64px 32px', textAlign: 'center' }}>
           <Award size={48} style={{ margin: '0 auto 16px', opacity: 0.2, color: 'var(--slate-400)' }} />
           <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: 'var(--slate-300)' }}>
             {activeAreaTab === 'all' ? 'No competencies recorded' : 'No entries for this area'}
@@ -592,7 +560,7 @@ export default function CompetenciesPage() {
           </button>
         </div>
       ) : (
-        <div className="card" style={{ overflow: 'hidden' }}>
+        <div className="card ui-anim-in" style={{ overflow: 'hidden' }}>
           <div className="table-scroll">
             <table className="data-table">
               <thead>

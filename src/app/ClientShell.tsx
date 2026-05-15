@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import SplashScreen from './SplashScreen';
 import type { ToastKind, ToastPayload } from '@/lib/toast';
 import { showToast } from '@/lib/toast';
@@ -26,7 +26,6 @@ export default function ClientShell({ children }: { children: React.ReactNode })
     const [passwordSetupError, setPasswordSetupError] = useState('');
     const [mounted, setMounted] = useState(false);
     const pathname = usePathname();
-    const searchParams = useSearchParams();
 
     const START_THROTTLE_MS = 180;
     const SHOW_DELAY_MS = 0;
@@ -41,6 +40,8 @@ export default function ClientShell({ children }: { children: React.ReactNode })
     const lastStartRef = useRef(0);
     const toastTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
     const recentToastRef = useRef<Map<string, number>>(new Map());
+    const routeStageRef = useRef<HTMLDivElement | null>(null);
+    const routeAnimationRef = useRef<Animation | null>(null);
 
     const TOAST_MAX = 5;
     const TOAST_RATE_LIMIT_MS = 900;
@@ -51,6 +52,46 @@ export default function ClientShell({ children }: { children: React.ReactNode })
 
     useEffect(() => {
         setMounted(true);
+    }, []);
+
+    useEffect(() => {
+        if (process.env.NODE_ENV !== 'development') return;
+
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+
+        const shouldFilter = (args: unknown[]) => {
+            const first = typeof args[0] === 'string' ? args[0] : '';
+            if (!first) return false;
+
+            if (first.startsWith('[Fast Refresh]')) return true;
+            if (first.includes('Unchecked runtime.lastError: Could not establish connection. Receiving end does not exist.')) return true;
+            if (first.includes('useInsertionEffect must not schedule updates.')) return true;
+
+            return false;
+        };
+
+        console.log = (...args: unknown[]) => {
+            if (shouldFilter(args)) return;
+            originalLog(...args);
+        };
+
+        console.warn = (...args: unknown[]) => {
+            if (shouldFilter(args)) return;
+            originalWarn(...args);
+        };
+
+        console.error = (...args: unknown[]) => {
+            if (shouldFilter(args)) return;
+            originalError(...args);
+        };
+
+        return () => {
+            console.log = originalLog;
+            console.warn = originalWarn;
+            console.error = originalError;
+        };
     }, []);
 
     const clearTimers = useCallback(() => {
@@ -153,11 +194,33 @@ export default function ClientShell({ children }: { children: React.ReactNode })
     }, [MIN_VISIBLE_MS]);
 
     useEffect(() => {
-        const key = `${pathname || ''}?${searchParams?.toString() || ''}`;
-        if (key) {
+        if (pathname) {
             stopRouteLoader();
+
+            const stage = routeStageRef.current;
+            if (!stage || typeof window === 'undefined') return;
+            if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+            routeAnimationRef.current?.cancel();
+            routeAnimationRef.current = stage.animate(
+                [
+                    { opacity: 0.88 },
+                    { opacity: 1 },
+                ],
+                {
+                    duration: 180,
+                    easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+                    fill: 'both',
+                },
+            );
         }
-    }, [pathname, searchParams, stopRouteLoader]);
+    }, [pathname, stopRouteLoader]);
+
+    useEffect(() => {
+        return () => {
+            routeAnimationRef.current?.cancel();
+        };
+    }, []);
 
     useEffect(() => {
         const originalPushState = window.history.pushState;
@@ -295,7 +358,7 @@ export default function ClientShell({ children }: { children: React.ReactNode })
             )}
 
             <div style={{ display: showSplash ? 'none' : 'block' }} className="route-content-host">
-                <div className="route-change-stage">
+                <div ref={routeStageRef} className="route-change-stage">
                     {children}
                 </div>
             </div>

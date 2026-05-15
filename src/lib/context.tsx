@@ -655,9 +655,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const localLog = storage.addDailyLog(log);
 
         // Update UI
-        const updatedLogs = [...logs, localLog];
-        setLogs(updatedLogs);
-        if (user) setStats(calculateHourStats(updatedLogs, user.totalRequiredHours));
+        setLogs((prev) => {
+            const updatedLogs = [...prev, localLog];
+            if (user) setStats(calculateHourStats(updatedLogs, user.totalRequiredHours));
+            return updatedLogs;
+        });
 
         // Persist to Firestore
         if (auth.currentUser) {
@@ -666,10 +668,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 // Replace local ID with Firestore ID if different
                 if (fsLog.id !== localLog.id) {
                     storage.replaceDailyLogId(localLog.id, fsLog.id);
-                    const refreshedLogs = updatedLogs.map(l =>
+                    setLogs((prev) => prev.map((l) =>
                         l.id === localLog.id ? { ...l, id: fsLog.id } : l
-                    );
-                    setLogs(refreshedLogs);
+                    ));
                 }
                 // Refresh supervisors from Firestore if auto-saved
                 if (log.supervisor && user) {
@@ -689,9 +690,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const handleUpdateLog = async (id: string, updates: Partial<DailyLog>) => {
         // Optimistic update
         storage.updateDailyLog(id, updates);
-        const updatedLogs = logs.map(l => l.id === id ? { ...l, ...updates, updatedAt: new Date().toISOString() } : l);
-        setLogs(updatedLogs);
-        if (user) setStats(calculateHourStats(updatedLogs, user.totalRequiredHours));
+        setLogs((prev) => {
+            const updatedLogs = prev.map((l) => (l.id === id ? { ...l, ...updates, updatedAt: new Date().toISOString() } : l));
+            if (user) setStats(calculateHourStats(updatedLogs, user.totalRequiredHours));
+            return updatedLogs;
+        });
 
         // Persist to Firestore
         if (auth.currentUser) {
@@ -707,9 +710,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const handleDeleteLog = async (id: string) => {
         // Optimistic delete
         storage.deleteDailyLog(id);
-        const updatedLogs = logs.filter(l => l.id !== id);
-        setLogs(updatedLogs);
-        if (user) setStats(calculateHourStats(updatedLogs, user.totalRequiredHours));
+        setLogs((prev) => {
+            const updatedLogs = prev.filter((l) => l.id !== id);
+            if (user) setStats(calculateHourStats(updatedLogs, user.totalRequiredHours));
+            return updatedLogs;
+        });
 
         // Persist to Firestore
         if (auth.currentUser) {
