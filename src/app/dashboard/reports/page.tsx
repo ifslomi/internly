@@ -169,7 +169,7 @@ export default function ReportsPage() {
     const [previewActivity, setPreviewActivity] = useState<ActivityType | ''>('');
     const [previewDateFrom, setPreviewDateFrom] = useState('');
     const [previewDateTo, setPreviewDateTo] = useState('');
-    const [showPreviewFilters, setShowPreviewFilters] = useState(true);
+    const [showPreviewFilters, setShowPreviewFilters] = useState(false);
 
     // History state
     const [searchQuery, setSearchQuery] = useState('');
