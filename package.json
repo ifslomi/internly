@@ -1,0 +1,48 @@
+{
+  "name": "internly-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Intern management dashboard for interns: profiles, hours, reports, sanctions, and competencies.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@types/nodemailer": "^7.0.10",
+    "cloudinary": "^2.10.0",
+    "date-fns": "^4.1.0",
+    "firebase": "^12.9.0",
+    "framer-motion": "^12.34.0",
+    "jspdf": "^4.1.0",
+    "jspdf-autotable": "^5.0.7",
+    "lucide-react": "^0.564.0",
+    "next": "16.1.6",
+    "nodemailer": "^8.0.1",
+    "pdfjs-dist": "^5.6.205",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-easy-crop": "^5.5.6",
+    "react-hot-toast": "^2.6.0",
+    "react-markdown": "^10.1.0",
+    "recharts": "^3.7.0",
+    "tesseract.js": "^7.0.0",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/uuid": "^10.0.0",
+    "babel-plugin-react-compiler": "1.0.0",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.6",
+    "firebase-admin": "^13.6.1",
+    "tailwindcss": "^4",
+    "tsx": "^4.21.0",
+    "typescript": "^5"
+  }
+}

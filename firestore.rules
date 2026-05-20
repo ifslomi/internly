@@ -1,0 +1,186 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ═══════════════════════════════════════════════════
+    // ─── Helper Functions ─────────────────────────────
+    // ═══════════════════════════════════════════════════
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDean() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'dean';
+    }
+
+    // ═══════════════════════════════════════════════════
+    // ─── Users & Subcollections ───────────────────────
+    // ─── users/{userId}              — profile
+    // ─── users/{userId}/dailyLogs    — training logs
+    // ─── users/{userId}/weeklyReports — weekly reflections
+    // ─── users/{userId}/notifications — alerts
+    // ═══════════════════════════════════════════════════
+
+    match /users/{userId} {
+      // Deans can read all user profiles to see interns; users can read/write their own
+      allow read: if isOwner(userId) || isDean();
+      allow write: if isOwner(userId);
+
+      // All subcollections inherit owner-only access
+      match /dailyLogs/{logId} {
+        allow read: if isOwner(userId) || isDean();
+        allow write: if isOwner(userId);
+      }
+
+      match /weeklyReports/{reportId} {
+        allow read: if isOwner(userId) || isDean();
+        allow create: if isOwner(userId)
+          && request.resource.data.userId == userId
+          && request.resource.data.weekNumber is int
+          && request.resource.data.weekNumber >= 1
+          && request.resource.data.weekNumber <= 15
+          && request.resource.data.hoursRendered is number
+          && request.resource.data.hoursRendered >= 0;
+        allow update: if isOwner(userId)
+          && request.resource.data.userId == userId;
+        allow delete: if isOwner(userId);
+      }
+
+      match /notifications/{notifId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /competencies/{competencyId} {
+        allow read: if isOwner(userId) || isDean();
+        allow create, update, delete: if isOwner(userId);
+      }
+    }
+
+    match /sanctions/{sanctionId} {
+      allow read: if isAuthenticated() && (
+        isDean() ||
+        resource.data.userId == request.auth.uid ||
+        (resource.data.userEmail is string && request.auth.token.email == resource.data.userEmail)
+      );
+      allow create: if isDean()
+        && request.resource.data.userId is string
+        && request.resource.data.userEmail is string
+        && request.resource.data.days is number
+        && request.resource.data.days >= 1;
+      allow update, delete: if isDean();
+    }
+
+    match /dutySlots/{slotId} {
+      allow read: if isAuthenticated();
+      allow create: if isDean()
+        && request.resource.data.deanId is string
+        && request.resource.data.title is string
+        && request.resource.data.date is string
+        && request.resource.data.startTime is string
+        && request.resource.data.endTime is string
+        && request.resource.data.capacity is number;
+      allow update, delete: if isDean();
+    }
+
+    match /sanctionRenders/{renderId} {
+      allow read: if isAuthenticated() && (
+        isDean() ||
+        resource.data.userId == request.auth.uid
+      );
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.sanctionId is string
+        && request.resource.data.dutySlotId is string
+        && request.resource.data.status is string;
+      allow update: if request.auth.uid == resource.data.userId || isDean();
+      allow delete: if isDean();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // ─── Legacy Flat Collections (read-only for migration)
+    // ═══════════════════════════════════════════════════
+
+    match /dailyLogs/{logId} {
+      allow read: if isAuthenticated()
+        && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated()
+        && resource.data.userId == request.auth.uid;
+    }
+
+    match /weeklyReports/{reportId} {
+      allow read: if isAuthenticated()
+        && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated()
+        && resource.data.userId == request.auth.uid;
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated()
+        && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated()
+        && resource.data.userId == request.auth.uid;
+    }
+
+    // ═══════════════════════════════════════════════════
+    // ─── Chat Users ───────────────────────────────────
+    // ═══════════════════════════════════════════════════
+
+    match /chatUsers/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+
+    // ═══════════════════════════════════════════════════
+    // ─── Conversations ────────────────────────────────
+    // ═══════════════════════════════════════════════════
+
+    match /conversations/{conversationId} {
+      allow read, update: if isAuthenticated()
+        && request.auth.uid in resource.data.participants;
+      allow create: if isAuthenticated()
+        && request.auth.uid in request.resource.data.participants;
+
+      match /messages/{messageId} {
+        allow read, create, update: if isAuthenticated()
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
+      }
+    }
+
+    // ═══════════════════════════════════════════════════
+    // ─── Supervisors (shared) ─────────────────────────
+    // ═══════════════════════════════════════════════════
+
+    match /supervisors/{supervisorId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAuthenticated()
+        && resource.data.addedBy == request.auth.uid;
+    }
+
+    // ═══════════════════════════════════════════════════
+    // ─── App Metadata ─────────────────────────────────
+    // ═══════════════════════════════════════════════════
+
+    match /appMetadata/{docId} {
+      allow read: if isAuthenticated();
+    }
+
+    // ═══════════════════════════════════════════════════
+    // ─── Schema Documents ─────────────────────────────
+    // ═══════════════════════════════════════════════════
+
+    match /{collection}/_schema_ {
+      allow read: if isAuthenticated();
+    }
+
+    match /{collection}/_schema_/{subcol}/{docId} {
+      allow read: if isAuthenticated();
+    }
+  }
+}

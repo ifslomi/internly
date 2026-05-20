@@ -1,0 +1,293 @@
+"use client";
+import React, { useEffect, useMemo, useState } from "react";
+import { CalendarDays, Users, Clock3, AlertTriangle } from 'lucide-react';
+import { useApp } from '@/lib/context';
+import type { Sanction } from '@/lib/types';
+
+export default function SanctionsPage() {
+  const { user, getSanctionsForStudent, getDutySlots, createSanctionRender } = useApp();
+  const [activeTab, setActiveTab] = useState<'students' | 'schedule'>('students');
+  const [sanctions, setSanctions] = useState<Sanction[]>([]);
+  const [dutySlots, setDutySlots] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [enrolling, setEnrolling] = useState<string | null>(null);
+  const tiles = [
+    { label: 'Days of Sanctions', value: useMemo(() => sanctions.reduce((sum, sanction) => sum + sanction.days, 0).toString(), [sanctions]), icon: AlertTriangle, tone: 'rose' },
+    { label: 'Available Slots', value: '--', icon: Clock3, tone: 'amber' },
+  ];
+
+  const handleAvailSlot = async (slotId: string) => {
+    if (!user || sanctions.length === 0) {
+      alert('You need active sanctions to enroll in a duty slot.');
+      return;
+    }
+
+    const activeSanction = sanctions.find((s) => s.status === 'active');
+    if (!activeSanction) {
+      alert('You need active sanctions to enroll in a duty slot.');
+      return;
+    }
+
+    setEnrolling(slotId);
+    try {
+      await createSanctionRender({
+        sanctionId: activeSanction.id,
+        userId: user.id,
+        dutySlotId: slotId,
+        status: 'availed',
+      });
+      alert('Successfully enrolled in the duty slot!');
+    } catch (err) {
+      console.error('Failed to enroll in duty slot:', err);
+      alert('Failed to enroll. Please try again.');
+    } finally {
+      setEnrolling(null);
+    }
+  };
+
+  useEffect(() => {
+    const loadData = async () => {
+      if (!user) {
+        setSanctions([]);
+        setDutySlots([]);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const [sanctionsData, slotsData] = await Promise.all([
+          getSanctionsForStudent(user.id, user.email),
+          getDutySlots(),
+        ]);
+        setSanctions(sanctionsData);
+        setDutySlots(slotsData);
+      } catch (err) {
+        console.error('Failed to load data:', err);
+        setSanctions([]);
+        setDutySlots([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [getSanctionsForStudent, getDutySlots, user]);
+
+  return (
+    <div>
+      <div className="dash-header" style={{ marginBottom: 24 }}>
+        <h1 className="page-title" style={{ fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>OJT Sanctions</h1>
+        <p style={{ color: 'var(--slate-400)', fontSize: 14 }}>Check sanction days, available slots, and the schedule for each sanction session.</p>
+      </div>
+
+      <div
+        className="stat-grid"
+        style={{
+          display: 'grid',
+          gap: 16,
+          marginBottom: 24,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+        }}
+      >
+        {tiles.map(({ label, value, icon: Icon, tone }) => (
+          <div key={label} className={`stat-tile stat-tile-${tone}`}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-400)' }}>
+                <Icon size={20} />
+              </div>
+              <span className="badge badge-primary">Sanctions</span>
+            </div>
+            <div className="stat-value">{value}</div>
+            <div className="stat-label">{label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div
+        style={{
+          marginBottom: 16,
+          display: 'flex',
+          gap: 10,
+          padding: 6,
+          borderRadius: 999,
+          background: 'rgba(24,24,27,0.72)',
+          border: '1px solid rgba(255,255,255,0.06)',
+          width: '100%',
+        }}
+      >
+        <button
+          onClick={() => setActiveTab('students')}
+          style={{
+            padding: '10px 18px',
+            borderRadius: 999,
+            background:
+              activeTab === 'students'
+                ? 'linear-gradient(135deg, rgba(16,185,129,0.35), rgba(16,185,129,0.15))'
+                : 'transparent',
+            color: activeTab === 'students' ? 'white' : 'var(--slate-400)',
+            fontSize: 13,
+            fontWeight: 700,
+            border: activeTab === 'students' ? '1px solid rgba(16,185,129,0.45)' : '1px solid transparent',
+            boxShadow: activeTab === 'students' ? '0 8px 20px rgba(16,185,129,0.2)' : 'none',
+            cursor: 'pointer',
+            transition: 'all 200ms',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flex: 1,
+            gap: 8,
+          }}
+        >
+          <Users size={16} /> Sanctioned Students
+        </button>
+        <button
+          onClick={() => setActiveTab('schedule')}
+          style={{
+            padding: '10px 18px',
+            borderRadius: 999,
+            background:
+              activeTab === 'schedule'
+                ? 'linear-gradient(135deg, rgba(16,185,129,0.35), rgba(16,185,129,0.15))'
+                : 'transparent',
+            color: activeTab === 'schedule' ? 'white' : 'var(--slate-400)',
+            fontSize: 13,
+            fontWeight: 700,
+            border: activeTab === 'schedule' ? '1px solid rgba(16,185,129,0.45)' : '1px solid transparent',
+            boxShadow: activeTab === 'schedule' ? '0 8px 20px rgba(16,185,129,0.2)' : 'none',
+            cursor: 'pointer',
+            transition: 'all 200ms',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flex: 1,
+            gap: 8,
+          }}
+        >
+          <CalendarDays size={16} /> Dean's Schedule
+        </button>
+      </div>
+
+      {activeTab === 'students' ? (
+        <div className="card" style={{ padding: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-400)' }}>
+              <Users size={18} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 700 }}>Students with Sanctions</h3>
+              <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>List of students currently under sanctions.</p>
+            </div>
+          </div>
+
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Days</th>
+                  <th>Reason</th>
+                  <th>Status</th>
+                  <th>Issued</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'center', padding: '18px 12px', color: 'var(--slate-500)' }}>
+                      Loading sanctions...
+                    </td>
+                  </tr>
+                ) : sanctions.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'center', padding: '18px 12px', color: 'var(--slate-500)' }}>
+                      No sanctions found.
+                    </td>
+                  </tr>
+                ) : (
+                  sanctions.map((sanction) => (
+                    <tr key={sanction.id}>
+                      <td>{sanction.days} {sanction.days === 1 ? 'day' : 'days'}</td>
+                      <td>{sanction.reason}</td>
+                      <td style={{ textTransform: 'capitalize' }}>{sanction.status}</td>
+                      <td>{new Date(sanction.issuedDate).toLocaleDateString()}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-400)' }}>
+              <Clock3 size={18} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 700 }}>Available Duty Slots</h3>
+              <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Enroll in a duty slot to render your sanction. You must have an active sanction.</p>
+            </div>
+          </div>
+
+          {sanctions.length === 0 || !sanctions.some((s) => s.status === 'active') ? (
+            <div style={{ textAlign: 'center', padding: '24px 12px', color: 'var(--slate-500)' }}>
+              <p>You don't have any active sanctions. Once sanctioned, you can enroll in available duty slots.</p>
+            </div>
+          ) : (
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Location</th>
+                    <th>Slots Needed</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dutySlots.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '18px 12px', color: 'var(--slate-500)' }}>
+                        No duty slots available.
+                      </td>
+                    </tr>
+                  ) : (
+                    dutySlots.map((slot) => (
+                      <tr key={slot.id}>
+                        <td>{slot.title}</td>
+                        <td>{new Date(slot.date).toLocaleDateString()}</td>
+                        <td>{slot.startTime} - {slot.endTime}</td>
+                        <td>{slot.location || '-'}</td>
+                        <td>{slot.capacity}</td>
+                        <td>
+                          <button
+                            onClick={() => handleAvailSlot(slot.id)}
+                            disabled={enrolling === slot.id}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: '6px',
+                              background: 'var(--primary-600)',
+                              border: 'none',
+                              color: 'white',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              opacity: enrolling === slot.id ? 0.7 : 1,
+                            }}
+                          >
+                            {enrolling === slot.id ? 'Enrolling...' : 'Enroll'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
