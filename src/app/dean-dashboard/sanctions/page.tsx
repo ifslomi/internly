@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Plus, Calendar, Users, AlertTriangle, CheckCircle, Clock, X } from 'lucide-react';
+import { Search, Plus, Calendar, Users, AlertTriangle, CheckCircle, Clock, X, Pencil } from 'lucide-react';
 import type { User, Sanction, DutySlot, SanctionRender } from '@/lib/types';
 import { useApp } from '@/lib/context';
 
 export default function DeanSanctionsPage() {
-    const { user, getAllStudents, getSanctionsForStudent, saveSanction, updateSanctionDays, getDutySlots, createDutySlot, getSanctionRenders } = useApp();
+    const { user, getAllStudents, getSanctionsForStudent, saveSanction, updateSanctionDays, updateSanction, getDutySlots, createDutySlot, getSanctionRenders } = useApp();
     const [activeTab, setActiveTab] = useState<'sanctions' | 'duty-slots' | 'renders'>('sanctions');
     const [students, setStudents] = useState<User[]>([]);
     const [filteredStudents, setFilteredStudents] = useState<User[]>([]);
@@ -39,6 +39,27 @@ export default function DeanSanctionsPage() {
     const [editingSanctionId, setEditingSanctionId] = useState<string | null>(null);
     const [editingDays, setEditingDays] = useState(0);
     const [updatingSanction, setUpdatingSanction] = useState(false);
+    const [showEditSanctionModal, setShowEditSanctionModal] = useState(false);
+    const [savingEditedSanction, setSavingEditedSanction] = useState(false);
+    const [editSanctionForm, setEditSanctionForm] = useState({
+        id: '',
+        days: 1,
+        reason: '',
+        description: '',
+        status: 'active' as Sanction['status'],
+    });
+
+    const toDigitsOnly = (value: string) => value.replace(/\D/g, '');
+    const toInteger = (value: string, fallback: number, min = 0) => {
+        const digits = toDigitsOnly(value);
+        if (!digits) return fallback;
+        return Math.max(min, Number(digits));
+    };
+    const blockNonIntegerKeys = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (['e', 'E', '+', '-', '.', ',', ' '].includes(event.key)) {
+            event.preventDefault();
+        }
+    };
 
     useEffect(() => {
         const loadData = async () => {
@@ -112,6 +133,17 @@ export default function DeanSanctionsPage() {
             );
         });
     }, [sanctions, students, searchQuery]);
+
+    const availedRenders = useMemo(() => {
+        const seen = new Set<string>();
+        return sanctionRenders.filter((render) => {
+            if (render.status !== 'availed') return false;
+            const enrollmentKey = `${render.dutySlotId}_${render.userId}`;
+            if (seen.has(enrollmentKey)) return false;
+            seen.add(enrollmentKey);
+            return true;
+        });
+    }, [sanctionRenders]);
 
     const handleIssueSanction = async () => {
         if (!sanctionForm.studentId || sanctionForm.days < 1 || !sanctionForm.reason.trim()) {
@@ -239,6 +271,57 @@ export default function DeanSanctionsPage() {
         }
     };
 
+    const openEditSanctionModal = (sanction: Sanction) => {
+        setEditSanctionForm({
+            id: sanction.id,
+            days: sanction.days,
+            reason: sanction.reason,
+            description: sanction.description || '',
+            status: sanction.status,
+        });
+        setShowEditSanctionModal(true);
+    };
+
+    const handleSaveEditedSanction = async () => {
+        if (!editSanctionForm.id || editSanctionForm.days < 1 || !editSanctionForm.reason.trim()) {
+            alert('Please provide valid sanction details.');
+            return;
+        }
+
+        setSavingEditedSanction(true);
+        try {
+            await updateSanction(editSanctionForm.id, {
+                days: editSanctionForm.days,
+                reason: editSanctionForm.reason.trim(),
+                description: editSanctionForm.description.trim(),
+                status: editSanctionForm.status,
+            });
+
+            setSanctions((prev) =>
+                prev.map((sanction) =>
+                    sanction.id === editSanctionForm.id
+                        ? {
+                              ...sanction,
+                              days: editSanctionForm.days,
+                              reason: editSanctionForm.reason.trim(),
+                              description: editSanctionForm.description.trim(),
+                              status: editSanctionForm.status,
+                              updatedAt: new Date().toISOString(),
+                          }
+                        : sanction
+                )
+            );
+
+            setShowEditSanctionModal(false);
+            setEditSanctionForm({ id: '', days: 1, reason: '', description: '', status: 'active' });
+        } catch (err) {
+            console.error('Failed to update sanction:', err);
+            alert('Failed to update sanction. Please try again.');
+        } finally {
+            setSavingEditedSanction(false);
+        }
+    };
+
     if (loading) {
         return (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '400px' }}>
@@ -346,12 +429,13 @@ export default function DeanSanctionsPage() {
                                     <th>Days</th>
                                     <th>Reason</th>
                                     <th>Status</th>
+                                    <th style={{ textAlign: 'right' }}>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {filteredSanctions.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4} style={{ textAlign: 'center', padding: '18px 12px', color: 'var(--slate-500)' }}>
+                                        <td colSpan={5} style={{ textAlign: 'center', padding: '18px 12px', color: 'var(--slate-500)' }}>
                                             {sanctions.length === 0 ? 'No sanctions issued yet.' : 'No sanctions match your search.'}
                                         </td>
                                     </tr>
@@ -362,6 +446,26 @@ export default function DeanSanctionsPage() {
                                             <td>{sanction.days} {sanction.days === 1 ? 'day' : 'days'}</td>
                                             <td>{sanction.reason}</td>
                                             <td style={{ textTransform: 'capitalize' }}>{sanction.status}</td>
+                                            <td style={{ textAlign: 'right' }}>
+                                                <button
+                                                    onClick={() => openEditSanctionModal(sanction)}
+                                                    style={{
+                                                        padding: '6px 12px',
+                                                        borderRadius: '6px',
+                                                        background: 'rgba(59,130,246,0.18)',
+                                                        border: '1px solid rgba(59,130,246,0.35)',
+                                                        color: '#60a5fa',
+                                                        fontSize: 12,
+                                                        fontWeight: 600,
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 6,
+                                                    }}
+                                                >
+                                                    <Pencil size={12} /> Edit
+                                                </button>
+                                            </td>
                                         </tr>
                                     ))
                                 )}
@@ -401,7 +505,7 @@ export default function DeanSanctionsPage() {
                                     </tr>
                                 ) : (
                                     dutySlots.map((slot) => {
-                                        const enrolledCount = sanctionRenders.filter((r) => r.dutySlotId === slot.id && r.status === 'availed').length;
+                                        const enrolledCount = availedRenders.filter((r) => r.dutySlotId === slot.id).length;
                                         const availableCount = Math.max(0, slot.capacity - enrolledCount);
                                         return (
                                             <tr key={slot.id}>
@@ -431,7 +535,7 @@ export default function DeanSanctionsPage() {
                     <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                         <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Students Enrolled in Slots</h3>
 
-                        {sanctionRenders.filter((r) => r.status === 'availed').length === 0 ? (
+                        {availedRenders.length === 0 ? (
                             <p style={{ color: 'var(--slate-400)', fontSize: 13 }}>No interns have enrolled in duty slots yet.</p>
                         ) : (
                             <div className="table-scroll">
@@ -445,9 +549,7 @@ export default function DeanSanctionsPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {sanctionRenders
-                                            .filter((r) => r.status === 'availed')
-                                            .map((render) => {
+                                        {availedRenders.map((render) => {
                                                 const student = students.find((s) => s.id === render.userId);
                                                 const slot = dutySlots.find((s) => s.id === render.dutySlotId);
                                                 return (
@@ -546,7 +648,9 @@ export default function DeanSanctionsPage() {
                                         min={0}
                                         step={1}
                                         value={editingDays}
-                                        onChange={(e) => setEditingDays(Math.max(0, Number(e.target.value) || 0))}
+                                        inputMode="numeric"
+                                        onKeyDown={blockNonIntegerKeys}
+                                        onChange={(e) => setEditingDays(toInteger(e.target.value, 0, 0))}
                                         style={{ width: '100%', padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: 14, boxSizing: 'border-box' }}
                                     />
                                 </div>
@@ -610,7 +714,9 @@ export default function DeanSanctionsPage() {
                                     min={1} 
                                     step={1} 
                                     value={sanctionForm.days} 
-                                    onChange={(e) => setSanctionForm({ ...sanctionForm, days: Number(e.target.value) || 0 })} 
+                                    inputMode="numeric"
+                                    onKeyDown={blockNonIntegerKeys}
+                                    onChange={(e) => setSanctionForm({ ...sanctionForm, days: toInteger(e.target.value, 0, 1) })} 
                                     placeholder="E.g., 3" 
                                     style={{ marginTop: 8 }} 
                                 />
@@ -691,7 +797,7 @@ export default function DeanSanctionsPage() {
 
                             <div>
                                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Slots Needed</label>
-                                <input type="number" min={1} step={1} value={dutySlotForm.capacity} onChange={(e) => setDutySlotForm({ ...dutySlotForm, capacity: Number(e.target.value) || 1 })} placeholder="E.g., 5" style={{ width: '100%', marginTop: 8, padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: 14, boxSizing: 'border-box' }} />
+                                <input type="number" min={1} step={1} value={dutySlotForm.capacity} inputMode="numeric" onKeyDown={blockNonIntegerKeys} onChange={(e) => setDutySlotForm({ ...dutySlotForm, capacity: toInteger(e.target.value, 1, 1) })} placeholder="E.g., 5" style={{ width: '100%', marginTop: 8, padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: 14, boxSizing: 'border-box' }} />
                             </div>
 
                             <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
@@ -700,6 +806,90 @@ export default function DeanSanctionsPage() {
                                 </button>
                                 <button onClick={handleCreateDutySlot} style={{ flex: 1, padding: '8px 16px', borderRadius: 'var(--radius-md)', background: 'var(--primary-600)', border: 'none', color: 'white', fontWeight: 600, cursor: 'pointer' }}>
                                     Create Duty Slot
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showEditSanctionModal && (
+                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+                    <div style={{ background: 'var(--slate-900)', borderRadius: 'var(--radius-lg)', border: '1px solid rgba(255,255,255,0.1)', padding: '24px', maxWidth: 500, width: '90%' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                            <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Edit Sanction</h2>
+                            <button
+                                onClick={() => setShowEditSanctionModal(false)}
+                                style={{ background: 'transparent', border: 'none', color: 'var(--slate-400)', cursor: 'pointer', padding: 0 }}
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Days of Sanction</label>
+                                <input
+                                    type="number"
+                                    className="input"
+                                    min={1}
+                                    step={1}
+                                    value={editSanctionForm.days}
+                                    inputMode="numeric"
+                                    onKeyDown={blockNonIntegerKeys}
+                                    onChange={(e) => setEditSanctionForm((prev) => ({ ...prev, days: toInteger(e.target.value, 0, 1) }))}
+                                    style={{ marginTop: 8 }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reason</label>
+                                <input
+                                    type="text"
+                                    className="input"
+                                    value={editSanctionForm.reason}
+                                    onChange={(e) => setEditSanctionForm((prev) => ({ ...prev, reason: e.target.value }))}
+                                    style={{ marginTop: 8 }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Description</label>
+                                <textarea
+                                    className="input textarea"
+                                    value={editSanctionForm.description}
+                                    onChange={(e) => setEditSanctionForm((prev) => ({ ...prev, description: e.target.value }))}
+                                    style={{ marginTop: 8 }}
+                                />
+                            </div>
+
+                            <div>
+                                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Status</label>
+                                <select
+                                    className="input"
+                                    value={editSanctionForm.status}
+                                    onChange={(e) => setEditSanctionForm((prev) => ({ ...prev, status: e.target.value as Sanction['status'] }))}
+                                    style={{ marginTop: 8 }}
+                                >
+                                    <option value="active">Active</option>
+                                    <option value="completed">Completed</option>
+                                    <option value="cancelled">Cancelled</option>
+                                </select>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+                                <button
+                                    onClick={() => setShowEditSanctionModal(false)}
+                                    style={{ flex: 1, padding: '8px 16px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontWeight: 600, cursor: 'pointer' }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSaveEditedSanction}
+                                    disabled={savingEditedSanction}
+                                    style={{ flex: 1, padding: '8px 16px', borderRadius: 'var(--radius-md)', background: 'var(--primary-600)', border: 'none', color: 'white', fontWeight: 600, cursor: 'pointer', opacity: savingEditedSanction ? 0.7 : 1 }}
+                                >
+                                    {savingEditedSanction ? 'Saving...' : 'Save Changes'}
                                 </button>
                             </div>
                         </div>

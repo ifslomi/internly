@@ -18,7 +18,7 @@ const KNOWLEDGE_BASE: { patterns: RegExp[]; response: string }[] = [
   {
     patterns: [/feature/i, /what can (it|internly) do/i, /capabilities/i, /offer/i],
     response:
-      'Internly offers several powerful features:\n\n⏱️ **Hour Tracking** — Log daily hours with precision\n📝 **Activity Logging** — Record tasks with activity types like Coding, Research, Meetings & more\n📊 **Dashboard Analytics** — Visual charts and stats on your progress\n📄 **Weekly Reports** — Auto-generate PDF reports for your supervisor\n👤 **Profile Management** — Upload a photo, manage your info\n🔔 **Reminders** — Stay on top of your OJT schedule',
+      'Internly offers several powerful features:\n\n- **Hour Tracking**: Log daily hours with precision\n- **Activity Logging**: Record tasks with activity types like Coding, Research, Meetings & more\n- **Dashboard Analytics**: Visual charts and stats on your progress\n- **Weekly Reports**: Auto-generate PDF reports for your supervisor\n- **Profile Management**: Upload a photo and manage your info\n- **Reminders**: Stay on top of your OJT schedule',
   },
   {
     patterns: [/how.*(start|begin|sign|register|create account)/i, /get started/i, /sign ?up/i],
@@ -53,7 +53,7 @@ const KNOWLEDGE_BASE: { patterns: RegExp[]; response: string }[] = [
   {
     patterns: [/dashboard/i, /overview|stats|analytics/i],
     response:
-      'Your **Dashboard** gives you a complete overview of your OJT progress:\n\n📈 Total hours rendered vs. required\n📅 Hours logged this week\n📊 Visual progress charts\n🏆 Completion percentage\n\nIt\'s your command center for tracking everything at a glance!',
+      'Your **Dashboard** gives you a complete overview of your OJT progress:\n\n- Total hours rendered vs. required\n- Hours logged this week\n- Visual progress charts\n- Completion percentage\n\nIt\'s your command center for tracking everything at a glance!',
   },
   {
     patterns: [/mobile|phone|tablet|responsive/i],
@@ -63,7 +63,7 @@ const KNOWLEDGE_BASE: { patterns: RegExp[]; response: string }[] = [
   {
     patterns: [/activity ?type/i, /type.*(activit|task|work)/i, /what types/i, /categories/i],
     response:
-      'Internly supports these activity types:\n\n💻 Technical\n📋 Administrative\n🤝 Meeting\n🏗️ Field Work\n👨‍💻 Coding\n📝 Documentation\n🔍 Research\n🎓 Training\n🎤 Presentation\n📦 Other\n\nYou can select multiple types per log entry!',
+      'Internly supports these activity types:\n\n- Technical\n- Administrative\n- Meeting\n- Field Work\n- Coding\n- Documentation\n- Research\n- Training\n- Presentation\n- Other\n\nYou can select multiple types per log entry!',
   },
   {
     patterns: [/hour|progress|remaining|total|how many/i],
@@ -83,27 +83,27 @@ const KNOWLEDGE_BASE: { patterns: RegExp[]; response: string }[] = [
   {
     patterns: [/hello|hi|hey|good (morning|afternoon|evening)|greet/i, /^(yo|sup|what'?s up)/i],
     response:
-      'Hello! 👋 I\'m the Internly AI Assistant. I\'m here to help you learn about the platform, its features, and how to get started. Feel free to ask me anything!',
+      'Hello! I\'m the Internly AI Assistant. I\'m here to help you learn about the platform, its features, and how to get started. Feel free to ask me anything!',
   },
   {
     patterns: [/thank|thanks|thx|appreciate/i],
     response:
-      'You\'re welcome! 😊 If you have any more questions about Internly, don\'t hesitate to ask. Happy tracking!',
+      'You\'re welcome. If you have any more questions about Internly, do not hesitate to ask. Happy tracking.',
   },
   {
     patterns: [/bye|goodbye|see you|later/i],
     response:
-      'Goodbye! 👋 Best of luck with your OJT journey. Remember, Internly is here whenever you need to track your progress. See you!',
+      'Goodbye. Best of luck with your OJT journey. Remember, Internly is here whenever you need to track your progress. See you.',
   },
   {
     patterns: [/help|support|contact|issue|problem|bug/i],
     response:
-      'Need help? Here are your options:\n\n📧 **Email:** support@internly.app\n🌐 **Website:** www.internly.app\n💬 **This chat:** Ask me anything about features & usage!\n\nYou can also check the **Contact Us** section in the footer for more details.',
+      'Need help? Here are your options:\n\n- **Email:** support@internly.app\n- **Website:** www.internly.app\n- **This chat:** Ask me anything about features and usage\n\nYou can also check the **Contact Us** section in the footer for more details.',
   },
   {
     patterns: [/who (made|built|created|developed)/i, /developer|creator|team/i],
     response:
-      'Internly was crafted with ❤️ in the Philippines. It\'s designed specifically for OJT students and trainees who need a simple, effective way to manage their training hours and activities.',
+      'Internly was crafted in the Philippines. It\'s designed specifically for OJT students and trainees who need a simple, effective way to manage their training hours and activities.',
   },
 ];
 
@@ -127,7 +127,7 @@ function getBotResponse(input: string): string {
     }
   }
 
-  return "I'm not sure I understand that question. Try asking about Internly's **features**, **how to get started**, **tracking hours**, **generating reports**, or **data privacy**. I'm here to help! 😊";
+  return "I'm not sure I understand that question. Try asking about Internly's **features**, **how to get started**, **tracking hours**, **generating reports**, or **data privacy**. I'm here to help.";
 }
 
 function formatMessage(text: string): React.ReactNode {
@@ -184,7 +184,7 @@ export default function Chatbot() {
           {
             id: 'welcome',
             role: 'bot',
-            text: "Hi there! 👋 I'm the **Internly AI Assistant**. I can help you learn about our platform, its features, and how to get started with your OJT tracking. What would you like to know?",
+            text: "Hi there. I'm the **Internly AI Assistant**. I can help you learn about our platform, its features, and how to get started with your OJT tracking. What would you like to know?",
             timestamp: new Date(),
           },
         ]);

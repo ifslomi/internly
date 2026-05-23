@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Mail, Send, CheckCircle } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { navigateWithLoader } from '@/lib/route-loading';
+import * as storage from '@/lib/storage';
 
 export default function ForgotPasswordPage() {
     const router = useRouter();
@@ -16,19 +17,44 @@ export default function ForgotPasswordPage() {
         e.preventDefault();
         setError('');
         setSubmitting(true);
+        const normalizedEmail = email.trim().toLowerCase();
 
         try {
-            const { sendPasswordResetEmail } = await import('firebase/auth');
+            const { sendPasswordResetEmail, fetchSignInMethodsForEmail } = await import('firebase/auth');
             const { auth } = await import('@/lib/firebase');
-            await sendPasswordResetEmail(auth, email);
+
+            const signInMethods = await fetchSignInMethodsForEmail(auth, normalizedEmail);
+            const localOnlyUser = storage.findUserByEmail(normalizedEmail);
+
+            if (signInMethods.length === 0 && localOnlyUser) {
+                throw Object.assign(new Error('This account was created in local mode and cannot receive Firebase reset emails. Please sign in normally, then change your password in Settings.'), {
+                    code: 'auth/local-only-account',
+                });
+            }
+
+            if (signInMethods.length > 0) {
+                await sendPasswordResetEmail(auth, normalizedEmail, {
+                    url: `${window.location.origin}/login`,
+                    handleCodeInApp: false,
+                });
+            }
+
             setSent(true);
-            showToast({ kind: 'success', title: 'Email Sent', message: 'Password reset link sent. Check your inbox.' });
+            showToast({ kind: 'success', title: 'Email Sent', message: 'If the account exists, a reset link was sent. Check your inbox and spam folder.' });
         } catch (err: unknown) {
             const firebaseErr = err as { code?: string; message?: string };
             if (firebaseErr.code === 'auth/user-not-found' || firebaseErr.code === 'auth/invalid-email') {
                 // Don't reveal whether the email exists — just show success anyway
                 setSent(true);
                 showToast({ kind: 'success', title: 'Email Sent', message: 'If the account exists, a reset link was sent.' });
+            } else if (firebaseErr.code === 'auth/local-only-account') {
+                const message = firebaseErr.message || 'This account cannot receive reset emails.';
+                setError(message);
+                showToast({ kind: 'warning', title: 'Reset Not Available', message });
+            } else if (firebaseErr.code === 'auth/unauthorized-continue-uri' || firebaseErr.code === 'auth/invalid-continue-uri') {
+                const message = 'Password reset is not configured for this domain in Firebase Auth. Add this app domain to Authorized domains in Firebase Console.';
+                setError(message);
+                showToast({ kind: 'error', title: 'Firebase Domain Config Needed', message });
             } else if (firebaseErr.code === 'auth/too-many-requests') {
                 setError('Too many attempts. Please try again later.');
                 showToast({ kind: 'warning', title: 'Too Many Attempts', message: 'Please try again later.' });

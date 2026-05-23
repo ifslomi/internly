@@ -25,6 +25,7 @@ import {
     getSanctionsForStudent,
     saveSanctionToFirestore,
     updateSanctionDaysInFirestore,
+    updateSanctionInFirestore,
     getDutySlotsFromFirestore,
     createDutySlotInFirestore,
     getSanctionRendersFromFirestore,
@@ -61,10 +62,12 @@ interface AppContextType {
     setupPasswordCredential: (password: string) => Promise<void>;
     // Dean functions
     getAllStudents: () => Promise<User[]>;
+    getStudentCompetencies: (studentId: string) => Promise<Competency[]>;
     getStudentHourStats: (studentId: string, totalRequiredHours?: number, email?: string) => Promise<HourStats>;
     getSanctionsForStudent: (studentId: string, studentEmail?: string) => Promise<any[]>;
     saveSanction: (sanction: any) => Promise<string>;
     updateSanctionDays: (sanctionId: string, newDays: number) => Promise<void>;
+    updateSanction: (sanctionId: string, updates: any) => Promise<void>;
     getDutySlots: () => Promise<any[]>;
     createDutySlot: (slot: any) => Promise<string>;
     getSanctionRenders: (filters?: any) => Promise<any[]>;
@@ -107,6 +110,17 @@ const needsPasswordCredentialSetup = (firebaseUser: FirebaseAuthUser | null) => 
     if (!isUbEmail(email)) return false;
     const providerIds = firebaseUser.providerData.map((p) => p.providerId);
     return !providerIds.includes('password');
+};
+
+const isPermissionDeniedError = (err: unknown) => {
+    const code = (err as { code?: string } | null)?.code || '';
+    const message = ((err as { message?: string } | null)?.message || '').toLowerCase();
+
+    return (
+        code === 'permission-denied' ||
+        code === 'firestore/permission-denied' ||
+        message.includes('missing or insufficient permissions')
+    );
 };
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -409,7 +423,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const { signInWithEmailAndPassword } = await import('firebase/auth');
         const normalizedEmail = email.trim().toLowerCase();
 
-        // Fast path for legacy/local accounts to avoid unnecessary Firebase 400 noise.
+        // Validate against local cache first so obvious bad credentials fail fast.
         const localUser = storage.findUserByEmail(normalizedEmail);
         if (localUser && Boolean(localUser.password)) {
             if (localUser.password !== password) {
@@ -418,13 +432,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 });
                 throw invalidCredentialError;
             }
-
-            const loggedUser = storage.login(normalizedEmail, password, rememberMe);
-            setUser(loggedUser);
-            const localLogs = storage.getDailyLogs(loggedUser.id);
-            setLogs(localLogs);
-            setStats(calculateHourStats(localLogs, loggedUser.totalRequiredHours));
-            return;
         }
 
         try {
@@ -461,7 +468,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             }
         } catch (err: unknown) {
             const firebaseError = err as { code?: string; message?: string };
-            if (firebaseError.code === 'auth/user-not-found' || firebaseError.code === 'auth/invalid-credential') {
+            if (firebaseError.code === 'auth/user-not-found') {
                 // Fallback: legacy localStorage-only user
                 try {
                     const loggedUser = storage.login(normalizedEmail, password, rememberMe);
@@ -952,6 +959,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
+    const handleGetStudentCompetencies = useCallback(async (studentId: string): Promise<Competency[]> => {
+        try {
+            return await getCompetenciesFromFirestore(studentId);
+        } catch (err) {
+            console.error('Error getting student competencies:', err);
+            return [];
+        }
+    }, []);
+
     const handleGetStudentHourStats = useCallback(async (studentId: string, totalRequiredHours?: number, email?: string): Promise<HourStats> => {
         try {
             const requiredHours = totalRequiredHours ?? 480;
@@ -1012,7 +1028,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                         identifiers.add(canonicalUser.id);
                     }
                 } catch (lookupErr) {
-                    console.error('Error resolving canonical student id:', lookupErr);
+                    if (!isPermissionDeniedError(lookupErr)) {
+                        console.error('Error resolving canonical student id:', lookupErr);
+                    }
                 }
             }
 
@@ -1031,7 +1049,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 return right - left;
             });
         } catch (err) {
-            console.error('Error getting sanctions:', err);
+            if (!isPermissionDeniedError(err)) {
+                console.error('Error getting sanctions:', err);
+            }
             return [];
         }
     }, []);
@@ -1054,11 +1074,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
     }, []);
 
+    const handleUpdateSanction = useCallback(async (sanctionId: string, updates: any): Promise<void> => {
+        try {
+            await updateSanctionInFirestore(sanctionId, updates);
+        } catch (err) {
+            console.error('Error updating sanction:', err);
+            throw err;
+        }
+    }, []);
+
     const handleGetDutySlots = useCallback(async () => {
         try {
             return await getDutySlotsFromFirestore();
         } catch (err) {
-            console.error('Error getting duty slots:', err);
+            if (!isPermissionDeniedError(err)) {
+                console.error('Error getting duty slots:', err);
+            }
             return [];
         }
     }, []);
@@ -1127,10 +1158,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 setupPasswordCredential: handleSetupPasswordCredential,
                 // Dean functions
                 getAllStudents: handleGetAllStudents,
+                getStudentCompetencies: handleGetStudentCompetencies,
                 getStudentHourStats: handleGetStudentHourStats,
                 getSanctionsForStudent: handleGetSanctionsForStudent,
                 saveSanction: handleSaveSanction,
                 updateSanctionDays: handleUpdateSanctionDays,
+                updateSanction: handleUpdateSanction,
                 getDutySlots: handleGetDutySlots,
                 createDutySlot: handleCreateDutySlot,
                 getSanctionRenders: handleGetSanctionRenders,

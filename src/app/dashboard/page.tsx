@@ -14,6 +14,25 @@ export default function DashboardPage() {
     const router = useRouter();
     const [weeklyReports, setWeeklyReports] = useState<WeeklyReport[]>([]);
 
+    const toFiniteNumber = (value: unknown) => {
+        const numericValue = typeof value === 'number' ? value : Number(value);
+        return Number.isFinite(numericValue) ? numericValue : 0;
+    };
+
+    const formatDateSafe = (value?: string | null, dateFormat = 'MMM dd, yyyy') => {
+        if (!value) {
+            return 'N/A';
+        }
+
+        const parsedIsoDate = parseISO(value);
+        if (!Number.isNaN(parsedIsoDate.getTime())) {
+            return format(parsedIsoDate, dateFormat);
+        }
+
+        const fallbackDate = new Date(value);
+        return Number.isNaN(fallbackDate.getTime()) ? 'N/A' : format(fallbackDate, dateFormat);
+    };
+
     useEffect(() => {
         if (!user) {
             setWeeklyReports([]);
@@ -46,14 +65,18 @@ export default function DashboardPage() {
     );
 
     const weeklyReportHoursTotal = useMemo(
-        () => weeklyReports.reduce((sum, report) => sum + report.hoursRendered, 0),
+        () => weeklyReports.reduce((sum, report) => sum + toFiniteNumber(report.hoursRendered), 0),
         [weeklyReports]
     );
 
-    const displayTotalRendered = Math.max(stats.totalRendered, weeklyReportHoursTotal);
-    const displayRemaining = Math.max(0, stats.totalRequired - displayTotalRendered);
-    const displayProgressPercentage = stats.totalRequired > 0
-        ? Math.min(100, (displayTotalRendered / stats.totalRequired) * 100)
+    const safeHoursThisWeek = toFiniteNumber(stats.hoursThisWeek);
+    const safeTotalRequired = toFiniteNumber(stats.totalRequired);
+    const safeTotalRendered = toFiniteNumber(stats.totalRendered);
+
+    const displayTotalRendered = Math.max(safeTotalRendered, weeklyReportHoursTotal);
+    const displayRemaining = Math.max(0, safeTotalRequired - displayTotalRendered);
+    const displayProgressPercentage = safeTotalRequired > 0
+        ? Math.min(100, (displayTotalRendered / safeTotalRequired) * 100)
         : 0;
 
     const latestWeeklyReport = sortedWeeklyReports[0] || null;
@@ -125,7 +148,7 @@ export default function DashboardPage() {
                             <Clock size={20} />
                         </div>
                         <div className="stat-value" style={{ color: 'var(--primary-300)', marginBottom: 0 }}>
-                            {stats.hoursThisWeek}
+                            {safeHoursThisWeek}
                         </div>
                     </div>
                     <div className="stat-label">Hours This Week</div>
@@ -159,7 +182,7 @@ export default function DashboardPage() {
                             <div className="progress-bar-fill" style={{ width: `${displayProgressPercentage}%` }} />
                         </div>
                         <p style={{ fontSize: 11, color: 'var(--slate-500)', marginTop: 4 }}>
-                            {Math.round(displayProgressPercentage * 10) / 10}% of {stats.totalRequired} hrs
+                            {Math.round(displayProgressPercentage * 10) / 10}% of {safeTotalRequired} hrs
                         </p>
                     </div>
                 </div>
@@ -210,7 +233,7 @@ export default function DashboardPage() {
                             </div>
                             <div className="stat-label">Rendered duty hours</div>
                             <p style={{ marginTop: 10, fontSize: 12, color: 'var(--slate-500)' }}>
-                                Submitted on {format(parseISO(latestWeeklyReport.submittedAt), 'MMM dd, yyyy')}
+                                Submitted on {formatDateSafe(latestWeeklyReport.submittedAt)}
                             </p>
                         </div>
 
@@ -220,7 +243,7 @@ export default function DashboardPage() {
                                 <Target size={18} style={{ color: 'var(--emerald-400)' }} />
                             </div>
                             <div style={{ fontSize: 22, fontWeight: 800, color: 'white', marginBottom: 4 }}>
-                                {format(parseISO(latestWeeklyReport.deadline), 'MMM dd, yyyy')}
+                                {formatDateSafe(latestWeeklyReport.deadline)}
                             </div>
                             <div className="stat-label">Submission deadline</div>
                             <p style={{ marginTop: 10, fontSize: 12, color: 'var(--slate-500)' }}>
@@ -260,10 +283,10 @@ export default function DashboardPage() {
                                         <td style={{ padding: '12px', fontSize: 13, color: 'white', fontWeight: 600 }}>Week {report.weekNumber}</td>
                                         <td style={{ padding: '12px', fontSize: 13, color: 'var(--slate-300)' }}>{report.hoursRendered} hrs</td>
                                         <td style={{ padding: '12px', fontSize: 13, color: 'var(--slate-300)' }}>
-                                            {format(parseISO(report.deadline), 'MMM dd, yyyy')}
+                                            {formatDateSafe(report.deadline)}
                                         </td>
                                         <td style={{ padding: '12px', fontSize: 13, color: 'var(--slate-300)' }}>
-                                            {format(parseISO(report.submittedAt), 'MMM dd, yyyy')}
+                                            {formatDateSafe(report.submittedAt)}
                                         </td>
                                     </tr>
                                 ))}
@@ -314,7 +337,7 @@ export default function DashboardPage() {
                                 </div>
                                 <div style={{ textAlign: 'right' }}>
                                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary-300)' }}>
-                                        {format(parseISO(comp.date), 'MMM dd, yyyy')}
+                                        {formatDateSafe(comp.date)}
                                     </div>
                                     <p style={{ fontSize: 11, color: 'var(--slate-500)' }}>{comp.activity}</p>
                                 </div>

@@ -94,6 +94,17 @@ export default function ReportsPage() {
     const [savingEdit, setSavingEdit] = useState(false);
     const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
 
+    const blockScientificNumberKeys = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (['e', 'E', '+', '-'].includes(event.key)) {
+            event.preventDefault();
+        }
+    };
+
+    const sanitizeDecimalInput = (value: string) => {
+        const normalized = value.replace(/[^\d.]/g, '');
+        return normalized.replace(/(\..*)\./g, '$1');
+    };
+
     const weeks = useMemo(
         () => buildWeeklyReportSchedule(user?.startDate, savedReports),
         [savedReports, user?.startDate]
@@ -485,8 +496,14 @@ export default function ReportsPage() {
                                         min={0.5}
                                         max={24}
                                         step={0.5}
+                                        inputMode="decimal"
+                                        onKeyDown={blockScientificNumberKeys}
                                         value={editHours}
-                                        onChange={(e) => setEditHours(Number(e.target.value))}
+                                        onChange={(e) => {
+                                            const sanitized = sanitizeDecimalInput(e.target.value);
+                                            const parsed = Number(sanitized);
+                                            setEditHours(Number.isFinite(parsed) ? parsed : 0);
+                                        }}
                                     />
                                 </div>
                             </div>
@@ -1037,8 +1054,10 @@ function ReportsContent({
                                     type="number"
                                     min={0.5}
                                     step={0.5}
+                                    inputMode="decimal"
+                                    onKeyDown={blockScientificNumberKeys}
                                     value={hoursRendered}
-                                    onChange={(e) => setHoursRendered(e.target.value)}
+                                    onChange={(e) => setHoursRendered(sanitizeDecimalInput(e.target.value))}
                                     placeholder="Total hours for the week"
                                 />
                             </div>
@@ -1054,17 +1073,17 @@ function ReportsContent({
                                     textAlign: 'center',
                                     cursor: 'pointer',
                                     transition: 'all 0.2s ease',
-                                    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.03)',
                                 }}
                                 onMouseEnter={(e) => {
                                     const el = e.currentTarget;
                                     el.style.borderColor = 'var(--primary-400)';
-                                    el.style.backgroundColor = 'rgba(15, 23, 42, 0.8)';
+                                    el.style.backgroundColor = 'rgba(255, 255, 255, 0.06)';
                                 }}
                                 onMouseLeave={(e) => {
                                     const el = e.currentTarget;
                                     el.style.borderColor = 'var(--slate-600)';
-                                    el.style.backgroundColor = 'rgba(15, 23, 42, 0.5)';
+                                    el.style.backgroundColor = 'rgba(255, 255, 255, 0.03)';
                                 }}
                                 >
                                     <input

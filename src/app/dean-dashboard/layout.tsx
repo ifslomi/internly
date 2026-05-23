@@ -24,6 +24,7 @@ const navItems = [
     { href: '/dean-dashboard/weekly-reports', label: 'Weekly Reports', icon: FileText },
     { href: '/dean-dashboard/sanctions', label: 'OJT Sanctions', icon: AlertTriangle },
     { href: '/dean-dashboard/competencies', label: 'Competencies', icon: BookOpen },
+    { href: '/dean-dashboard/chat', label: 'Messages', icon: MessageCircle },
 ];
 
 export default function DeanDashboardLayout({ children }: { children: React.ReactNode }) {

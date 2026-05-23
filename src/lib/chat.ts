@@ -36,10 +36,24 @@ export interface Message {
     senderId: string;
     text?: string;
     imageUrl?: string;
+    imageUrls?: string[];
     fileUrl?: string;
     fileName?: string;
     fileSize?: number;
     fileType?: string;
+    fileAttachments?: {
+        fileUrl: string;
+        fileName: string;
+        fileSize: number;
+        fileType: string;
+    }[];
+    editedAt?: Timestamp;
+    isUnsent?: boolean;
+    editHistory?: {
+        text: string;
+        editedAt: Timestamp;
+    }[];
+    reactions?: Record<string, string>;
     timestamp: Timestamp;
     read: boolean;
     status?: 'sent' | 'delivered' | 'seen';
@@ -60,6 +74,169 @@ export interface Conversation {
     createdBy?: string;
     nicknames?: Record<string, string>;
     typing?: Record<string, Timestamp>;
+    lastMessageType?: 'text' | 'attachments' | 'unsent';
+    lastAttachmentImageCount?: number;
+    lastAttachmentFileCount?: number;
+}
+
+function summarizeConversationPreview(messageData: {
+    text?: string | null;
+    imageUrl?: string | null;
+    imageUrls?: string[] | null;
+    fileUrl?: string | null;
+    fileName?: string | null;
+    fileSize?: number | null;
+    fileType?: string | null;
+    fileAttachments?: { fileUrl: string; fileName: string; fileSize: number; fileType: string }[] | null;
+    isUnsent?: boolean | null;
+}) {
+    const imageUrls = (messageData.imageUrls || []).filter(Boolean);
+    if (imageUrls.length === 0 && messageData.imageUrl) imageUrls.push(messageData.imageUrl);
+
+    const fileAttachments = (messageData.fileAttachments || []).filter(Boolean) as { fileUrl: string; fileName: string; fileSize: number; fileType: string }[];
+    if (fileAttachments.length === 0 && messageData.fileUrl && messageData.fileName) {
+        fileAttachments.push({
+            fileUrl: messageData.fileUrl,
+            fileName: messageData.fileName,
+            fileSize: Number(messageData.fileSize || 0),
+            fileType: messageData.fileType || 'file',
+        });
+    }
+
+    if (messageData.isUnsent) {
+        return {
+            lastMessage: 'Message removed',
+            lastMessageType: 'unsent' as const,
+            lastAttachmentImageCount: 0,
+            lastAttachmentFileCount: 0,
+        };
+    }
+
+    if (messageData.text && messageData.text.trim().length > 0) {
+        return {
+            lastMessage: messageData.text.trim(),
+            lastMessageType: 'text' as const,
+            lastAttachmentImageCount: imageUrls.length,
+            lastAttachmentFileCount: fileAttachments.length,
+        };
+    }
+
+    if (imageUrls.length > 0 || fileAttachments.length > 0) {
+        let label = '';
+        if (imageUrls.length > 0 && fileAttachments.length > 0) {
+            label = `${imageUrls.length} image${imageUrls.length === 1 ? '' : 's'}, ${fileAttachments.length} file${fileAttachments.length === 1 ? '' : 's'}`;
+        } else if (imageUrls.length > 0) {
+            label = imageUrls.length === 1 ? 'Image attachment' : `${imageUrls.length} image attachments`;
+        } else if (fileAttachments.length > 0) {
+            label = fileAttachments.length === 1 ? fileAttachments[0].fileName : `${fileAttachments.length} file attachments`;
+        }
+
+        return {
+            lastMessage: label,
+            lastMessageType: 'attachments' as const,
+            lastAttachmentImageCount: imageUrls.length,
+            lastAttachmentFileCount: fileAttachments.length,
+        };
+    }
+
+    return {
+        lastMessage: '',
+        lastMessageType: 'text' as const,
+        lastAttachmentImageCount: 0,
+        lastAttachmentFileCount: 0,
+    };
+}
+
+async function refreshConversationPreview(conversationId: string) {
+    const latestMessageQuery = query(
+        collection(db, 'conversations', conversationId, 'messages'),
+        orderBy('timestamp', 'desc'),
+        limit(1),
+    );
+    const latestSnapshot = await getDocs(latestMessageQuery);
+
+    if (latestSnapshot.empty) {
+        await updateDoc(doc(db, 'conversations', conversationId), {
+            lastMessage: '',
+            lastMessageTime: serverTimestamp(),
+            lastMessageSenderId: null,
+            lastMessageType: 'text',
+            lastAttachmentImageCount: 0,
+            lastAttachmentFileCount: 0,
+        });
+        return;
+    }
+
+    const latestDoc = latestSnapshot.docs[0];
+    const latestData = latestDoc.data() as {
+        senderId?: string;
+        timestamp?: Timestamp;
+        text?: string | null;
+        imageUrl?: string | null;
+        imageUrls?: string[] | null;
+        fileUrl?: string | null;
+        fileName?: string | null;
+        fileSize?: number | null;
+        fileType?: string | null;
+        fileAttachments?: { fileUrl: string; fileName: string; fileSize: number; fileType: string }[] | null;
+        isUnsent?: boolean | null;
+    };
+
+    const preview = summarizeConversationPreview(latestData);
+
+    await updateDoc(doc(db, 'conversations', conversationId), {
+        lastMessage: preview.lastMessage,
+        lastMessageTime: latestData.timestamp || serverTimestamp(),
+        lastMessageSenderId: latestData.senderId || null,
+        lastMessageType: preview.lastMessageType,
+        lastAttachmentImageCount: preview.lastAttachmentImageCount,
+        lastAttachmentFileCount: preview.lastAttachmentFileCount,
+    });
+}
+
+async function updateConversationForLatestMessageActivity(
+    conversationId: string,
+    messageId: string,
+    options?: {
+        activitySenderId?: string;
+        activityTextOverride?: string;
+        activityTypeOverride?: Conversation['lastMessageType'];
+    },
+) {
+    const latestMessageQuery = query(
+        collection(db, 'conversations', conversationId, 'messages'),
+        orderBy('timestamp', 'desc'),
+        limit(1),
+    );
+    const latestSnapshot = await getDocs(latestMessageQuery);
+    if (latestSnapshot.empty) return;
+
+    const latestDoc = latestSnapshot.docs[0];
+    if (latestDoc.id !== messageId) return;
+
+    const latestData = latestDoc.data() as {
+        senderId?: string;
+        text?: string | null;
+        imageUrl?: string | null;
+        imageUrls?: string[] | null;
+        fileUrl?: string | null;
+        fileName?: string | null;
+        fileSize?: number | null;
+        fileType?: string | null;
+        fileAttachments?: { fileUrl: string; fileName: string; fileSize: number; fileType: string }[] | null;
+        isUnsent?: boolean | null;
+    };
+
+    const preview = summarizeConversationPreview(latestData);
+
+    await updateDoc(doc(db, 'conversations', conversationId), {
+        lastMessage: options?.activityTextOverride ?? preview.lastMessage,
+        lastMessageTime: serverTimestamp(),
+        lastMessageSenderId: options?.activitySenderId ?? (latestData.senderId || null),
+        lastMessageType: options?.activityTypeOverride ?? preview.lastMessageType,
+        lastAttachmentImageCount: preview.lastAttachmentImageCount,
+        lastAttachmentFileCount: preview.lastAttachmentFileCount,
+    });
 }
 
 // ─── User Profile ───────────────────────────────────────
@@ -72,10 +249,104 @@ export async function upsertChatUser(user: ChatUser): Promise<void> {
         uid: uid,
         name: user.name,
         email: user.email,
+        nameLower: (user.name || '').trim().toLowerCase(),
+        emailLower: (user.email || '').trim().toLowerCase(),
         profileImage: user.profileImage || null,
         online: true,
         lastSeen: serverTimestamp(),
     }, { merge: true });
+}
+
+export async function searchChatUsers(
+    searchTerm: string,
+    options?: { limitCount?: number; excludeUid?: string },
+): Promise<ChatUser[]> {
+    const normalizedTerm = (searchTerm || '').trim().toLowerCase();
+    const limitCount = Math.max(20, Math.min(options?.limitCount ?? 120, 300));
+    const excludeUid = options?.excludeUid || auth.currentUser?.uid || '';
+
+    const byUid = new Map<string, ChatUser>();
+    const seenEmails = new Set<string>();
+
+    const addDocs = (docs: Array<{ data: () => unknown }>) => {
+        for (const d of docs) {
+            const raw = d.data() as Partial<ChatUser> & { uid?: string; name?: string; email?: string };
+            if (!raw?.uid || raw.uid.startsWith('_schema')) continue;
+            if (excludeUid && raw.uid === excludeUid) continue;
+
+            const candidate = {
+                uid: raw.uid,
+                name: raw.name || 'Unknown',
+                email: raw.email || '',
+                profileImage: raw.profileImage,
+                online: raw.online,
+                lastSeen: raw.lastSeen,
+            } as ChatUser;
+
+            const normalizedEmail = (candidate.email || '').trim().toLowerCase();
+            if (normalizedEmail && seenEmails.has(normalizedEmail)) continue;
+
+            if (!byUid.has(candidate.uid)) {
+                byUid.set(candidate.uid, candidate);
+                if (normalizedEmail) seenEmails.add(normalizedEmail);
+            }
+        }
+    };
+
+    try {
+        if (!normalizedTerm) {
+            const seedSnap = await getDocs(query(collection(db, 'chatUsers'), limit(limitCount + 10)));
+            addDocs(seedSnap.docs);
+        } else {
+            const nameQuery = query(
+                collection(db, 'chatUsers'),
+                where('nameLower', '>=', normalizedTerm),
+                where('nameLower', '<=', `${normalizedTerm}\uf8ff`),
+                orderBy('nameLower'),
+                limit(limitCount),
+            );
+            const emailQuery = query(
+                collection(db, 'chatUsers'),
+                where('emailLower', '>=', normalizedTerm),
+                where('emailLower', '<=', `${normalizedTerm}\uf8ff`),
+                orderBy('emailLower'),
+                limit(limitCount),
+            );
+
+            const [nameSnap, emailSnap] = await Promise.all([getDocs(nameQuery), getDocs(emailQuery)]);
+            addDocs(nameSnap.docs);
+            addDocs(emailSnap.docs);
+
+            // Backward-compatible fallback for legacy docs without lower-case index fields.
+            if (byUid.size === 0) {
+                const fallbackSnap = await getDocs(query(collection(db, 'chatUsers'), limit(300)));
+                addDocs(
+                    fallbackSnap.docs.filter((docSnap) => {
+                        const data = docSnap.data() as { name?: string; email?: string };
+                        const name = (data.name || '').toLowerCase();
+                        const email = (data.email || '').toLowerCase();
+                        return name.includes(normalizedTerm) || email.includes(normalizedTerm);
+                    }),
+                );
+            }
+        }
+    } catch {
+        // Conservative fallback when indexed search is unavailable.
+        const fallbackSnap = await getDocs(query(collection(db, 'chatUsers'), limit(300)));
+        const filtered = normalizedTerm
+            ? fallbackSnap.docs.filter((docSnap) => {
+                const data = docSnap.data() as { name?: string; email?: string };
+                const name = (data.name || '').toLowerCase();
+                const email = (data.email || '').toLowerCase();
+                return name.includes(normalizedTerm) || email.includes(normalizedTerm);
+            })
+            : fallbackSnap.docs;
+        addDocs(filtered);
+    }
+
+    return Array.from(byUid.values())
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+        .slice(0, limitCount);
 }
 
 export async function getChatUser(uid: string): Promise<ChatUser | null> {
@@ -170,7 +441,9 @@ export async function getOrCreateConversation(
 
     for (const docSnap of snap.docs) {
         const data = docSnap.data();
-        if (data.participants.includes(otherUser.uid)) {
+        const participants = Array.isArray(data.participants) ? data.participants : [];
+        const isDirectChat = !data.isGroup && participants.length === 2;
+        if (isDirectChat && participants.includes(otherUser.uid) && participants.includes(currentUid)) {
             return docSnap.id;
         }
     }
@@ -216,14 +489,15 @@ export function subscribeToConversations(
     return onSnapshot(q, (snapshot) => {
         const conversations = snapshot.docs.map(d => ({
             id: d.id,
-            ...d.data(),
+            ...d.data({ serverTimestamps: 'estimate' }),
         })) as Conversation[];
 
         // Sort by lastMessageTime client-side
         conversations.sort((a, b) => {
             const aTime = a.lastMessageTime?.toMillis?.() || 0;
             const bTime = b.lastMessageTime?.toMillis?.() || 0;
-            return bTime - aTime;
+            if (bTime !== aTime) return bTime - aTime;
+            return a.id.localeCompare(b.id);
         });
 
         callback(conversations);
@@ -240,7 +514,18 @@ export async function createGroupConversation(
 ): Promise<string> {
     const currentUid = auth.currentUser?.uid || currentUser.uid;
 
-    const allParticipants = [currentUid, ...members.map(m => m.uid)];
+    // Sanitize members to avoid duplicates and accidental self-inclusion.
+    const uniqueMembers = members.filter((member, index, arr) => {
+        if (!member?.uid) return false;
+        if (member.uid === currentUid) return false;
+        return arr.findIndex(m => m.uid === member.uid) === index;
+    });
+
+    if (uniqueMembers.length < 2) {
+        throw new Error('Select at least 2 other members to create a group');
+    }
+
+    const allParticipants = [currentUid, ...uniqueMembers.map(m => m.uid)];
     const participantDetails: Record<string, { name: string; email: string; profileImage?: string }> = {
         [currentUid]: {
             name: currentUser.name,
@@ -250,7 +535,7 @@ export async function createGroupConversation(
     };
     const unreadCount: Record<string, number> = { [currentUid]: 0 };
 
-    for (const m of members) {
+    for (const m of uniqueMembers) {
         participantDetails[m.uid] = {
             name: m.name,
             email: m.email,
@@ -284,19 +569,30 @@ export async function sendMessage(
     text?: string,
     imageUrl?: string,
     fileData?: { fileUrl: string; fileName: string; fileSize: number; fileType: string },
+    multiAttachments?: {
+        imageUrls?: string[];
+        fileAttachments?: { fileUrl: string; fileName: string; fileSize: number; fileType: string }[];
+    },
 ): Promise<void> {
     // Use Firebase Auth UID to ensure Firestore rules pass
     const effectiveSenderId = auth.currentUser?.uid || senderId;
+
+    const normalizedImageUrls = multiAttachments?.imageUrls ?? (imageUrl ? [imageUrl] : []);
+    const normalizedFileAttachments = multiAttachments?.fileAttachments ?? (fileData ? [fileData] : []);
 
     // CRITICAL: Add the message — this is the primary operation
     await addDoc(collection(db, 'conversations', conversationId, 'messages'), {
         senderId: effectiveSenderId,
         text: text || null,
-        imageUrl: imageUrl || null,
-        fileUrl: fileData?.fileUrl || null,
-        fileName: fileData?.fileName || null,
-        fileSize: fileData?.fileSize || null,
-        fileType: fileData?.fileType || null,
+        // Legacy single-attachment fields for backward compatibility with old clients.
+        imageUrl: normalizedImageUrls[0] || null,
+        fileUrl: normalizedFileAttachments[0]?.fileUrl || null,
+        fileName: normalizedFileAttachments[0]?.fileName || null,
+        fileSize: normalizedFileAttachments[0]?.fileSize || null,
+        fileType: normalizedFileAttachments[0]?.fileType || null,
+        // New stacked attachments fields.
+        imageUrls: normalizedImageUrls.length > 0 ? normalizedImageUrls : null,
+        fileAttachments: normalizedFileAttachments.length > 0 ? normalizedFileAttachments : null,
         timestamp: serverTimestamp(),
         read: false,
         status: 'sent',
@@ -312,14 +608,20 @@ export async function sendMessage(
             unreadUpdates[`unreadCount.${id}`] = increment(1);
         }
 
-        let lastMessage = text || '';
-        if (imageUrl) lastMessage = '📷 Image';
-        if (fileData) lastMessage = `📎 ${fileData.fileName}`;
+        const preview = summarizeConversationPreview({
+            text,
+            imageUrls: normalizedImageUrls,
+            fileAttachments: normalizedFileAttachments,
+            isUnsent: false,
+        });
 
         await updateDoc(doc(db, 'conversations', conversationId), {
-            lastMessage,
+            lastMessage: preview.lastMessage,
             lastMessageTime: serverTimestamp(),
             lastMessageSenderId: effectiveSenderId,
+            lastMessageType: preview.lastMessageType,
+            lastAttachmentImageCount: preview.lastAttachmentImageCount,
+            lastAttachmentFileCount: preview.lastAttachmentFileCount,
             ...unreadUpdates,
             // Clear typing when sending
             [`typing.${effectiveSenderId}`]: deleteField(),
@@ -327,6 +629,144 @@ export async function sendMessage(
     } catch (err) {
         console.warn('Failed to update conversation metadata (message was still sent):', err);
     }
+}
+
+export async function editChatMessage(
+    conversationId: string,
+    messageId: string,
+    newText: string,
+): Promise<void> {
+    const effectiveUid = auth.currentUser?.uid;
+    if (!effectiveUid) throw new Error('Not authenticated');
+
+    const messageRef = doc(db, 'conversations', conversationId, 'messages', messageId);
+    const messageSnap = await getDoc(messageRef);
+    if (!messageSnap.exists()) throw new Error('Message not found');
+
+    const data = messageSnap.data() as Message;
+    if (data.senderId !== effectiveUid) throw new Error('You can only edit your own messages');
+    if (data.isUnsent) throw new Error('Cannot edit an unsent message');
+
+    const messageTimestampMs = data.timestamp?.toMillis?.();
+    if (!messageTimestampMs) throw new Error('Message timestamp unavailable');
+    const EDIT_WINDOW_MS = 10 * 60 * 1000;
+    if (Date.now() - messageTimestampMs > EDIT_WINDOW_MS) {
+        throw new Error('You can only edit messages within 10 minutes');
+    }
+
+    const trimmed = newText.trim();
+    if (!trimmed) throw new Error('Message cannot be empty');
+
+    const previousText = (data.text || '').trim();
+    if (previousText === trimmed) return;
+
+    const editHistory = Array.isArray(data.editHistory) ? [...data.editHistory] : [];
+    if (previousText) {
+        editHistory.push({ text: previousText, editedAt: Timestamp.now() });
+    }
+
+    await updateDoc(messageRef, {
+        text: trimmed,
+        editedAt: serverTimestamp(),
+        editHistory,
+    });
+
+    await updateConversationForLatestMessageActivity(conversationId, messageId, {
+        activitySenderId: effectiveUid,
+        activityTextOverride: `Edited: ${trimmed}`,
+        activityTypeOverride: 'text',
+    });
+}
+
+export async function unsendChatMessage(
+    conversationId: string,
+    messageId: string,
+): Promise<void> {
+    const effectiveUid = auth.currentUser?.uid;
+    if (!effectiveUid) throw new Error('Not authenticated');
+
+    const messageRef = doc(db, 'conversations', conversationId, 'messages', messageId);
+    const messageSnap = await getDoc(messageRef);
+    if (!messageSnap.exists()) throw new Error('Message not found');
+
+    const data = messageSnap.data() as Message;
+    if (data.senderId !== effectiveUid) throw new Error('You can only unsend your own messages');
+    if (data.isUnsent) return;
+
+    await updateDoc(messageRef, {
+        text: 'This message was removed',
+        imageUrl: null,
+        imageUrls: null,
+        fileUrl: null,
+        fileName: null,
+        fileSize: null,
+        fileType: null,
+        fileAttachments: null,
+        isUnsent: true,
+        editedAt: serverTimestamp(),
+    });
+
+    // Unsend activity should always refresh conversation preview/time,
+    // even when unsending an older message.
+    await updateDoc(doc(db, 'conversations', conversationId), {
+        lastMessage: 'Unsent a message',
+        lastMessageTime: serverTimestamp(),
+        lastMessageSenderId: effectiveUid,
+        lastMessageType: 'text',
+        lastAttachmentImageCount: 0,
+        lastAttachmentFileCount: 0,
+    });
+}
+
+export async function setMessageReaction(
+    conversationId: string,
+    messageId: string,
+    reaction: string | null,
+): Promise<void> {
+    const effectiveUid = auth.currentUser?.uid;
+    if (!effectiveUid) throw new Error('Not authenticated');
+
+    const messageRef = doc(db, 'conversations', conversationId, 'messages', messageId);
+    const messageSnap = await getDoc(messageRef);
+    if (!messageSnap.exists()) throw new Error('Message not found');
+
+    const data = messageSnap.data() as Message;
+    if (data.isUnsent) throw new Error('Cannot react to removed message');
+
+    const reactions = { ...(data.reactions || {}) };
+    if (reaction) {
+        reactions[effectiveUid] = reaction;
+    } else {
+        delete reactions[effectiveUid];
+    }
+
+    await updateDoc(messageRef, {
+        reactions,
+    });
+
+    const reactionEmojiMap: Record<string, string> = {
+        heart: '❤️',
+        haha: '😂',
+        wow: '😮',
+        sad: '😢',
+        angry: '😡',
+        like: '👍',
+    };
+    const reactedToOwnMessage = data.senderId === effectiveUid;
+    const reactionText = reaction
+        ? `Reacted ${reactionEmojiMap[reaction] || '🙂'} to ${reactedToOwnMessage ? 'own message' : 'a message'}`
+        : `Removed reaction from ${reactedToOwnMessage ? 'own message' : 'a message'}`;
+
+    // Reaction activity should always bump conversation preview/time,
+    // even when reacting to an older message.
+    await updateDoc(doc(db, 'conversations', conversationId), {
+        lastMessage: reactionText,
+        lastMessageTime: serverTimestamp(),
+        lastMessageSenderId: effectiveUid,
+        lastMessageType: 'text',
+        lastAttachmentImageCount: 0,
+        lastAttachmentFileCount: 0,
+    });
 }
 
 export function subscribeToMessages(

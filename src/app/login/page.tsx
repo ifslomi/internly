@@ -82,6 +82,16 @@ export default function LoginPage() {
     };
 
     const isUbEmail = (value: string) => value.trim().toLowerCase().endsWith('@ub.edu.ph');
+    const blockNonIntegerKeys = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        if (['e', 'E', '+', '-', '.', ',', ' '].includes(event.key)) {
+            event.preventDefault();
+        }
+    };
+    const sanitizeInteger = (value: string, fallback: number, min = 1) => {
+        const digits = value.replace(/\D/g, '');
+        if (!digits) return fallback;
+        return Math.max(min, Number(digits));
+    };
 
     const handleLoginSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -437,8 +447,10 @@ export default function LoginPage() {
                                                 type="number"
                                                 min={1}
                                                 max={5000}
+                                                inputMode="numeric"
+                                                onKeyDown={blockNonIntegerKeys}
                                                 value={totalHours}
-                                                onChange={(e) => setTotalHours(Number(e.target.value))}
+                                                onChange={(e) => setTotalHours(sanitizeInteger(e.target.value, 1, 1))}
                                                 required
                                             />
                                         </div>

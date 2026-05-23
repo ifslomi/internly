@@ -5,6 +5,36 @@ import { Save, User, GraduationCap, Building2, Mail, Phone, MapPin, ShieldCheck,
 import { showToast } from '@/lib/toast';
 import { uploadProfileImage } from '@/lib/intern';
 
+const DEPARTMENT_OPTIONS = ['CICT'] as const;
+const PROGRAM_OPTIONS_BY_DEPARTMENT: Record<string, string[]> = {
+  CICT: ['BSIT', 'BSCS', 'BSIS', 'ACT', 'BLIS'],
+};
+
+const normalizeDepartment = (value?: string | null) => {
+  const normalized = (value || '').trim().toUpperCase();
+  return normalized === 'CICT' ? 'CICT' : '';
+};
+
+const normalizeProgramForDepartment = (departmentValue: string, programValue?: string | null) => {
+  const normalizedProgram = (programValue || '').trim().toUpperCase();
+  if (departmentValue === 'CICT' && PROGRAM_OPTIONS_BY_DEPARTMENT.CICT.includes(normalizedProgram)) {
+    return normalizedProgram;
+  }
+  return '';
+};
+
+const digitsOnly = (value: string) => value.replace(/\D/g, '');
+const blockNonIntegerKeys = (event: React.KeyboardEvent<HTMLInputElement>) => {
+  if (['e', 'E', '+', '-', '.', ',', ' '].includes(event.key)) {
+    event.preventDefault();
+  }
+};
+const sanitizeInteger = (value: string, fallback: number, min = 0) => {
+  const digits = digitsOnly(value);
+  if (!digits) return fallback;
+  return Math.max(min, Number(digits));
+};
+
 type AccountProfilePanelProps = {
   title?: string;
   description?: string;
@@ -33,13 +63,15 @@ export default function AccountProfilePanel({
 
   useEffect(() => {
     if (user) {
+      const normalizedDepartment = normalizeDepartment(user.department);
+      const normalizedProgram = normalizeProgramForDepartment(normalizedDepartment, user.course);
       setFullName(user.fullName || user.name || '');
       setAddress(user.address || '');
       setPhoneNumber(user.phoneNumber || user.contact || '');
       setGuardianEmail(user.guardianEmail || user.guardian?.email || '');
       setGuardianPhone(user.guardianPhone || user.guardian?.phone || '');
-      setProgramCourse(user.course || '');
-      setDepartment(user.department || '');
+      setDepartment(normalizedDepartment);
+      setProgramCourse(normalizedProgram);
       setHoursToRender(user.totalRequiredHours || 480);
       setStartDate(user.startDate || new Date().toISOString().split('T')[0]);
     }
@@ -48,6 +80,14 @@ export default function AccountProfilePanel({
   useEffect(() => {
     setAvatarLoadError(false);
   }, [user?.profileImage]);
+
+  const availablePrograms = PROGRAM_OPTIONS_BY_DEPARTMENT[department] || [];
+
+  useEffect(() => {
+    if (programCourse && !availablePrograms.includes(programCourse)) {
+      setProgramCourse('');
+    }
+  }, [availablePrograms, programCourse]);
 
   if (!user) {
     return <div className="card" style={{ padding: 24 }}>Please log in to view your account.</div>;
@@ -189,7 +229,7 @@ export default function AccountProfilePanel({
                   <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                     <Phone size={16} /> Phone Number
                   </label>
-                  <input className="input" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} />
+                  <input className="input" type="tel" inputMode="numeric" value={phoneNumber} onChange={(e) => setPhoneNumber(digitsOnly(e.target.value))} />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -207,25 +247,40 @@ export default function AccountProfilePanel({
                   <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                     <ShieldCheck size={16} /> Guardian Phone
                   </label>
-                  <input className="input" value={guardianPhone} onChange={(e) => setGuardianPhone(e.target.value)} />
-                </div>
-                <div>
-                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <GraduationCap size={16} /> Program or Course
-                  </label>
-                  <input className="input" value={programCourse} onChange={(e) => setProgramCourse(e.target.value)} />
+                  <input className="input" type="tel" inputMode="numeric" value={guardianPhone} onChange={(e) => setGuardianPhone(digitsOnly(e.target.value))} />
                 </div>
                 <div>
                   <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                     <Building2 size={16} /> Department
                   </label>
-                  <input className="input" value={department} onChange={(e) => setDepartment(e.target.value)} />
+                  <select className="input" value={department} onChange={(e) => setDepartment(e.target.value)}>
+                    <option value="">Select Department</option>
+                    {DEPARTMENT_OPTIONS.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <GraduationCap size={16} /> Program or Course
+                  </label>
+                  <select
+                    className="input"
+                    value={programCourse}
+                    onChange={(e) => setProgramCourse(e.target.value)}
+                    disabled={!department}
+                  >
+                    <option value="">{department ? 'Select Program/Course' : 'Select Department First'}</option>
+                    {availablePrograms.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                     <Clock3 size={16} /> Required OJT Hours
                   </label>
-                  <input className="input" type="number" min={1} max={5000} value={hoursToRender} onChange={(e) => setHoursToRender(Number(e.target.value))} />
+                  <input className="input" type="number" min={1} max={5000} inputMode="numeric" onKeyDown={blockNonIntegerKeys} value={hoursToRender} onChange={(e) => setHoursToRender(sanitizeInteger(e.target.value, 1, 1))} />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -268,7 +323,7 @@ export default function AccountProfilePanel({
                     <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <Phone size={16} /> Phone Number
                     </label>
-                    <input className="input" value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} />
+                    <input className="input" type="tel" inputMode="numeric" value={phoneNumber} onChange={(e) => setPhoneNumber(digitsOnly(e.target.value))} />
                   </div>
                 </div>
               </div>
@@ -286,7 +341,7 @@ export default function AccountProfilePanel({
                     <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <ShieldCheck size={16} /> Guardian Phone Number
                     </label>
-                    <input className="input" value={guardianPhone} onChange={(e) => setGuardianPhone(e.target.value)} />
+                    <input className="input" type="tel" inputMode="numeric" value={guardianPhone} onChange={(e) => setGuardianPhone(digitsOnly(e.target.value))} />
                   </div>
                 </div>
               </div>
@@ -296,15 +351,30 @@ export default function AccountProfilePanel({
                 <div style={{ display: 'grid', gap: 12 }}>
                   <div>
                     <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                      <GraduationCap size={16} /> Program or Course
+                      <Building2 size={16} /> Department
                     </label>
-                    <input className="input" value={programCourse} onChange={(e) => setProgramCourse(e.target.value)} />
+                    <select className="input" value={department} onChange={(e) => setDepartment(e.target.value)}>
+                      <option value="">Select Department</option>
+                      {DEPARTMENT_OPTIONS.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                      <Building2 size={16} /> Department
+                      <GraduationCap size={16} /> Program or Course
                     </label>
-                    <input className="input" value={department} onChange={(e) => setDepartment(e.target.value)} />
+                    <select
+                      className="input"
+                      value={programCourse}
+                      onChange={(e) => setProgramCourse(e.target.value)}
+                      disabled={!department}
+                    >
+                      <option value="">{department ? 'Select Program/Course' : 'Select Department First'}</option>
+                      {availablePrograms.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </div>
@@ -316,7 +386,7 @@ export default function AccountProfilePanel({
                     <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <Clock3 size={16} /> Required OJT Hours
                     </label>
-                    <input className="input" type="number" min={1} max={5000} value={hoursToRender} onChange={(e) => setHoursToRender(Number(e.target.value))} />
+                      <input className="input" type="number" min={1} max={5000} inputMode="numeric" onKeyDown={blockNonIntegerKeys} value={hoursToRender} onChange={(e) => setHoursToRender(sanitizeInteger(e.target.value, 1, 1))} />
                   </div>
                   <div>
                     <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>

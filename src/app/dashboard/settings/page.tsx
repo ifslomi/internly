@@ -26,6 +26,8 @@ export default function SettingsPage() {
     const [savingCompany, setSavingCompany] = useState(false);
     const [savingNotifications, setSavingNotifications] = useState(false);
 
+    const digitsOnly = (value: string) => value.replace(/\D/g, '');
+
     if (!user) return null;
     const hasPasswordProvider = auth.currentUser?.providerData.some((provider) => provider.providerId === 'password') ?? false;
 
@@ -204,7 +206,7 @@ export default function SettingsPage() {
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                                     <div className="input-group">
                                         <label className="input-label" htmlFor="settings-company-contact" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Phone size={14} /> Company contact number</label>
-                                        <input id="settings-company-contact" className="input" value={companyContactNumber} onChange={(e) => setCompanyContactNumber(e.target.value)} />
+                                        <input id="settings-company-contact" className="input" type="tel" inputMode="numeric" value={companyContactNumber} onChange={(e) => setCompanyContactNumber(digitsOnly(e.target.value))} />
                                     </div>
                                     <div className="input-group">
                                         <label className="input-label" htmlFor="settings-company-email" style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Mail size={14} /> Company email address</label>

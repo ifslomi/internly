@@ -5,10 +5,11 @@ import { useApp } from '@/lib/context';
 import type { Sanction } from '@/lib/types';
 
 export default function SanctionsPage() {
-  const { user, getSanctionsForStudent, getDutySlots, createSanctionRender } = useApp();
+  const { user, getSanctionsForStudent, getDutySlots, getSanctionRenders, createSanctionRender } = useApp();
   const [activeTab, setActiveTab] = useState<'students' | 'schedule'>('students');
   const [sanctions, setSanctions] = useState<Sanction[]>([]);
   const [dutySlots, setDutySlots] = useState<any[]>([]);
+  const [myRenders, setMyRenders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState<string | null>(null);
   const tiles = [
@@ -17,6 +18,8 @@ export default function SanctionsPage() {
   ];
 
   const handleAvailSlot = async (slotId: string) => {
+    if (enrolling) return;
+
     if (!user || sanctions.length === 0) {
       alert('You need active sanctions to enroll in a duty slot.');
       return;
@@ -28,18 +31,41 @@ export default function SanctionsPage() {
       return;
     }
 
+    const alreadyEnrolled = myRenders.some((render) => render.dutySlotId === slotId && render.status === 'availed');
+    if (alreadyEnrolled) {
+      alert('You are already enrolled for this duty slot.');
+      return;
+    }
+
     setEnrolling(slotId);
     try {
-      await createSanctionRender({
+      const renderId = await createSanctionRender({
         sanctionId: activeSanction.id,
         userId: user.id,
         dutySlotId: slotId,
         status: 'availed',
       });
+
+      setMyRenders((prev) => [
+        {
+          id: renderId,
+          sanctionId: activeSanction.id,
+          userId: user.id,
+          dutySlotId: slotId,
+          status: 'availed',
+        },
+        ...prev,
+      ]);
+
       alert('Successfully enrolled in the duty slot!');
     } catch (err) {
       console.error('Failed to enroll in duty slot:', err);
-      alert('Failed to enroll. Please try again.');
+      const code = (err as { code?: string } | null)?.code || '';
+      if (code === 'sanction/already-enrolled') {
+        alert('You are already enrolled for this duty slot.');
+      } else {
+        alert('Failed to enroll. Please try again.');
+      }
     } finally {
       setEnrolling(null);
     }
@@ -55,23 +81,26 @@ export default function SanctionsPage() {
       }
 
       try {
-        const [sanctionsData, slotsData] = await Promise.all([
+        const [sanctionsData, slotsData, rendersData] = await Promise.all([
           getSanctionsForStudent(user.id, user.email),
           getDutySlots(),
+          getSanctionRenders({ userId: user.id }),
         ]);
         setSanctions(sanctionsData);
         setDutySlots(slotsData);
+        setMyRenders(rendersData);
       } catch (err) {
         console.error('Failed to load data:', err);
         setSanctions([]);
         setDutySlots([]);
+        setMyRenders([]);
       } finally {
         setLoading(false);
       }
     };
 
     loadData();
-  }, [getSanctionsForStudent, getDutySlots, user]);
+  }, [getSanctionsForStudent, getDutySlots, getSanctionRenders, user]);
 
   return (
     <div>
@@ -261,6 +290,9 @@ export default function SanctionsPage() {
                         <td>{slot.location || '-'}</td>
                         <td>{slot.capacity}</td>
                         <td>
+                          {myRenders.some((render) => render.dutySlotId === slot.id && render.status === 'availed') ? (
+                            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary-400)' }}>Already Enrolled</span>
+                          ) : (
                           <button
                             onClick={() => handleAvailSlot(slot.id)}
                             disabled={enrolling === slot.id}
@@ -278,6 +310,7 @@ export default function SanctionsPage() {
                           >
                             {enrolling === slot.id ? 'Enrolling...' : 'Enroll'}
                           </button>
+                          )}
                         </td>
                       </tr>
                     ))

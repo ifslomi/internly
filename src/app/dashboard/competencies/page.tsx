@@ -39,9 +39,29 @@ const AREA_SECTIONS = [
   },
 ];
 
-const getAreaKey = (areaCovered: string) => {
-  const match = areaCovered.trim().match(/^([ABC])\b/);
-  return match ? match[1] : '';
+const getAreaKeys = (areaCovered: string): string[] => {
+  const matches = areaCovered.match(/[ABC]\.[0-9]+/g) || [];
+  if (matches.length > 0) {
+    return [...new Set(matches.map((item) => item.charAt(0)))];
+  }
+
+  const fallback = areaCovered.trim().match(/^([ABC])\b/);
+  return fallback ? [fallback[1]] : [];
+};
+
+const splitAreaCovered = (areaCovered: string): string[] =>
+  areaCovered
+    .split('|')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const parseAreaItem = (item: string) => {
+  const match = item.match(/^([ABC]\.\d+)\s+(.*)$/);
+  if (!match) {
+    return { code: item, text: '' };
+  }
+
+  return { code: match[1], text: match[2] };
 };
 
 export default function CompetenciesPage() {
@@ -56,6 +76,7 @@ export default function CompetenciesPage() {
   } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [activeAreaTab, setActiveAreaTab] = useState<'all' | 'A' | 'B' | 'C'>('all');
+  const [selectedAreaSection, setSelectedAreaSection] = useState<'A' | 'B' | 'C'>('A');
   const [uploadingEvidence, setUploadingEvidence] = useState(false);
   const [savingEntry, setSavingEntry] = useState(false);
   const [deletingCompetencyId, setDeletingCompetencyId] = useState<string | null>(null);
@@ -63,7 +84,7 @@ export default function CompetenciesPage() {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     activity: '',
-    areaCovered: '',
+    areaCovered: [] as string[],
     outcome: '',
     evidenceType: '' as '' | 'link' | 'image' | 'video' | 'document',
     evidenceUrl: '',
@@ -73,7 +94,7 @@ export default function CompetenciesPage() {
 
   const handleAddCompetency = async () => {
     if (!user || savingEntry) return;
-    if (!formData.activity || !formData.areaCovered || !formData.outcome) {
+    if (!formData.activity || formData.areaCovered.length === 0 || !formData.outcome) {
       showToast({ kind: 'warning', title: 'Incomplete Form', message: 'Please complete activity, area covered, and outcome.' });
       return;
     }
@@ -85,6 +106,7 @@ export default function CompetenciesPage() {
     if (formData.evidenceType && formData.evidenceType !== 'link') {
       if (!formData.evidenceFile) {
         showToast({ kind: 'warning', title: 'Missing Evidence', message: 'Please choose a file for your selected evidence type.' });
+        setSavingEntry(false);
         return;
       }
 
@@ -112,7 +134,7 @@ export default function CompetenciesPage() {
       userId: user.id,
       date: formData.date,
       activity: formData.activity,
-      areaCovered: formData.areaCovered,
+      areaCovered: formData.areaCovered.join(' | '),
       outcome: formData.outcome,
       evidenceType: formData.evidenceType,
       evidenceUrl,
@@ -125,13 +147,14 @@ export default function CompetenciesPage() {
       setFormData({
         date: new Date().toISOString().split('T')[0],
         activity: '',
-        areaCovered: '',
+        areaCovered: [],
         outcome: '',
         evidenceType: '',
         evidenceUrl: '',
         evidenceLabel: '',
         evidenceFile: null,
       });
+      setSelectedAreaSection('A');
       setShowAddModal(false);
     } catch {
       showToast({ kind: 'error', title: 'Save Failed', message: 'Could not add competency. Please try again.' });
@@ -166,8 +189,12 @@ export default function CompetenciesPage() {
 
   const filteredCompetencies = useMemo(() => {
     if (activeAreaTab === 'all') return competencies;
-    return competencies.filter((c) => getAreaKey(c.areaCovered) === activeAreaTab);
+    return competencies.filter((c) => getAreaKeys(c.areaCovered).includes(activeAreaTab));
   }, [competencies, activeAreaTab]);
+
+  const selectedAreaOptions = useMemo(() => {
+    return AREA_SECTIONS.find((section) => section.key === selectedAreaSection)?.items || [];
+  }, [selectedAreaSection]);
 
   if (!user) return null;
 
@@ -228,22 +255,130 @@ export default function CompetenciesPage() {
 
               <div className="input-group">
                 <label className="input-label">Area Covered</label>
-                <select
-                  className="input"
-                  value={formData.areaCovered}
-                  onChange={(e) => setFormData({ ...formData, areaCovered: e.target.value })}
-                >
-                  <option value="">Select area covered</option>
-                  {AREA_SECTIONS.map((section) => (
-                    <optgroup key={section.key} label={`${section.key}. ${section.title}`}>
-                      {section.items.map((item) => (
-                        <option key={item} value={item}>
-                          {item}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {AREA_SECTIONS.map((section) => {
+                      const isActive = selectedAreaSection === section.key;
+                      return (
+                        <button
+                          key={section.key}
+                          type="button"
+                          onClick={() => setSelectedAreaSection(section.key as 'A' | 'B' | 'C')}
+                          style={{
+                            padding: '8px 12px',
+                            borderRadius: 10,
+                            border: isActive ? '1px solid rgba(16,185,129,0.6)' : '1px solid rgba(255,255,255,0.12)',
+                            background: isActive ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.03)',
+                            color: isActive ? 'var(--primary-300)' : 'var(--slate-300)',
+                            cursor: 'pointer',
+                            fontSize: 12,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {section.key}. {section.title}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div
+                    style={{
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: 12,
+                      background: 'rgba(255,255,255,0.02)',
+                      maxHeight: 220,
+                      overflowY: 'auto',
+                      padding: '10px',
+                      display: 'grid',
+                      gap: 8,
+                    }}
+                  >
+                    {selectedAreaOptions.map((item) => {
+                      const checked = formData.areaCovered.includes(item);
+                      const parsed = parseAreaItem(item);
+                      return (
+                        <label
+                          key={item}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: 10,
+                            cursor: 'pointer',
+                            fontSize: 13,
+                            color: checked ? 'var(--slate-100)' : 'var(--slate-300)',
+                            border: checked ? '1px solid rgba(16,185,129,0.45)' : '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: 10,
+                            background: checked ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.02)',
+                            padding: '10px 12px',
+                            transition: 'all 140ms ease',
+                            position: 'relative',
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setFormData((prev) => ({
+                                ...prev,
+                                areaCovered: checked
+                                  ? prev.areaCovered.filter((entry) => entry !== item)
+                                  : [...prev.areaCovered, item],
+                              }));
+                            }}
+                            style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
+                          />
+                          <span
+                            style={{
+                              width: 18,
+                              height: 18,
+                              marginTop: 1,
+                              borderRadius: 6,
+                              border: checked ? '1px solid rgba(16,185,129,0.8)' : '1px solid rgba(148,163,184,0.5)',
+                              background: checked ? 'linear-gradient(135deg, rgba(16,185,129,0.9), rgba(20,184,166,0.85))' : 'rgba(15,23,42,0.35)',
+                              boxShadow: checked ? '0 4px 10px rgba(16,185,129,0.35)' : 'none',
+                              color: 'white',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 12,
+                              fontWeight: 800,
+                              flexShrink: 0,
+                              transition: 'all 140ms ease',
+                            }}
+                          >
+                            {checked ? '✓' : ''}
+                          </span>
+                          <span style={{ display: 'grid', gap: 4, minWidth: 0 }}>
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                width: 'fit-content',
+                                padding: '2px 8px',
+                                borderRadius: 999,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                letterSpacing: '0.03em',
+                                border: checked ? '1px solid rgba(16,185,129,0.6)' : '1px solid rgba(148,163,184,0.35)',
+                                background: checked ? 'rgba(16,185,129,0.18)' : 'rgba(148,163,184,0.08)',
+                                color: checked ? 'var(--primary-300)' : 'var(--slate-400)',
+                              }}
+                            >
+                              {parsed.code}
+                            </span>
+                            <span style={{ lineHeight: 1.45, color: checked ? 'var(--slate-100)' : 'var(--slate-300)' }}>
+                              {parsed.text || item}
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>
+                    Select one or more competency items.
+                  </p>
+                </div>
               </div>
 
               <div className="input-group">
@@ -398,7 +533,7 @@ export default function CompetenciesPage() {
                 disabled={
                   savingEntry ||
                   !formData.activity ||
-                  !formData.areaCovered ||
+                  formData.areaCovered.length === 0 ||
                   !formData.outcome ||
                   (formData.evidenceType === 'link' && !formData.evidenceUrl) ||
                   (!!formData.evidenceType && formData.evidenceType !== 'link' && !formData.evidenceFile)
@@ -603,7 +738,7 @@ export default function CompetenciesPage() {
                     </td>
                     <td>{comp.activity}</td>
                     <td>
-                      {(comp.areaCovered.match(/[A-C]\.[0-9]+/i) || [comp.areaCovered])[0]}
+                      {splitAreaCovered(comp.areaCovered).join(', ')}
                     </td>
                     <td style={{ maxWidth: 280 }}>
                       <p style={{

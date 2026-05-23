@@ -28,6 +28,7 @@ import {
     updateDoc,
     writeBatch,
     limit,
+    runTransaction,
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { User, DailyLog, WeeklyReport, Notification, Supervisor, Competency } from './types';
@@ -36,6 +37,17 @@ import { v4 as uuidv4 } from 'uuid';
 // ─── Helper: resolve current UID ────────────────────────
 function resolveUid(fallback?: string): string {
     return fallback || auth.currentUser?.uid || '';
+}
+
+function isPermissionDeniedError(err: unknown): boolean {
+    const code = (err as { code?: string } | null)?.code || '';
+    const message = ((err as { message?: string } | null)?.message || '').toLowerCase();
+
+    return (
+        code === 'permission-denied' ||
+        code === 'firestore/permission-denied' ||
+        message.includes('missing or insufficient permissions')
+    );
 }
 
 // ═══════════════════════════════════════════════════════
@@ -821,6 +833,9 @@ export async function getSanctionsForStudent(studentId: string, studentEmail?: s
             return right - left;
         });
     } catch (err) {
+        if (isPermissionDeniedError(err)) {
+            return [];
+        }
         console.error('Error fetching sanctions:', err);
         return [];
     }
@@ -860,6 +875,23 @@ export async function updateSanctionDaysInFirestore(sanctionId: string, newDays:
     }
 }
 
+/** Update sanction fields (for dean corrections) */
+export async function updateSanctionInFirestore(
+    sanctionId: string,
+    updates: Partial<Pick<Sanction, 'days' | 'reason' | 'description' | 'status'>>
+): Promise<void> {
+    try {
+        const sanctionRef = doc(db, 'sanctions', sanctionId);
+        await updateDoc(sanctionRef, {
+            ...updates,
+            updatedAt: serverTimestamp(),
+        });
+    } catch (err) {
+        console.error('Error updating sanction:', err);
+        throw err;
+    }
+}
+
 /** Get all duty slots */
 export async function getDutySlotsFromFirestore(): Promise<DutySlot[]> {
     try {
@@ -884,6 +916,9 @@ export async function getDutySlotsFromFirestore(): Promise<DutySlot[]> {
             };
         });
     } catch (err) {
+        if (isPermissionDeniedError(err)) {
+            return [];
+        }
         console.error('Error fetching duty slots:', err);
         return [];
     }
@@ -956,16 +991,34 @@ export async function getSanctionRendersFromFirestore(filters?: { dutySlotId?: s
 export async function createSanctionRenderInFirestore(render: Omit<SanctionRender, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     try {
         const rendersRef = collection(db, 'sanctionRenders');
-        const newId = uuidv4();
-        const docRef = doc(rendersRef, newId);
-        
-        await setDoc(docRef, {
-            ...render,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+        const existingRenderQuery = query(
+            rendersRef,
+            where('userId', '==', render.userId),
+            where('dutySlotId', '==', render.dutySlotId),
+            limit(1)
+        );
+        const existingRenderSnapshot = await getDocs(existingRenderQuery);
+        if (!existingRenderSnapshot.empty) {
+            throw { code: 'sanction/already-enrolled', message: 'Student is already enrolled in this duty slot.' };
+        }
+
+        const renderDocId = `${render.dutySlotId}_${render.userId}`;
+        const docRef = doc(rendersRef, renderDocId);
+
+        await runTransaction(db, async (transaction) => {
+            const renderDoc = await transaction.get(docRef);
+            if (renderDoc.exists()) {
+                throw { code: 'sanction/already-enrolled', message: 'Student is already enrolled in this duty slot.' };
+            }
+
+            transaction.set(docRef, {
+                ...render,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+            });
         });
-        
-        return newId;
+
+        return renderDocId;
     } catch (err) {
         console.error('Error creating sanction render:', err);
         throw err;

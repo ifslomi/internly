@@ -8,7 +8,7 @@ import {
     Conversation,
     Message,
     upsertChatUser,
-    subscribeToAllChatUsers,
+    searchChatUsers,
     getChatUser,
     getOrCreateConversation,
     createGroupConversation,
@@ -23,6 +23,9 @@ import {
     setNickname,
     setTypingStatus,
     kickGroupMember,
+    editChatMessage,
+    unsendChatMessage,
+    setMessageReaction,
 } from '@/lib/chat';
 import {
     Search,
@@ -58,6 +61,9 @@ import {
     MoreVertical,
     Paperclip,
     Download,
+    Trash2,
+    ChevronLeft,
+    ChevronRight,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import type { Area } from 'react-easy-crop';
@@ -588,7 +594,50 @@ function ProfileModal({ chatUser, onClose }: { chatUser: ChatUser | null; onClos
 
 // ─── Image Preview Modal ────────────────────────────────
 
-function ImagePreviewModal({ url, onClose }: { url: string; onClose: () => void }) {
+function ImagePreviewModal({
+    images,
+    initialIndex,
+    onClose,
+}: {
+    images: string[];
+    initialIndex: number;
+    onClose: () => void;
+}) {
+    const [activeIndex, setActiveIndex] = useState(initialIndex);
+
+    useEffect(() => {
+        setActiveIndex(initialIndex);
+    }, [initialIndex, images]);
+
+    useEffect(() => {
+        if (images.length <= 1) return;
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'ArrowLeft') {
+                setActiveIndex((prev) => (prev - 1 + images.length) % images.length);
+            } else if (event.key === 'ArrowRight') {
+                setActiveIndex((prev) => (prev + 1) % images.length);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [images.length]);
+
+    if (images.length === 0) return null;
+
+    const safeIndex = Math.min(Math.max(activeIndex, 0), images.length - 1);
+    const activeImage = images[safeIndex];
+    const canNavigate = images.length > 1;
+
+    const goPrev = () => {
+        if (!canNavigate) return;
+        setActiveIndex((prev) => (prev - 1 + images.length) % images.length);
+    };
+
+    const goNext = () => {
+        if (!canNavigate) return;
+        setActiveIndex((prev) => (prev + 1) % images.length);
+    };
+
     return (
         <div
             onClick={onClose}
@@ -596,7 +645,7 @@ function ImagePreviewModal({ url, onClose }: { url: string; onClose: () => void 
                 position: 'fixed',
                 inset: 0,
                 background: 'rgba(0,0,0,0.85)',
-                zIndex: 1000,
+                zIndex: 3000,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -604,38 +653,154 @@ function ImagePreviewModal({ url, onClose }: { url: string; onClose: () => void 
                 cursor: 'zoom-out',
             }}
         >
-            <button
-                onClick={onClose}
+            <div
+                onClick={(event) => event.stopPropagation()}
                 style={{
-                    position: 'absolute',
-                    top: 16,
-                    right: 16,
-                    background: 'rgba(255,255,255,0.1)',
-                    border: 'none',
-                    color: 'white',
-                    width: 40,
-                    height: 40,
-                    borderRadius: '50%',
-                    cursor: 'pointer',
+                    position: 'relative',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 14,
+                    maxWidth: '92vw',
+                }}
+            >
+                <div style={{
+                    position: 'relative',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                }}
-            >
-                <X size={20} />
-            </button>
-            <img
-                src={url}
-                alt="Preview"
-                onClick={(e) => e.stopPropagation()}
-                style={{
                     maxWidth: '90vw',
-                    maxHeight: '85vh',
-                    borderRadius: 12,
-                    objectFit: 'contain',
-                    cursor: 'default',
-                }}
-            />
+                }}>
+                    <button
+                        onClick={onClose}
+                        style={{
+                            position: 'absolute',
+                            top: 10,
+                            right: 10,
+                            background: 'rgba(0,0,0,0.48)',
+                            border: '1px solid rgba(255,255,255,0.25)',
+                            color: 'white',
+                            width: 38,
+                            height: 38,
+                            borderRadius: '50%',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 3,
+                        }}
+                        title="Close"
+                    >
+                        <X size={18} />
+                    </button>
+
+                    {canNavigate && (
+                        <button
+                            onClick={goPrev}
+                            title="Previous image"
+                            style={{
+                                position: 'absolute',
+                                left: 10,
+                                width: 42,
+                                height: 42,
+                                borderRadius: '50%',
+                                border: '1px solid rgba(255,255,255,0.2)',
+                                background: 'rgba(0,0,0,0.45)',
+                                color: 'white',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                zIndex: 1,
+                            }}
+                        >
+                            <ChevronLeft size={22} />
+                        </button>
+                    )}
+
+                    <img
+                        src={activeImage}
+                        alt="Preview"
+                        style={{
+                            maxWidth: '90vw',
+                            maxHeight: '76vh',
+                            borderRadius: 12,
+                            objectFit: 'contain',
+                            cursor: 'default',
+                            display: 'block',
+                        }}
+                    />
+
+                    {canNavigate && (
+                        <button
+                            onClick={goNext}
+                            title="Next image"
+                            style={{
+                                position: 'absolute',
+                                right: 10,
+                                width: 42,
+                                height: 42,
+                                borderRadius: '50%',
+                                border: '1px solid rgba(255,255,255,0.2)',
+                                background: 'rgba(0,0,0,0.45)',
+                                color: 'white',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                zIndex: 1,
+                            }}
+                        >
+                            <ChevronRight size={22} />
+                        </button>
+                    )}
+                </div>
+
+                {canNavigate && (
+                    <div style={{
+                        display: 'flex',
+                        gap: 8,
+                        overflowX: 'auto',
+                        maxWidth: '90vw',
+                        padding: '4px 2px',
+                    }}>
+                        {images.map((url, index) => {
+                            const isActive = index === safeIndex;
+                            return (
+                                <button
+                                    key={`${url}-${index}`}
+                                    onClick={() => setActiveIndex(index)}
+                                    title={`Image ${index + 1}`}
+                                    style={{
+                                        border: isActive ? '2px solid rgba(16,185,129,0.9)' : '1px solid rgba(255,255,255,0.18)',
+                                        borderRadius: 10,
+                                        padding: 0,
+                                        background: 'rgba(255,255,255,0.03)',
+                                        cursor: 'pointer',
+                                        width: 62,
+                                        height: 62,
+                                        overflow: 'hidden',
+                                        flexShrink: 0,
+                                        opacity: isActive ? 1 : 0.8,
+                                    }}
+                                >
+                                    <img
+                                        src={url}
+                                        alt={`Preview ${index + 1}`}
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            objectFit: 'cover',
+                                            display: 'block',
+                                        }}
+                                    />
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
@@ -655,23 +820,39 @@ export default function ChatPage() {
     }, [chatError]);
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [allUsers, setAllUsers] = useState<ChatUser[]>([]);
+    const [searchingUsers, setSearchingUsers] = useState(false);
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [messageText, setMessageText] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [showUserSearch, setShowUserSearch] = useState(false);
+    const [userSearchVisibleCount, setUserSearchVisibleCount] = useState(80);
     const [selectedProfile, setSelectedProfile] = useState<ChatUser | null>(null);
-    const [previewImage, setPreviewImage] = useState<string | null>(null);
+    const [previewImage, setPreviewImage] = useState<{ images: string[]; index: number } | null>(null);
     const [uploading, setUploading] = useState(false);
     const [sending, setSending] = useState(false);
     const [pendingImages, setPendingImages] = useState<{ file: File | Blob; preview: string }[]>([]);
-    const [pendingFile, setPendingFile] = useState<{ file: File; name: string; size: number; type: string } | null>(null);
+    const [pendingFiles, setPendingFiles] = useState<{ file: File; name: string; size: number; type: string }[]>([]);
+    const [uploadHdImages, setUploadHdImages] = useState(false);
+    const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+    const [editingMessageText, setEditingMessageText] = useState('');
+    const [savingMessageEdit, setSavingMessageEdit] = useState(false);
+    const [unsendingMessageId, setUnsendingMessageId] = useState<string | null>(null);
+    const [expandedEditHistoryMessageId, setExpandedEditHistoryMessageId] = useState<string | null>(null);
+    const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
+    const [reactionPickerMessageId, setReactionPickerMessageId] = useState<string | null>(null);
+    const [updatingReactionMessageId, setUpdatingReactionMessageId] = useState<string | null>(null);
+    const [showUnsendConfirmModal, setShowUnsendConfirmModal] = useState(false);
+    const [pendingUnsendMessage, setPendingUnsendMessage] = useState<Message | null>(null);
+    const [rememberUnsendChoice, setRememberUnsendChoice] = useState(false);
+    const [skipUnsendConfirm, setSkipUnsendConfirm] = useState(false);
     const [editingImageIndex, setEditingImageIndex] = useState<number | null>(null);
     // Group chat creation state
     const [showGroupCreate, setShowGroupCreate] = useState(false);
     const [groupName, setGroupName] = useState('');
     const [selectedGroupMembers, setSelectedGroupMembers] = useState<ChatUser[]>([]);
     const [groupSearchQuery, setGroupSearchQuery] = useState('');
+    const [groupSearchVisibleCount, setGroupSearchVisibleCount] = useState(80);
     const [creatingGroup, setCreatingGroup] = useState(false);
     // Nickname state
     const [showNicknameModal, setShowNicknameModal] = useState(false);
@@ -715,6 +896,9 @@ export default function ChatPage() {
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const isTypingRef = useRef(false);
     const lastTypingWriteRef = useRef<number>(0);
+    const sendInFlightRef = useRef(false);
+    const previousMessageCountRef = useRef(0);
+    const previousConversationIdRef = useRef<string | null>(null);
     const [typingTick, setTypingTick] = useState(0);
 
     // Always use Firebase Auth UID for chat operations to match Firestore rules
@@ -748,11 +932,12 @@ export default function ChatPage() {
     // Get display info for a conversation (works for both 1:1 and group)
     const getConversationDisplay = useCallback((conv: Conversation) => {
         if (conv.isGroup) {
+            const uniqueMemberCount = Array.from(new Set(conv.participants || [])).length;
             return {
                 name: conv.groupName || 'Unnamed Group',
                 avatar: conv.groupAvatar,
                 isGroup: true,
-                memberCount: conv.participants.length,
+                memberCount: uniqueMemberCount,
             };
         }
         const otherId = conv.participants.find(p => p !== currentUserId) || '';
@@ -797,20 +982,41 @@ export default function ChatPage() {
         };
     }, [user, firebaseUser]);
 
-    // Realtime: all users list updates live when profile info changes.
+    // Debounced server-side user search for scalable user directories.
     useEffect(() => {
         if (!user || !firebaseUser) return;
-        const unsub = subscribeToAllChatUsers(
-            (users) => {
-                setAllUsers(users.filter(u => u.uid !== currentUserId));
-            },
-            (err) => {
-                console.error('Failed to subscribe users:', err);
-            },
-        );
+        if (!showUserSearch && !showGroupCreate) return;
 
-        return () => unsub();
-    }, [user, firebaseUser, currentUserId]);
+        const myUid = firebaseUser.uid || currentUserId || user.id;
+        const activeSearchTerm = showGroupCreate ? groupSearchQuery : searchQuery;
+        let cancelled = false;
+
+        setSearchingUsers(true);
+        const timer = setTimeout(() => {
+            void searchChatUsers(activeSearchTerm, { limitCount: 400, excludeUid: myUid })
+                .then((users) => {
+                    if (!cancelled) {
+                        setAllUsers(users);
+                    }
+                })
+                .catch((err) => {
+                    console.error('Failed to search users:', err);
+                    if (!cancelled) {
+                        setChatError('Failed to load users. Please try again.');
+                    }
+                })
+                .finally(() => {
+                    if (!cancelled) {
+                        setSearchingUsers(false);
+                    }
+                });
+        }, 220);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [user, firebaseUser, currentUserId, showUserSearch, showGroupCreate, searchQuery, groupSearchQuery]);
 
     // Subscribe to conversations (only after Firebase Auth is ready)
     useEffect(() => {
@@ -850,10 +1056,20 @@ export default function ChatPage() {
         return () => unsub();
     }, [activeConversationId, currentUserId, firebaseUser]);
 
-    // Auto-scroll to bottom
+    // Auto-scroll only when a new message is added or conversation changes.
+    // This prevents jump-to-bottom on edits/reactions that only modify existing docs.
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+        const conversationChanged = previousConversationIdRef.current !== activeConversationId;
+        const currentCount = messages.length;
+        const hadNewMessage = currentCount > previousMessageCountRef.current;
+
+        if (conversationChanged || hadNewMessage) {
+            messagesEndRef.current?.scrollIntoView({ behavior: conversationChanged ? 'auto' : 'smooth' });
+        }
+
+        previousConversationIdRef.current = activeConversationId;
+        previousMessageCountRef.current = currentCount;
+    }, [activeConversationId, messages.length]);
 
     // Typing indicator: send typing status, refresh every 2s, auto-clear after 3s
     const handleTyping = useCallback(() => {
@@ -916,16 +1132,23 @@ export default function ChatPage() {
     const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
 
     const galleryImages = React.useMemo(() => {
-        return messages
-            .filter(m => m.imageUrl)
-            .map(m => ({
-                id: m.id,
-                url: m.imageUrl!,
-                senderId: m.senderId,
-                senderName: activeConversation?.participantDetails?.[m.senderId]?.name || 'Unknown',
-                timestamp: m.timestamp,
-            }))
-            .reverse(); // newest first
+        const images: { id: string; url: string; senderId: string; senderName: string; timestamp: Message['timestamp'] }[] = [];
+        for (const m of messages) {
+            const urls = m.imageUrls && m.imageUrls.length > 0
+                ? m.imageUrls
+                : (m.imageUrl ? [m.imageUrl] : []);
+
+            for (const url of urls) {
+                images.push({
+                    id: `${m.id}-${url}`,
+                    url,
+                    senderId: m.senderId,
+                    senderName: activeConversation?.participantDetails?.[m.senderId]?.name || 'Unknown',
+                    timestamp: m.timestamp,
+                });
+            }
+        }
+        return images.reverse(); // newest first
     }, [messages, activeConversation]);
 
     const galleryLinks = React.useMemo(() => {
@@ -935,8 +1158,12 @@ export default function ChatPage() {
             const matches = m.text.match(URL_REGEX);
             if (matches) {
                 for (const url of matches) {
-                    // Skip image hosting URLs that are already shown as images
-                    if (m.imageUrl && url === m.imageUrl) continue;
+                    const messageImageUrls = m.imageUrls && m.imageUrls.length > 0
+                        ? m.imageUrls
+                        : (m.imageUrl ? [m.imageUrl] : []);
+
+                    // Skip image hosting URLs that are already shown as image attachments.
+                    if (messageImageUrls.includes(url)) continue;
                     links.push({
                         id: `${m.id}-${url}`,
                         url,
@@ -953,19 +1180,31 @@ export default function ChatPage() {
     }, [messages, activeConversation]);
 
     const galleryFiles = React.useMemo(() => {
-        return messages
-            .filter(m => m.fileUrl && m.fileName)
-            .map(m => ({
-                id: m.id,
-                name: m.fileName!,
-                url: m.fileUrl!,
-                type: m.fileType || 'file',
-                size: m.fileSize || 0,
-                senderId: m.senderId,
-                senderName: activeConversation?.participantDetails?.[m.senderId]?.name || 'Unknown',
-                timestamp: m.timestamp,
-            }))
-            .reverse(); // newest first
+        const files: { id: string; name: string; url: string; type: string; size: number; senderId: string; senderName: string; timestamp: Message['timestamp'] }[] = [];
+        for (const m of messages) {
+            const attachments = m.fileAttachments && m.fileAttachments.length > 0
+                ? m.fileAttachments
+                : (m.fileUrl && m.fileName ? [{
+                    fileUrl: m.fileUrl,
+                    fileName: m.fileName,
+                    fileType: m.fileType || 'file',
+                    fileSize: m.fileSize || 0,
+                }] : []);
+
+            for (const attachment of attachments) {
+                files.push({
+                    id: `${m.id}-${attachment.fileUrl}`,
+                    name: attachment.fileName,
+                    url: attachment.fileUrl,
+                    type: attachment.fileType || 'file',
+                    size: attachment.fileSize || 0,
+                    senderId: m.senderId,
+                    senderName: activeConversation?.participantDetails?.[m.senderId]?.name || 'Unknown',
+                    timestamp: m.timestamp,
+                });
+            }
+        }
+        return files.reverse(); // newest first
     }, [messages, activeConversation]);
 
     // Close media gallery & chat menu when switching conversations
@@ -985,11 +1224,15 @@ export default function ChatPage() {
             return [];
         });
         if (fileInputRef.current) fileInputRef.current.value = '';
+        if (attachFileInputRef.current) attachFileInputRef.current.value = '';
+        setPendingFiles([]);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeConversationId]);
 
     const handleStartConversation = async (otherUser: ChatUser) => {
         if (!user) return;
+        const myUid = firebaseUser?.uid || currentUserId || user.id;
+        if (!otherUser?.uid || otherUser.uid === myUid) return;
         const endGlobalLoading = beginGlobalLoading();
         try {
             const chatUser: ChatUser = {
@@ -1011,7 +1254,20 @@ export default function ChatPage() {
     };
 
     const handleCreateGroup = async () => {
-        if (!user || !groupName.trim() || selectedGroupMembers.length < 2) return;
+        if (!user || !groupName.trim()) return;
+
+        const myUid = firebaseUser?.uid || currentUserId || user.id;
+        const normalizedMembers = selectedGroupMembers.filter((member, index, arr) => {
+            if (!member?.uid) return false;
+            if (member.uid === myUid) return false;
+            return arr.findIndex(m => m.uid === member.uid) === index;
+        });
+
+        if (normalizedMembers.length < 2) {
+            setChatError('Select at least 2 other members to create a group.');
+            return;
+        }
+
         const endGlobalLoading = beginGlobalLoading();
         setCreatingGroup(true);
         try {
@@ -1021,7 +1277,7 @@ export default function ChatPage() {
                 email: user.email,
                 profileImage: user.profileImage,
             };
-            const convId = await createGroupConversation(chatUser, selectedGroupMembers, groupName.trim());
+            const convId = await createGroupConversation(chatUser, normalizedMembers, groupName.trim());
             setActiveConversationId(convId);
             setShowGroupCreate(false);
             setShowUserSearch(false);
@@ -1038,6 +1294,8 @@ export default function ChatPage() {
     };
 
     const toggleGroupMember = (u: ChatUser) => {
+        const myUid = firebaseUser?.uid || currentUserId || user?.id || '';
+        if (!u?.uid || u.uid === myUid) return;
         setSelectedGroupMembers(prev =>
             prev.find(m => m.uid === u.uid)
                 ? prev.filter(m => m.uid !== u.uid)
@@ -1074,6 +1332,11 @@ export default function ChatPage() {
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
+    const clearAllPendingFiles = () => {
+        setPendingFiles([]);
+        if (attachFileInputRef.current) attachFileInputRef.current.value = '';
+    };
+
     const removePendingImage = (index: number) => {
         setPendingImages(prev => {
             const updated = [...prev];
@@ -1083,11 +1346,17 @@ export default function ChatPage() {
         });
     };
 
+    const removePendingFile = (index: number) => {
+        setPendingFiles(prev => prev.filter((_, fileIndex) => fileIndex !== index));
+    };
+
     const handleSendMessage = async () => {
+        if (sendInFlightRef.current) return;
         const hasText = messageText.trim().length > 0;
         const hasImages = pendingImages.length > 0;
-        const hasFile = pendingFile !== null;
-        if ((!hasText && !hasImages && !hasFile) || !activeConversationId || !activeConversation) return;
+        const hasFiles = pendingFiles.length > 0;
+        if ((!hasText && !hasImages && !hasFiles) || !activeConversationId || !activeConversation) return;
+        sendInFlightRef.current = true;
         const endGlobalLoading = beginGlobalLoading();
         const text = messageText.trim();
         setMessageText('');
@@ -1102,47 +1371,60 @@ export default function ChatPage() {
         }
 
         try {
-            const otherIds = activeConversation.participants.filter(p => p !== currentUserId);
+            const otherIds = Array.from(new Set(activeConversation.participants.filter(p => p !== currentUserId)));
 
-            if (hasFile) {
+            if (hasImages || hasFiles) {
                 setUploading(true);
-                const result = await uploadChatFile(pendingFile!.file);
-                setUploading(false);
-                setPendingFile(null);
+                const uploadedImageUrls: string[] = [];
+                const uploadedFileAttachments: { fileUrl: string; fileName: string; fileSize: number; fileType: string }[] = [];
 
-                await sendMessage(activeConversationId, currentUserId, otherIds, text || undefined, undefined, {
-                    fileUrl: result.url,
-                    fileName: result.name,
-                    fileSize: result.size,
-                    fileType: result.type,
-                });
-            } else if (hasImages) {
-                setUploading(true);
-                // Upload all images
-                const imageUrls: string[] = [];
-                for (const img of pendingImages) {
-                    const url = await uploadChatImage(activeConversationId, img.file);
-                    imageUrls.push(url);
+                if (hasImages) {
+                    for (const img of pendingImages) {
+                        const imageBlob = await compressImageForUpload(img.file);
+                        const url = await uploadChatImage(activeConversationId, imageBlob);
+                        uploadedImageUrls.push(url);
+                    }
                 }
-                setUploading(false);
+
+                if (hasFiles) {
+                    for (const pendingFile of pendingFiles) {
+                        const result = await uploadChatFile(pendingFile.file);
+                        uploadedFileAttachments.push({
+                            fileUrl: result.url,
+                            fileName: result.name,
+                            fileSize: result.size,
+                            fileType: result.type,
+                        });
+                    }
+                }
+
+                await sendMessage(
+                    activeConversationId,
+                    currentUserId,
+                    otherIds,
+                    text || undefined,
+                    undefined,
+                    undefined,
+                    {
+                        imageUrls: uploadedImageUrls,
+                        fileAttachments: uploadedFileAttachments,
+                    },
+                );
+
                 clearAllPendingImages();
-
-                // Send first image with text (if any), rest as separate image messages
-                await sendMessage(activeConversationId, currentUserId, otherIds, text || undefined, imageUrls[0]);
-                for (let i = 1; i < imageUrls.length; i++) {
-                    await sendMessage(activeConversationId, currentUserId, otherIds, undefined, imageUrls[i]);
-                }
+                clearAllPendingFiles();
             } else {
                 await sendMessage(activeConversationId, currentUserId, otherIds, text);
             }
         } catch (err: unknown) {
             console.error('Failed to send message:', err);
-            setUploading(false);
             if (text) setMessageText(text);
             const errorMsg = err instanceof Error ? err.message : 'Unknown error';
             setChatError(`Failed to send message: ${errorMsg}`);
         } finally {
+            setUploading(false);
             setSending(false);
+            sendInFlightRef.current = false;
             messageInputRef.current?.focus();
             endGlobalLoading();
         }
@@ -1168,34 +1450,45 @@ export default function ChatPage() {
 
         if (newImages.length > 0) {
             setPendingImages(prev => [...prev, ...newImages]);
-            setPendingFile(null); // clear any pending file when adding images
         }
         if (fileInputRef.current) fileInputRef.current.value = '';
         messageInputRef.current?.focus();
     };
 
     const handleFileAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file || !activeConversationId || !activeConversation) return;
+        const files = e.target.files;
+        if (!files || files.length === 0 || !activeConversationId || !activeConversation) return;
 
-        if (file.type.startsWith('image/')) {
-            // Redirect images to the image handler
-            const preview = URL.createObjectURL(file);
-            setPendingImages(prev => [...prev, { file, preview }]);
-            setPendingFile(null);
-            if (attachFileInputRef.current) attachFileInputRef.current.value = '';
-            messageInputRef.current?.focus();
-            return;
+        const newImages: { file: File; preview: string }[] = [];
+        const newFiles: { file: File; name: string; size: number; type: string }[] = [];
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+
+            if (file.type.startsWith('image/')) {
+                if (file.size > 5 * 1024 * 1024) {
+                    alert(`"${file.name}" exceeds 5MB. Skipped.`);
+                    continue;
+                }
+                newImages.push({ file, preview: URL.createObjectURL(file) });
+                continue;
+            }
+
+            if (file.size > 10 * 1024 * 1024) {
+                alert(`"${file.name}" exceeds 10 MB. Skipped.`);
+                continue;
+            }
+
+            newFiles.push({ file, name: file.name, size: file.size, type: file.type || 'application/octet-stream' });
         }
 
-        if (file.size > 10 * 1024 * 1024) {
-            alert(`"${file.name}" exceeds 10 MB. Please choose a smaller file.`);
-            if (attachFileInputRef.current) attachFileInputRef.current.value = '';
-            return;
+        if (newImages.length > 0) {
+            setPendingImages(prev => [...prev, ...newImages]);
+        }
+        if (newFiles.length > 0) {
+            setPendingFiles(prev => [...prev, ...newFiles]);
         }
 
-        setPendingFile({ file, name: file.name, size: file.size, type: file.type || 'application/octet-stream' });
-        clearAllPendingImages(); // clear images when attaching a file
         if (attachFileInputRef.current) attachFileInputRef.current.value = '';
         messageInputRef.current?.focus();
     };
@@ -1211,6 +1504,43 @@ export default function ChatPage() {
         return ext;
     };
 
+    const compressImageForUpload = async (fileOrBlob: File | Blob): Promise<Blob> => {
+        if (uploadHdImages) return fileOrBlob;
+        const mimeType = fileOrBlob.type || '';
+        if (!mimeType.startsWith('image/')) return fileOrBlob;
+
+        const objectUrl = URL.createObjectURL(fileOrBlob);
+        try {
+            const image = await createImage(objectUrl);
+            const maxDimension = 1920;
+            let targetWidth = image.width;
+            let targetHeight = image.height;
+
+            if (targetWidth > maxDimension || targetHeight > maxDimension) {
+                const ratio = Math.min(maxDimension / targetWidth, maxDimension / targetHeight);
+                targetWidth = Math.round(targetWidth * ratio);
+                targetHeight = Math.round(targetHeight * ratio);
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return fileOrBlob;
+            ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+
+            const compressed = await new Promise<Blob | null>((resolve) => {
+                canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.82);
+            });
+
+            return compressed || fileOrBlob;
+        } catch {
+            return fileOrBlob;
+        } finally {
+            URL.revokeObjectURL(objectUrl);
+        }
+    };
+
     const handleViewProfile = async (uid: string) => {
         const endGlobalLoading = beginGlobalLoading();
         try {
@@ -1221,10 +1551,48 @@ export default function ChatPage() {
         }
     };
 
-    const filteredUsers = allUsers.filter(u =>
+    const selectableUsers = React.useMemo(() => {
+        const ownIds = new Set([
+            firebaseUser?.uid,
+            currentUserId,
+            user?.id,
+        ].filter(Boolean) as string[]);
+        const ownEmail = (user?.email || '').trim().toLowerCase();
+        const seen = new Set<string>();
+        const seenEmails = new Set<string>();
+        return allUsers.filter((u) => {
+            if (!u?.uid) return false;
+            if (ownIds.has(u.uid)) return false;
+            const normalizedEmail = (u.email || '').trim().toLowerCase();
+            if (ownEmail && normalizedEmail === ownEmail) return false;
+            if (seen.has(u.uid)) return false;
+            if (normalizedEmail && seenEmails.has(normalizedEmail)) return false;
+            seen.add(u.uid);
+            if (normalizedEmail) seenEmails.add(normalizedEmail);
+            return true;
+        });
+    }, [allUsers, currentUserId, firebaseUser, user]);
+
+    const filteredUsers = selectableUsers.filter(u =>
         (u.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (u.email || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
+
+    const filteredGroupUsers = selectableUsers.filter(u =>
+        (u.name || '').toLowerCase().includes(groupSearchQuery.toLowerCase()) ||
+        (u.email || '').toLowerCase().includes(groupSearchQuery.toLowerCase())
+    );
+
+    const visibleFilteredUsers = filteredUsers.slice(0, userSearchVisibleCount);
+    const visibleGroupUsers = filteredGroupUsers.slice(0, groupSearchVisibleCount);
+
+    useEffect(() => {
+        setUserSearchVisibleCount(80);
+    }, [searchQuery, showUserSearch]);
+
+    useEffect(() => {
+        setGroupSearchVisibleCount(80);
+    }, [groupSearchQuery, showGroupCreate]);
 
     const totalUnread = conversations.reduce((sum, c) => sum + (c.unreadCount?.[currentUserId] || 0), 0);
 
@@ -1246,6 +1614,138 @@ export default function ChatPage() {
     const formatMessageTime = (timestamp: { toDate?: () => Date } | undefined) => {
         if (!timestamp?.toDate) return '';
         return timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const getConversationPreviewMeta = useCallback((conv: Conversation) => {
+        const previewType = conv.lastMessageType;
+        const previewText = conv.lastMessage || 'Start chatting...';
+        const imageCount = conv.lastAttachmentImageCount || 0;
+        const fileCount = conv.lastAttachmentFileCount || 0;
+
+        if (previewType === 'unsent') {
+            return { kind: 'unsent' as const, text: previewText };
+        }
+        if (previewType === 'attachments') {
+            if (imageCount > 0 && fileCount > 0) return { kind: 'mixed' as const, text: previewText };
+            if (imageCount > 0) return { kind: 'image' as const, text: previewText };
+            if (fileCount > 0) return { kind: 'file' as const, text: previewText };
+        }
+
+        // Backward compatibility for old preview formats.
+        if (previewText.startsWith('[File]')) {
+            return { kind: 'file' as const, text: previewText.replace('[File] ', '') };
+        }
+        if (/image/i.test(previewText)) {
+            return { kind: 'image' as const, text: previewText };
+        }
+        if (/file/i.test(previewText)) {
+            return { kind: 'file' as const, text: previewText };
+        }
+
+        return { kind: 'text' as const, text: previewText };
+    }, []);
+
+    const startEditMessage = (msg: Message) => {
+        const messageTimestampMs = msg.timestamp?.toDate?.()?.getTime?.();
+        const EDIT_WINDOW_MS = 10 * 60 * 1000;
+        if (!messageTimestampMs || Date.now() - messageTimestampMs > EDIT_WINDOW_MS) {
+            setChatError('You can only edit messages within 10 minutes.');
+            return;
+        }
+        setEditingMessageId(msg.id);
+        setEditingMessageText(msg.text || '');
+    };
+
+    const cancelEditMessage = () => {
+        setEditingMessageId(null);
+        setEditingMessageText('');
+    };
+
+    const saveEditMessage = async () => {
+        if (!activeConversationId || !editingMessageId || !editingMessageText.trim()) return;
+        setSavingMessageEdit(true);
+        try {
+            await editChatMessage(activeConversationId, editingMessageId, editingMessageText.trim());
+            setEditingMessageId(null);
+            setEditingMessageText('');
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Failed to edit message';
+            setChatError(message);
+        } finally {
+            setSavingMessageEdit(false);
+        }
+    };
+
+    const executeUnsendMessage = async (msg: Message) => {
+        if (!activeConversationId || !msg.id) return;
+        setUnsendingMessageId(msg.id);
+        try {
+            await unsendChatMessage(activeConversationId, msg.id);
+            if (editingMessageId === msg.id) {
+                cancelEditMessage();
+            }
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Failed to unsend message';
+            setChatError(message);
+        } finally {
+            setUnsendingMessageId(null);
+        }
+    };
+
+    const handleUnsendMessage = async (msg: Message) => {
+        if (!activeConversationId || !msg.id) return;
+        if (skipUnsendConfirm) {
+            await executeUnsendMessage(msg);
+            return;
+        }
+        setPendingUnsendMessage(msg);
+        setShowUnsendConfirmModal(true);
+    };
+
+    const confirmUnsendMessage = async () => {
+        if (!pendingUnsendMessage) return;
+        if (rememberUnsendChoice) {
+            setSkipUnsendConfirm(true);
+        }
+        setShowUnsendConfirmModal(false);
+        const target = pendingUnsendMessage;
+        setPendingUnsendMessage(null);
+        await executeUnsendMessage(target);
+    };
+
+    const cancelUnsendConfirmation = () => {
+        setShowUnsendConfirmModal(false);
+        setPendingUnsendMessage(null);
+    };
+
+    const reactionOptions = [
+        { key: 'heart', emoji: '❤️', label: 'Heart' },
+        { key: 'haha', emoji: '😂', label: 'Haha' },
+        { key: 'wow', emoji: '😮', label: 'Wow' },
+        { key: 'sad', emoji: '😢', label: 'Sad' },
+        { key: 'angry', emoji: '😡', label: 'Angry' },
+        { key: 'like', emoji: '👍', label: 'Like' },
+    ] as const;
+
+    const toggleEditHistoryInline = (messageId: string) => {
+        setExpandedEditHistoryMessageId((current) => (current === messageId ? null : messageId));
+    };
+
+    const handleReactToMessage = async (msg: Message, reactionKey: string) => {
+        if (!activeConversationId || !msg.id || !currentUserId) return;
+        const currentReaction = msg.reactions?.[currentUserId] || null;
+        const nextReaction = currentReaction === reactionKey ? null : reactionKey;
+
+        setUpdatingReactionMessageId(msg.id);
+        try {
+            await setMessageReaction(activeConversationId, msg.id, nextReaction);
+            setReactionPickerMessageId(null);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Failed to update reaction';
+            setChatError(message);
+        } finally {
+            setUpdatingReactionMessageId(null);
+        }
     };
 
     // ─── RENDER ─────────────────────────────────────────
@@ -1548,17 +2048,26 @@ export default function ChatPage() {
                                 </div>
                             </div>
                             <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
-                                {filteredUsers.length === 0 ? (
+                                {searchingUsers && filteredUsers.length === 0 ? (
                                     <div style={{
                                         padding: 40,
                                         textAlign: 'center',
                                         color: 'var(--slate-500)',
                                         fontSize: 14,
                                     }}>
-                                        {allUsers.length === 0 ? 'No other users found.' : 'No users match your search.'}
+                                        Loading users...
+                                    </div>
+                                ) : filteredUsers.length === 0 ? (
+                                    <div style={{
+                                        padding: 40,
+                                        textAlign: 'center',
+                                        color: 'var(--slate-500)',
+                                        fontSize: 14,
+                                    }}>
+                                        {selectableUsers.length === 0 ? 'No other users found.' : 'No users match your search.'}
                                     </div>
                                 ) : (
-                                    filteredUsers.map(u => (
+                                    visibleFilteredUsers.map(u => (
                                         <button
                                             key={u.uid}
                                             onClick={() => handleStartConversation(u)}
@@ -1615,6 +2124,25 @@ export default function ChatPage() {
                                             }} />
                                         </button>
                                     ))
+                                )}
+                                {filteredUsers.length > visibleFilteredUsers.length && (
+                                    <div style={{ padding: '6px 8px 12px' }}>
+                                        <button
+                                            onClick={() => setUserSearchVisibleCount((prev) => prev + 80)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '10px 12px',
+                                                borderRadius: 10,
+                                                border: '1px solid rgba(255,255,255,0.1)',
+                                                background: 'rgba(255,255,255,0.03)',
+                                                color: 'var(--slate-300)',
+                                                fontSize: 12,
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            Load more users ({filteredUsers.length - visibleFilteredUsers.length} remaining)
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -1802,78 +2330,113 @@ export default function ChatPage() {
 
                             {/* User List (selectable) */}
                             <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
-                                {allUsers
-                                    .filter(u =>
-                                        (u.name || '').toLowerCase().includes(groupSearchQuery.toLowerCase()) ||
-                                        (u.email || '').toLowerCase().includes(groupSearchQuery.toLowerCase())
-                                    )
-                                    .map(u => {
-                                        const isSelected = selectedGroupMembers.some(m => m.uid === u.uid);
-                                        return (
-                                            <button
-                                                key={u.uid}
-                                                onClick={() => toggleGroupMember(u)}
-                                                style={{
-                                                    width: '100%',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: 12,
-                                                    padding: '12px 14px',
-                                                    borderRadius: 12,
-                                                    border: 'none',
-                                                    background: isSelected ? 'rgba(16,185,129,0.08)' : 'transparent',
-                                                    cursor: 'pointer',
-                                                    transition: 'background 150ms',
-                                                    textAlign: 'left',
-                                                }}
-                                                onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
-                                                onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
-                                            >
-                                                {u.profileImage ? (
-                                                    <img src={u.profileImage} alt={u.name} style={{
-                                                        width: 40,
-                                                        height: 40,
-                                                        borderRadius: '50%',
-                                                        objectFit: 'cover',
-                                                    }} />
-                                                ) : (
+                                {searchingUsers && filteredGroupUsers.length === 0 ? (
+                                    <div style={{
+                                        padding: 28,
+                                        textAlign: 'center',
+                                        color: 'var(--slate-500)',
+                                        fontSize: 13,
+                                    }}>
+                                        Loading members...
+                                    </div>
+                                ) : filteredGroupUsers.length === 0 ? (
+                                    <div style={{
+                                        padding: 28,
+                                        textAlign: 'center',
+                                        color: 'var(--slate-500)',
+                                        fontSize: 13,
+                                    }}>
+                                        No members found for this search.
+                                    </div>
+                                ) : (
+                                    visibleGroupUsers
+                                        .map(u => {
+                                            const isSelected = selectedGroupMembers.some(m => m.uid === u.uid);
+                                            return (
+                                                <button
+                                                    key={u.uid}
+                                                    onClick={() => toggleGroupMember(u)}
+                                                    style={{
+                                                        width: '100%',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 12,
+                                                        padding: '12px 14px',
+                                                        borderRadius: 12,
+                                                        border: 'none',
+                                                        background: isSelected ? 'rgba(16,185,129,0.08)' : 'transparent',
+                                                        cursor: 'pointer',
+                                                        transition: 'background 150ms',
+                                                        textAlign: 'left',
+                                                    }}
+                                                    onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+                                                    onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+                                                >
+                                                    {u.profileImage ? (
+                                                        <img src={u.profileImage} alt={u.name} style={{
+                                                            width: 40,
+                                                            height: 40,
+                                                            borderRadius: '50%',
+                                                            objectFit: 'cover',
+                                                        }} />
+                                                    ) : (
+                                                        <div style={{
+                                                            width: 40,
+                                                            height: 40,
+                                                            borderRadius: '50%',
+                                                            background: 'linear-gradient(135deg, #10b981, #34d399)',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            fontWeight: 700,
+                                                            fontSize: 16,
+                                                            color: 'white',
+                                                            flexShrink: 0,
+                                                        }}>
+                                                            {(u.name || '?').charAt(0).toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                                        <p style={{ fontSize: 14, fontWeight: 600, color: 'white', margin: 0 }}>{u.name || 'Unknown'}</p>
+                                                        <p style={{ fontSize: 12, color: 'var(--slate-500)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email || ''}</p>
+                                                    </div>
                                                     <div style={{
-                                                        width: 40,
-                                                        height: 40,
-                                                        borderRadius: '50%',
-                                                        background: 'linear-gradient(135deg, #10b981, #34d399)',
+                                                        width: 24,
+                                                        height: 24,
+                                                        borderRadius: 6,
+                                                        border: isSelected ? 'none' : '2px solid rgba(255,255,255,0.15)',
+                                                        background: isSelected ? 'var(--primary-500)' : 'transparent',
                                                         display: 'flex',
                                                         alignItems: 'center',
                                                         justifyContent: 'center',
-                                                        fontWeight: 700,
-                                                        fontSize: 16,
-                                                        color: 'white',
                                                         flexShrink: 0,
+                                                        transition: 'all 150ms',
                                                     }}>
-                                                        {(u.name || '?').charAt(0).toUpperCase()}
+                                                        {isSelected && <Check size={14} style={{ color: 'white' }} />}
                                                     </div>
-                                                )}
-                                                <div style={{ minWidth: 0, flex: 1 }}>
-                                                    <p style={{ fontSize: 14, fontWeight: 600, color: 'white', margin: 0 }}>{u.name || 'Unknown'}</p>
-                                                    <p style={{ fontSize: 12, color: 'var(--slate-500)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email || ''}</p>
-                                                </div>
-                                                <div style={{
-                                                    width: 24,
-                                                    height: 24,
-                                                    borderRadius: 6,
-                                                    border: isSelected ? 'none' : '2px solid rgba(255,255,255,0.15)',
-                                                    background: isSelected ? 'var(--primary-500)' : 'transparent',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    flexShrink: 0,
-                                                    transition: 'all 150ms',
-                                                }}>
-                                                    {isSelected && <Check size={14} style={{ color: 'white' }} />}
-                                                </div>
-                                            </button>
-                                        );
-                                    })}
+                                                </button>
+                                            );
+                                        })
+                                )}
+                                {filteredGroupUsers.length > visibleGroupUsers.length && (
+                                    <div style={{ padding: '6px 8px 12px' }}>
+                                        <button
+                                            onClick={() => setGroupSearchVisibleCount((prev) => prev + 80)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '10px 12px',
+                                                borderRadius: 10,
+                                                border: '1px solid rgba(255,255,255,0.1)',
+                                                background: 'rgba(255,255,255,0.03)',
+                                                color: 'var(--slate-300)',
+                                                fontSize: 12,
+                                                cursor: 'pointer',
+                                            }}
+                                        >
+                                            Load more members ({filteredGroupUsers.length - visibleGroupUsers.length} remaining)
+                                        </button>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Create Button */}
@@ -1972,6 +2535,7 @@ export default function ChatPage() {
                                 const display = getConversationDisplay(conv);
                                 const unread = conv.unreadCount?.[currentUserId] || 0;
                                 const isActive = conv.id === activeConversationId;
+                                const preview = getConversationPreviewMeta(conv);
 
                                 return (
                                     <button
@@ -2083,10 +2647,17 @@ export default function ChatPage() {
                                                     overflow: 'hidden',
                                                     textOverflow: 'ellipsis',
                                                     maxWidth: '80%',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: 6,
                                                 }}>
                                                     {conv.lastMessageSenderId === currentUserId && conv.lastMessage ? 'You: ' : 
                                                      (conv.isGroup && conv.lastMessageSenderId ? `${getSenderName(conv, conv.lastMessageSenderId)}: ` : '')}
-                                                    {conv.lastMessage || 'Start chatting...'}
+                                                    {preview.kind === 'image' && <ImageIcon size={12} style={{ color: 'var(--slate-400)', flexShrink: 0 }} />}
+                                                    {preview.kind === 'file' && <FileText size={12} style={{ color: 'var(--slate-400)', flexShrink: 0 }} />}
+                                                    {preview.kind === 'mixed' && <Paperclip size={12} style={{ color: 'var(--slate-400)', flexShrink: 0 }} />}
+                                                    {preview.kind === 'unsent' && <AlertCircle size={12} style={{ color: 'var(--slate-500)', flexShrink: 0 }} />}
+                                                    {preview.text}
                                                 </span>
                                                 {unread > 0 && (
                                                     <span style={{
@@ -2475,10 +3046,42 @@ export default function ChatPage() {
                                 const isLastInGroup = idx === messages.length - 1 || messages[idx + 1]?.senderId !== msg.senderId;
                                 const isGroup = activeConversation?.isGroup;
                                 const senderDetails = activeConversation?.participantDetails?.[msg.senderId];
+                                const isEditingThisMessage = editingMessageId === msg.id;
+                                const messageTimestampMs = msg.timestamp?.toDate?.()?.getTime?.() || 0;
+                                const canEditByTime = Date.now() - messageTimestampMs <= 10 * 60 * 1000;
+                                const isHistoryExpanded = expandedEditHistoryMessageId === msg.id;
+                                const messageReactionEntries = Object.entries(msg.reactions || {});
+                                const reactionCounts = messageReactionEntries.reduce<Record<string, number>>((acc, [, reactionKey]) => {
+                                    acc[reactionKey] = (acc[reactionKey] || 0) + 1;
+                                    return acc;
+                                }, {});
+                                const totalReactions = messageReactionEntries.length;
+                                const reactionEmojiPreview = reactionOptions
+                                    .filter((reaction) => reactionCounts[reaction.key] > 0)
+                                    .map((reaction) => reaction.emoji)
+                                    .slice(0, 3);
+                                const myReaction = currentUserId ? (msg.reactions?.[currentUserId] || null) : null;
+                                const actionPanelOnLeft = isMine;
+                                const pickerOnRight = !isMine;
+                                const messageImageUrls = msg.imageUrls && msg.imageUrls.length > 0
+                                    ? msg.imageUrls
+                                    : (msg.imageUrl ? [msg.imageUrl] : []);
+                                const messageFileAttachments = msg.fileAttachments && msg.fileAttachments.length > 0
+                                    ? msg.fileAttachments
+                                    : (msg.fileUrl && msg.fileName
+                                        ? [{
+                                            fileUrl: msg.fileUrl,
+                                            fileName: msg.fileName,
+                                            fileSize: msg.fileSize || 0,
+                                            fileType: msg.fileType || 'file',
+                                        }]
+                                        : []);
 
                                 return (
                                     <div
                                         key={msg.id}
+                                        onMouseEnter={() => setHoveredMessageId(msg.id)}
+                                        onMouseLeave={() => setHoveredMessageId(current => (current === msg.id ? null : current))}
                                         style={{
                                             display: 'flex',
                                             alignItems: 'flex-start',
@@ -2522,7 +3125,7 @@ export default function ChatPage() {
                                         })()}
                                         {!isMine && !showAvatar && <div style={{ width: 28, flexShrink: 0 }} />}
 
-                                        <div style={{ maxWidth: '70%' }}>
+                                        <div style={{ maxWidth: '70%', position: 'relative' }}>
                                             {/* Sender name for group chats */}
                                             {isGroup && !isMine && showAvatar && (
                                                 <p style={{
@@ -2536,95 +3139,361 @@ export default function ChatPage() {
                                                 </p>
                                             )}
 
-                                            {/* Image message */}
-                                            {msg.imageUrl && (
+                                            <div style={{
+                                                position: 'relative',
+                                                width: 'fit-content',
+                                                maxWidth: '100%',
+                                                paddingBottom: !msg.isUnsent && totalReactions > 0 ? 18 : 0,
+                                            }}>
+                                            {!msg.isUnsent && !isEditingThisMessage && (
                                                 <div
-                                                    onClick={() => setPreviewImage(msg.imageUrl || null)}
                                                     style={{
-                                                        cursor: 'zoom-in',
-                                                        borderRadius: 16,
-                                                        overflow: 'hidden',
-                                                        marginBottom: msg.text ? 4 : 0,
-                                                        border: `2px solid ${isMine ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                                                        position: 'absolute',
+                                                        [actionPanelOnLeft ? 'right' : 'left']: '100%',
+                                                        top: '50%',
+                                                        [actionPanelOnLeft ? 'marginRight' : 'marginLeft']: 10,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 8,
+                                                        opacity: hoveredMessageId === msg.id ? 1 : 0,
+                                                        pointerEvents: hoveredMessageId === msg.id ? 'auto' : 'none',
+                                                        transform: hoveredMessageId === msg.id
+                                                            ? 'translate(0, -50%)'
+                                                            : (actionPanelOnLeft ? 'translate(6px, -50%)' : 'translate(-6px, -50%)'),
+                                                        transition: 'opacity 150ms ease, transform 150ms ease',
                                                     }}
                                                 >
-                                                    <img
-                                                        src={msg.imageUrl}
-                                                        alt="Shared image"
+                                                    <button
+                                                        onClick={() => setReactionPickerMessageId((current) => (current === msg.id ? null : msg.id))}
                                                         style={{
-                                                            maxWidth: 260,
-                                                            maxHeight: 300,
-                                                            display: 'block',
-                                                            borderRadius: 14,
+                                                            fontSize: 11,
+                                                            color: 'var(--slate-500)',
+                                                            background: 'none',
+                                                            border: 'none',
+                                                            cursor: 'pointer',
+                                                            padding: 0,
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            gap: 4,
+                                                            whiteSpace: 'nowrap',
                                                         }}
-                                                    />
+                                                        title="React"
+                                                    >
+                                                        <Smile size={11} /> React
+                                                    </button>
+                                                    {isMine && msg.text && canEditByTime && (
+                                                        <button
+                                                            onClick={() => startEditMessage(msg)}
+                                                            style={{
+                                                                fontSize: 11,
+                                                                color: 'var(--slate-500)',
+                                                                background: 'none',
+                                                                border: 'none',
+                                                                cursor: 'pointer',
+                                                                padding: 0,
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: 4,
+                                                                whiteSpace: 'nowrap',
+                                                            }}
+                                                        >
+                                                            <Pencil size={11} /> Edit
+                                                        </button>
+                                                    )}
+                                                    {isMine && (
+                                                        <button
+                                                            onClick={() => void handleUnsendMessage(msg)}
+                                                            disabled={unsendingMessageId === msg.id}
+                                                            style={{
+                                                                fontSize: 11,
+                                                                color: '#fca5a5',
+                                                                background: 'none',
+                                                                border: 'none',
+                                                                cursor: unsendingMessageId === msg.id ? 'not-allowed' : 'pointer',
+                                                                padding: 0,
+                                                                display: 'inline-flex',
+                                                                alignItems: 'center',
+                                                                gap: 4,
+                                                                opacity: unsendingMessageId === msg.id ? 0.65 : 1,
+                                                                whiteSpace: 'nowrap',
+                                                            }}
+                                                        >
+                                                            <Trash2 size={11} /> {unsendingMessageId === msg.id ? 'Unsending...' : 'Unsend'}
+                                                        </button>
+                                                    )}
                                                 </div>
                                             )}
 
-                                            {/* File message */}
-                                            {msg.fileUrl && msg.fileName && (
-                                                <a
-                                                    href={msg.fileUrl}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: 10,
-                                                        padding: '10px 14px',
-                                                        borderRadius: 14,
-                                                        background: isMine
-                                                            ? 'rgba(255,255,255,0.12)'
-                                                            : 'rgba(255,255,255,0.06)',
-                                                        border: `1px solid ${isMine ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)'}`,
-                                                        textDecoration: 'none',
-                                                        marginBottom: msg.text ? 4 : 0,
-                                                        maxWidth: 260,
-                                                        cursor: 'pointer',
-                                                        transition: 'all 150ms',
-                                                    }}
-                                                    onMouseEnter={(e) => { e.currentTarget.style.background = isMine ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.1)'; }}
-                                                    onMouseLeave={(e) => { e.currentTarget.style.background = isMine ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)'; }}
-                                                >
-                                                    <div style={{
-                                                        width: 36,
-                                                        height: 36,
-                                                        borderRadius: 8,
-                                                        background: isMine ? 'rgba(255,255,255,0.15)' : 'rgba(16,185,129,0.15)',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        flexShrink: 0,
-                                                    }}>
-                                                        <FileText size={18} style={{ color: isMine ? 'white' : 'var(--primary-400)' }} />
-                                                    </div>
-                                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                                        <p style={{
-                                                            fontSize: 12,
-                                                            fontWeight: 600,
-                                                            color: 'white',
-                                                            margin: 0,
-                                                            overflow: 'hidden',
-                                                            textOverflow: 'ellipsis',
-                                                            whiteSpace: 'nowrap',
-                                                        }}>
-                                                            {msg.fileName}
-                                                        </p>
-                                                        <p style={{
-                                                            fontSize: 10,
-                                                            color: isMine ? 'rgba(255,255,255,0.6)' : 'var(--slate-500)',
-                                                            margin: 0,
-                                                            marginTop: 1,
-                                                        }}>
-                                                            {msg.fileSize ? formatFileSize(msg.fileSize) : ''}{msg.fileType ? ` · ${getFileExtension(msg.fileName!)}` : ''}
-                                                        </p>
-                                                    </div>
-                                                    <Download size={14} style={{ color: isMine ? 'rgba(255,255,255,0.6)' : 'var(--slate-500)', flexShrink: 0 }} />
-                                                </a>
+                                            {reactionPickerMessageId === msg.id && !msg.isUnsent && (
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    [pickerOnRight ? 'left' : 'right']: '100%',
+                                                    top: '50%',
+                                                    [pickerOnRight ? 'marginLeft' : 'marginRight']: 10,
+                                                    transform: 'translateY(calc(-50% + 28px))',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 4,
+                                                    padding: '6px 8px',
+                                                    borderRadius: 999,
+                                                    border: '1px solid rgba(255,255,255,0.14)',
+                                                    background: 'rgba(24,24,27,0.96)',
+                                                    zIndex: 5,
+                                                }}>
+                                                    {reactionOptions.map((reaction) => (
+                                                        <button
+                                                            key={`${msg.id}-${reaction.key}`}
+                                                            onClick={() => void handleReactToMessage(msg, reaction.key)}
+                                                            disabled={updatingReactionMessageId === msg.id}
+                                                            title={reaction.label}
+                                                            style={{
+                                                                width: 28,
+                                                                height: 28,
+                                                                borderRadius: '50%',
+                                                                border: myReaction === reaction.key ? '1px solid rgba(16,185,129,0.6)' : '1px solid rgba(255,255,255,0.08)',
+                                                                background: myReaction === reaction.key ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.04)',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                cursor: updatingReactionMessageId === msg.id ? 'not-allowed' : 'pointer',
+                                                                opacity: updatingReactionMessageId === msg.id ? 0.7 : 1,
+                                                                fontSize: 14,
+                                                                padding: 0,
+                                                            }}
+                                                        >
+                                                            {reaction.emoji}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {/* Stacked image attachments */}
+                                            {messageImageUrls.length > 0 && (
+                                                <div style={{ marginBottom: (messageFileAttachments.length > 0 || msg.text) ? 6 : 0 }}>
+                                                    {messageImageUrls.length > 1 ? (
+                                                        <div style={{ display: 'grid', gap: 6 }}>
+                                                            <p style={{
+                                                                margin: 0,
+                                                                fontSize: 11,
+                                                                color: isMine ? 'rgba(255,255,255,0.75)' : 'var(--slate-500)',
+                                                                textAlign: isMine ? 'right' : 'left',
+                                                                fontWeight: 600,
+                                                            }}>
+                                                                {isMine ? 'You sent' : 'Sent'} {messageImageUrls.length} photo{messageImageUrls.length === 1 ? '' : 's'}
+                                                            </p>
+                                                            <div
+                                                                onClick={() => setPreviewImage({ images: messageImageUrls, index: 0 })}
+                                                                style={{
+                                                                    position: 'relative',
+                                                                    width: 260,
+                                                                    height: 190,
+                                                                    cursor: 'zoom-in',
+                                                                }}
+                                                            >
+                                                                {[...messageImageUrls].slice(0, 3).reverse().map((imageUrl, stackIndex, arr) => {
+                                                                    const visualIndex = arr.length - 1 - stackIndex;
+                                                                    const offset = visualIndex * 10;
+                                                                    const isTop = visualIndex === 0;
+                                                                    return (
+                                                                        <div
+                                                                            key={`${msg.id}-stack-${stackIndex}`}
+                                                                            style={{
+                                                                                position: 'absolute',
+                                                                                inset: 0,
+                                                                                transform: `translateY(${offset}px) scale(${1 - visualIndex * 0.03}) rotate(${isMine ? visualIndex * 1.2 : -visualIndex * 1.2}deg)`,
+                                                                                borderRadius: 16,
+                                                                                overflow: 'hidden',
+                                                                                border: `2px solid ${isMine ? 'rgba(16,185,129,0.35)' : 'rgba(255,255,255,0.1)'}`,
+                                                                                background: '#0b0b0f',
+                                                                                boxShadow: isTop ? '0 8px 20px rgba(0,0,0,0.35)' : '0 3px 10px rgba(0,0,0,0.22)',
+                                                                            }}
+                                                                        >
+                                                                            <img
+                                                                                src={imageUrl}
+                                                                                alt="Shared image"
+                                                                                style={{
+                                                                                    width: '100%',
+                                                                                    height: '100%',
+                                                                                    objectFit: 'cover',
+                                                                                    display: 'block',
+                                                                                }}
+                                                                            />
+                                                                        </div>
+                                                                    );
+                                                                })}
+
+                                                                {messageImageUrls.length > 3 && (
+                                                                    <div style={{
+                                                                        position: 'absolute',
+                                                                        right: 10,
+                                                                        top: 10,
+                                                                        padding: '4px 8px',
+                                                                        borderRadius: 999,
+                                                                        background: 'rgba(0,0,0,0.6)',
+                                                                        color: 'white',
+                                                                        fontSize: 12,
+                                                                        fontWeight: 700,
+                                                                        border: '1px solid rgba(255,255,255,0.16)',
+                                                                    }}>
+                                                                        +{messageImageUrls.length - 3}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div
+                                                            onClick={() => setPreviewImage({ images: messageImageUrls, index: 0 })}
+                                                            style={{
+                                                                cursor: 'zoom-in',
+                                                                borderRadius: 16,
+                                                                overflow: 'hidden',
+                                                                border: `2px solid ${isMine ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                                                                maxWidth: 260,
+                                                            }}
+                                                        >
+                                                            <img
+                                                                src={messageImageUrls[0]}
+                                                                alt="Shared image"
+                                                                style={{
+                                                                    maxWidth: 260,
+                                                                    maxHeight: 300,
+                                                                    display: 'block',
+                                                                    borderRadius: 14,
+                                                                }}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Stacked file attachments */}
+                                            {messageFileAttachments.length > 0 && (
+                                                <div style={{ display: 'grid', gap: 6, marginBottom: msg.text ? 6 : 0 }}>
+                                                    {messageFileAttachments.map((attachment, fileIndex) => (
+                                                        <a
+                                                            key={`${msg.id}-file-${fileIndex}`}
+                                                            href={attachment.fileUrl}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            style={{
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                gap: 10,
+                                                                padding: '10px 14px',
+                                                                borderRadius: 14,
+                                                                background: isMine
+                                                                    ? 'rgba(255,255,255,0.12)'
+                                                                    : 'rgba(255,255,255,0.06)',
+                                                                border: `1px solid ${isMine ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)'}`,
+                                                                textDecoration: 'none',
+                                                                maxWidth: 260,
+                                                                cursor: 'pointer',
+                                                                transition: 'all 150ms',
+                                                            }}
+                                                            onMouseEnter={(e) => { e.currentTarget.style.background = isMine ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.1)'; }}
+                                                            onMouseLeave={(e) => { e.currentTarget.style.background = isMine ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)'; }}
+                                                        >
+                                                            <div style={{
+                                                                width: 36,
+                                                                height: 36,
+                                                                borderRadius: 8,
+                                                                background: isMine ? 'rgba(255,255,255,0.15)' : 'rgba(16,185,129,0.15)',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                flexShrink: 0,
+                                                            }}>
+                                                                <FileText size={18} style={{ color: isMine ? 'white' : 'var(--primary-400)' }} />
+                                                            </div>
+                                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                                <p style={{
+                                                                    fontSize: 12,
+                                                                    fontWeight: 600,
+                                                                    color: 'white',
+                                                                    margin: 0,
+                                                                    overflow: 'hidden',
+                                                                    textOverflow: 'ellipsis',
+                                                                    whiteSpace: 'nowrap',
+                                                                }}>
+                                                                    {attachment.fileName}
+                                                                </p>
+                                                                <p style={{
+                                                                    fontSize: 10,
+                                                                    color: isMine ? 'rgba(255,255,255,0.6)' : 'var(--slate-500)',
+                                                                    margin: 0,
+                                                                    marginTop: 1,
+                                                                }}>
+                                                                    {attachment.fileSize ? formatFileSize(attachment.fileSize) : ''}{attachment.fileType ? ` · ${getFileExtension(attachment.fileName)}` : ''}
+                                                                </p>
+                                                            </div>
+                                                            <Download size={14} style={{ color: isMine ? 'rgba(255,255,255,0.6)' : 'var(--slate-500)', flexShrink: 0 }} />
+                                                        </a>
+                                                    ))}
+                                                </div>
                                             )}
 
                                             {/* Text message */}
-                                            {msg.text && (
+                                            {isEditingThisMessage ? (
+                                                <div style={{ display: 'grid', gap: 8, marginTop: 4 }}>
+                                                    <input
+                                                        value={editingMessageText}
+                                                        onChange={(e) => setEditingMessageText(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                e.preventDefault();
+                                                                void saveEditMessage();
+                                                            }
+                                                            if (e.key === 'Escape') {
+                                                                e.preventDefault();
+                                                                cancelEditMessage();
+                                                            }
+                                                        }}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '8px 12px',
+                                                            borderRadius: 10,
+                                                            border: '1px solid rgba(255,255,255,0.14)',
+                                                            background: 'rgba(255,255,255,0.08)',
+                                                            color: 'white',
+                                                            fontSize: 13,
+                                                            outline: 'none',
+                                                        }}
+                                                        autoFocus
+                                                    />
+                                                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                                                        <button
+                                                            onClick={cancelEditMessage}
+                                                            style={{
+                                                                padding: '4px 8px',
+                                                                borderRadius: 8,
+                                                                border: '1px solid rgba(255,255,255,0.12)',
+                                                                background: 'rgba(255,255,255,0.05)',
+                                                                color: 'var(--slate-300)',
+                                                                fontSize: 11,
+                                                                cursor: 'pointer',
+                                                            }}
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button
+                                                            onClick={() => void saveEditMessage()}
+                                                            disabled={savingMessageEdit || !editingMessageText.trim()}
+                                                            style={{
+                                                                padding: '4px 8px',
+                                                                borderRadius: 8,
+                                                                border: 'none',
+                                                                background: 'var(--primary-500)',
+                                                                color: 'white',
+                                                                fontSize: 11,
+                                                                cursor: savingMessageEdit ? 'not-allowed' : 'pointer',
+                                                                opacity: savingMessageEdit ? 0.7 : 1,
+                                                            }}
+                                                        >
+                                                            {savingMessageEdit ? 'Saving...' : 'Save'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : msg.text && (
                                                 <div style={{
                                                     padding: '10px 16px',
                                                     borderRadius: isMine
@@ -2637,8 +3506,106 @@ export default function ChatPage() {
                                                     fontSize: 14,
                                                     lineHeight: 1.5,
                                                     wordBreak: 'break-word',
+                                                    fontStyle: msg.isUnsent ? 'italic' : 'normal',
+                                                    opacity: msg.isUnsent ? 0.82 : 1,
                                                 }}>
                                                     {msg.text}
+                                                </div>
+                                            )}
+
+                                            {!msg.isUnsent && totalReactions > 0 && (
+                                                <button
+                                                    onClick={() => setReactionPickerMessageId((current) => (current === msg.id ? null : msg.id))}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        right: 6,
+                                                        bottom: 6,
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 4,
+                                                        padding: '2px 7px',
+                                                        borderRadius: 999,
+                                                        border: myReaction ? '1px solid rgba(16,185,129,0.5)' : '1px solid rgba(255,255,255,0.14)',
+                                                        background: 'rgba(24,24,27,0.96)',
+                                                        color: 'white',
+                                                        fontSize: 11,
+                                                        cursor: 'pointer',
+                                                        zIndex: 3,
+                                                    }}
+                                                    title="View reactions"
+                                                >
+                                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, lineHeight: 1 }}>
+                                                        {reactionEmojiPreview.map((emoji, reactionIdx) => (
+                                                            <span
+                                                                key={`${msg.id}-chip-emoji-${reactionIdx}`}
+                                                                style={{ fontSize: 13, marginLeft: reactionIdx === 0 ? 0 : -2 }}
+                                                            >
+                                                                {emoji}
+                                                            </span>
+                                                        ))}
+                                                    </span>
+                                                    {totalReactions > 1 && <span style={{ fontSize: 11 }}>{totalReactions}</span>}
+                                                </button>
+                                            )}
+
+                                            </div>
+
+                                            {msg.editedAt && !msg.isUnsent && !isEditingThisMessage && (
+                                                <div style={{
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: isMine ? 'flex-end' : 'flex-start',
+                                                    marginTop: 4,
+                                                    paddingLeft: isMine ? 0 : 4,
+                                                    paddingRight: isMine ? 4 : 0,
+                                                }}>
+                                                    <button
+                                                        onClick={() => toggleEditHistoryInline(msg.id)}
+                                                        style={{
+                                                            fontSize: 10,
+                                                            color: 'var(--slate-500)',
+                                                            background: 'none',
+                                                            border: 'none',
+                                                            cursor: 'pointer',
+                                                            padding: 0,
+                                                            textDecoration: 'underline',
+                                                            textUnderlineOffset: 2,
+                                                        }}
+                                                        title="View edit history"
+                                                    >
+                                                        {isHistoryExpanded ? 'Hide edits' : 'Edited'}
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {isHistoryExpanded && !msg.isUnsent && (
+                                                <div style={{
+                                                    marginTop: 6,
+                                                    display: 'grid',
+                                                    gap: 6,
+                                                    justifyItems: isMine ? 'end' : 'start',
+                                                }}>
+                                                    {Array.isArray(msg.editHistory) && msg.editHistory.length > 0 ? (
+                                                        [...msg.editHistory].reverse().map((item, index) => (
+                                                            <div key={`${msg.id}-inline-history-${index}`} style={{
+                                                                width: 'fit-content',
+                                                                maxWidth: 300,
+                                                                borderRadius: 12,
+                                                                border: '1px solid rgba(255,255,255,0.1)',
+                                                                background: 'rgba(255,255,255,0.03)',
+                                                                padding: '8px 12px',
+                                                            }}>
+                                                                <p style={{ margin: 0, fontSize: 10, color: 'var(--slate-500)', fontWeight: 600 }}>
+                                                                    Previous version {msg.editHistory ? msg.editHistory.length - index : ''}
+                                                                </p>
+                                                                <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--slate-300)', whiteSpace: 'pre-wrap' }}>
+                                                                    {item.text}
+                                                                </p>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <p style={{ margin: 0, fontSize: 11, color: 'var(--slate-500)' }}>No previous versions recorded.</p>
+                                                    )}
                                                 </div>
                                             )}
 
@@ -2851,81 +3818,88 @@ export default function ChatPage() {
                                     ))}
                                 </div>
                                 <div style={{ fontSize: 11, color: 'var(--slate-500)', marginTop: 6 }}>
-                                    {pendingImages.length} image{pendingImages.length !== 1 ? 's' : ''} selected — hover to edit/crop, press Send when ready
+                                    {pendingImages.length} image{pendingImages.length !== 1 ? 's' : ''} selected — {uploadHdImages ? 'HD mode: original quality' : 'Standard mode: compressed'}
                                 </div>
                             </div>
                         )}
 
                         {/* Pending file preview */}
-                        {pendingFile && (
+                        {pendingFiles.length > 0 && (
                             <div style={{
                                 padding: '10px 16px 4px',
                                 borderTop: '1px solid rgba(255,255,255,0.06)',
                                 background: 'var(--slate-950)',
                                 flexShrink: 0,
                             }}>
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 10,
-                                    padding: '10px 12px',
-                                    borderRadius: 10,
-                                    background: 'rgba(16,185,129,0.08)',
-                                    border: '1px solid rgba(16,185,129,0.2)',
-                                }}>
-                                    <div style={{
-                                        width: 36,
-                                        height: 36,
-                                        borderRadius: 8,
-                                        background: 'rgba(16,185,129,0.15)',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        flexShrink: 0,
-                                    }}>
-                                        <FileText size={18} style={{ color: 'var(--primary-400)' }} />
-                                    </div>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        <p style={{
-                                            fontSize: 12,
-                                            fontWeight: 600,
-                                            color: 'white',
-                                            margin: 0,
-                                            overflow: 'hidden',
-                                            textOverflow: 'ellipsis',
-                                            whiteSpace: 'nowrap',
-                                        }}>
-                                            {pendingFile.name}
-                                        </p>
-                                        <p style={{ fontSize: 10, color: 'var(--slate-500)', margin: 0, marginTop: 1 }}>
-                                            {formatFileSize(pendingFile.size)} · {getFileExtension(pendingFile.name)}
-                                        </p>
-                                    </div>
-                                    <button
-                                        onClick={() => setPendingFile(null)}
-                                        style={{
-                                            width: 24,
-                                            height: 24,
-                                            borderRadius: '50%',
-                                            background: 'rgba(239,68,68,0.15)',
-                                            border: 'none',
-                                            color: '#f87171',
-                                            cursor: 'pointer',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            flexShrink: 0,
-                                            transition: 'all 150ms',
-                                        }}
-                                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.3)'; }}
-                                        onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.15)'; }}
-                                        title="Remove file"
-                                    >
-                                        <X size={12} />
-                                    </button>
+                                <div style={{ display: 'grid', gap: 6 }}>
+                                    {pendingFiles.map((pendingFile, fileIndex) => (
+                                        <div
+                                            key={`${pendingFile.name}-${pendingFile.size}-${fileIndex}`}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: 10,
+                                                padding: '10px 12px',
+                                                borderRadius: 10,
+                                                background: 'rgba(16,185,129,0.08)',
+                                                border: '1px solid rgba(16,185,129,0.2)',
+                                            }}
+                                        >
+                                            <div style={{
+                                                width: 36,
+                                                height: 36,
+                                                borderRadius: 8,
+                                                background: 'rgba(16,185,129,0.15)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                flexShrink: 0,
+                                            }}>
+                                                <FileText size={18} style={{ color: 'var(--primary-400)' }} />
+                                            </div>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <p style={{
+                                                    fontSize: 12,
+                                                    fontWeight: 600,
+                                                    color: 'white',
+                                                    margin: 0,
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis',
+                                                    whiteSpace: 'nowrap',
+                                                }}>
+                                                    {pendingFile.name}
+                                                </p>
+                                                <p style={{ fontSize: 10, color: 'var(--slate-500)', margin: 0, marginTop: 1 }}>
+                                                    {formatFileSize(pendingFile.size)} · {getFileExtension(pendingFile.name)}
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={() => removePendingFile(fileIndex)}
+                                                style={{
+                                                    width: 24,
+                                                    height: 24,
+                                                    borderRadius: '50%',
+                                                    background: 'rgba(239,68,68,0.15)',
+                                                    border: 'none',
+                                                    color: '#f87171',
+                                                    cursor: 'pointer',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    flexShrink: 0,
+                                                    transition: 'all 150ms',
+                                                }}
+                                                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.3)'; }}
+                                                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.15)'; }}
+                                                title="Remove file"
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        </div>
+                                    ))}
                                 </div>
                                 <div style={{ fontSize: 11, color: 'var(--slate-500)', marginTop: 6 }}>
-                                    File attached — press Send when ready
+                                    {pendingFiles.length} file{pendingFiles.length !== 1 ? 's' : ''} attached — press Send when ready
                                 </div>
                             </div>
                         )}
@@ -2933,7 +3907,7 @@ export default function ChatPage() {
                         {/* Message input */}
                         <div style={{
                             padding: '12px 16px',
-                            borderTop: (pendingImages.length > 0 || pendingFile) ? 'none' : '1px solid rgba(255,255,255,0.06)',
+                            borderTop: (pendingImages.length > 0 || pendingFiles.length > 0) ? 'none' : '1px solid rgba(255,255,255,0.06)',
                             display: 'flex',
                             alignItems: 'center',
                             gap: 8,
@@ -2951,6 +3925,7 @@ export default function ChatPage() {
                             <input
                                 type="file"
                                 ref={attachFileInputRef}
+                                multiple
                                 onChange={handleFileAttach}
                                 style={{ display: 'none' }}
                             />
@@ -2962,9 +3937,9 @@ export default function ChatPage() {
                                     width: 40,
                                     height: 40,
                                     borderRadius: 10,
-                                    border: `1px solid ${pendingFile ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.08)'}`,
-                                    background: pendingFile ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.04)',
-                                    color: pendingFile ? 'var(--primary-400)' : (uploading ? 'var(--primary-400)' : 'var(--slate-400)'),
+                                    border: `1px solid ${pendingFiles.length > 0 ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                                    background: pendingFiles.length > 0 ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.04)',
+                                    color: pendingFiles.length > 0 ? 'var(--primary-400)' : (uploading ? 'var(--primary-400)' : 'var(--slate-400)'),
                                     cursor: uploading ? 'not-allowed' : 'pointer',
                                     display: 'flex',
                                     alignItems: 'center',
@@ -2973,7 +3948,7 @@ export default function ChatPage() {
                                     transition: 'all 150ms',
                                 }}
                                 onMouseEnter={(e) => { if (!uploading) e.currentTarget.style.color = 'var(--primary-400)'; }}
-                                onMouseLeave={(e) => { if (!uploading && !pendingFile) e.currentTarget.style.color = 'var(--slate-400)'; }}
+                                onMouseLeave={(e) => { if (!uploading && pendingFiles.length === 0) e.currentTarget.style.color = 'var(--slate-400)'; }}
                             >
                                 <Paperclip size={18} />
                             </button>
@@ -3013,6 +3988,27 @@ export default function ChatPage() {
                                 )}
                             </button>
 
+                            <button
+                                onClick={() => setUploadHdImages((prev) => !prev)}
+                                disabled={uploading}
+                                title={uploadHdImages ? 'HD uploads enabled (original quality)' : 'Standard uploads enabled (compressed)'}
+                                style={{
+                                    height: 34,
+                                    minWidth: 46,
+                                    padding: '0 10px',
+                                    borderRadius: 9,
+                                    border: uploadHdImages ? '1px solid rgba(16,185,129,0.35)' : '1px solid rgba(255,255,255,0.08)',
+                                    background: uploadHdImages ? 'rgba(16,185,129,0.14)' : 'rgba(255,255,255,0.04)',
+                                    color: uploadHdImages ? 'var(--primary-300)' : 'var(--slate-400)',
+                                    cursor: uploading ? 'not-allowed' : 'pointer',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    flexShrink: 0,
+                                }}
+                            >
+                                HD
+                            </button>
+
                             <input
                                 ref={messageInputRef}
                                 type="text"
@@ -3022,6 +4018,7 @@ export default function ChatPage() {
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter' && !e.shiftKey) {
                                         e.preventDefault();
+                                        if (sending || uploading || sendInFlightRef.current) return;
                                         handleSendMessage();
                                     }
                                 }}
@@ -3039,22 +4036,22 @@ export default function ChatPage() {
 
                             <button
                                 onClick={handleSendMessage}
-                                disabled={(!messageText.trim() && pendingImages.length === 0 && !pendingFile) || sending || uploading}
+                                disabled={(!messageText.trim() && pendingImages.length === 0 && pendingFiles.length === 0) || sending || uploading || sendInFlightRef.current}
                                 title="Send"
                                 style={{
                                     width: 40,
                                     height: 40,
                                     borderRadius: 10,
-                                    background: (messageText.trim() || pendingImages.length > 0 || pendingFile) ? 'var(--primary-500)' : 'rgba(255,255,255,0.04)',
-                                    border: (messageText.trim() || pendingImages.length > 0 || pendingFile) ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                                    background: (messageText.trim() || pendingImages.length > 0 || pendingFiles.length > 0) ? 'var(--primary-500)' : 'rgba(255,255,255,0.04)',
+                                    border: (messageText.trim() || pendingImages.length > 0 || pendingFiles.length > 0) ? 'none' : '1px solid rgba(255,255,255,0.08)',
                                     color: 'white',
-                                    cursor: (messageText.trim() || pendingImages.length > 0 || pendingFile) && !sending && !uploading ? 'pointer' : 'not-allowed',
+                                    cursor: (messageText.trim() || pendingImages.length > 0 || pendingFiles.length > 0) && !sending && !uploading ? 'pointer' : 'not-allowed',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     flexShrink: 0,
                                     transition: 'all 150ms',
-                                    opacity: (messageText.trim() || pendingImages.length > 0 || pendingFile) ? 1 : 0.5,
+                                    opacity: (messageText.trim() || pendingImages.length > 0 || pendingFiles.length > 0) ? 1 : 0.5,
                                 }}
                             >
                                 {(sending || uploading) ? (
@@ -3188,10 +4185,10 @@ export default function ChatPage() {
                                     gridTemplateColumns: 'repeat(3, 1fr)',
                                     gap: 4,
                                 }}>
-                                    {galleryImages.map(img => (
+                                    {galleryImages.map((img, index) => (
                                         <div
                                             key={img.id}
-                                            onClick={() => setPreviewImage(img.url)}
+                                            onClick={() => setPreviewImage({ images: galleryImages.map((item) => item.url), index })}
                                             style={{
                                                 aspectRatio: '1',
                                                 borderRadius: 8,
@@ -3366,7 +4363,98 @@ export default function ChatPage() {
                 <ProfileModal chatUser={selectedProfile} onClose={() => setSelectedProfile(null)} />
             )}
             {previewImage && (
-                <ImagePreviewModal url={previewImage} onClose={() => setPreviewImage(null)} />
+                <ImagePreviewModal
+                    images={previewImage.images}
+                    initialIndex={previewImage.index}
+                    onClose={() => setPreviewImage(null)}
+                />
+            )}
+
+            {showUnsendConfirmModal && (
+                <div
+                    onClick={cancelUnsendConfirmation}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(0,0,0,0.6)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                        zIndex: 1000,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 24,
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            background: 'var(--slate-900)',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: 14,
+                            width: '100%',
+                            maxWidth: 420,
+                            padding: 16,
+                        }}
+                    >
+                        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'white' }}>Unsend message?</h3>
+                        <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--slate-400)' }}>
+                            This will remove the message for everyone in the conversation.
+                        </p>
+
+                        <label style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            marginTop: 14,
+                            color: 'var(--slate-300)',
+                            fontSize: 12,
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                        }}>
+                            <input
+                                type="checkbox"
+                                checked={rememberUnsendChoice}
+                                onChange={(e) => setRememberUnsendChoice(e.target.checked)}
+                                style={{ accentColor: 'var(--primary-500)' }}
+                            />
+                            Remember my choice until refresh
+                        </label>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                            <button
+                                onClick={cancelUnsendConfirmation}
+                                style={{
+                                    padding: '6px 10px',
+                                    borderRadius: 8,
+                                    border: '1px solid rgba(255,255,255,0.12)',
+                                    background: 'rgba(255,255,255,0.05)',
+                                    color: 'var(--slate-300)',
+                                    fontSize: 12,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => void confirmUnsendMessage()}
+                                disabled={!pendingUnsendMessage || unsendingMessageId === pendingUnsendMessage.id}
+                                style={{
+                                    padding: '6px 10px',
+                                    borderRadius: 8,
+                                    border: 'none',
+                                    background: '#dc2626',
+                                    color: 'white',
+                                    fontSize: 12,
+                                    cursor: !pendingUnsendMessage || unsendingMessageId === pendingUnsendMessage.id ? 'not-allowed' : 'pointer',
+                                    opacity: !pendingUnsendMessage || unsendingMessageId === pendingUnsendMessage.id ? 0.7 : 1,
+                                }}
+                            >
+                                {pendingUnsendMessage && unsendingMessageId === pendingUnsendMessage.id ? 'Unsending...' : 'Unsend'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* Image Editor Modal */}
@@ -3437,7 +4525,7 @@ export default function ChatPage() {
                             {/* For group chats with no specific target, show all members */}
                             {activeConversation.isGroup && !nicknameTarget ? (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                    {activeConversation.participants.map(uid => {
+                                    {Array.from(new Set(activeConversation.participants)).map(uid => {
                                         const details = activeConversation.participantDetails?.[uid];
                                         const currentNickname = activeConversation.nicknames?.[uid] || '';
                                         const isMe = uid === currentUserId;
@@ -3612,7 +4700,7 @@ export default function ChatPage() {
                         }}>
                             <h3 style={{ fontSize: 16, fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <Users size={16} style={{ color: 'var(--primary-400)' }} />
-                                Group Members ({activeConversation.participants.length})
+                                Group Members ({Array.from(new Set(activeConversation.participants)).length})
                             </h3>
                             <button
                                 onClick={() => { setShowMembersModal(false); setKickingUid(null); }}
@@ -3624,7 +4712,7 @@ export default function ChatPage() {
 
                         <div style={{ padding: '12px 20px', maxHeight: '50vh', overflowY: 'auto' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                {activeConversation.participants.map(uid => {
+                                {Array.from(new Set(activeConversation.participants)).map(uid => {
                                     const details = activeConversation.participantDetails?.[uid];
                                     const isMe = uid === currentUserId;
                                     const isCreator = uid === activeConversation.createdBy;
@@ -3636,7 +4724,7 @@ export default function ChatPage() {
                                             display: 'flex',
                                             alignItems: 'center',
                                             gap: 10,
-                                            padding: '10px 14px',
+                                            padding: '9px 10px 9px 12px',
                                             borderRadius: 12,
                                             background: isCreator ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.03)',
                                             border: `1px solid ${isCreator ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.06)'}`,
@@ -3655,7 +4743,23 @@ export default function ChatPage() {
                                                     {(details?.name || '?').charAt(0).toUpperCase()}
                                                 </div>
                                             )}
-                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                            <button
+                                                onClick={() => {
+                                                    setShowMembersModal(false);
+                                                    setKickingUid(null);
+                                                    void handleViewProfile(uid);
+                                                }}
+                                                style={{
+                                                    flex: 1,
+                                                    minWidth: 0,
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    padding: 0,
+                                                    textAlign: 'left',
+                                                    cursor: 'pointer',
+                                                }}
+                                                title={isMe ? 'View your profile' : `View ${(details?.name || 'member')}'s profile`}
+                                            >
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                                     <p style={{
                                                         fontSize: 13, fontWeight: 600, color: 'white', margin: 0,
@@ -3681,13 +4785,60 @@ export default function ChatPage() {
                                                         {details.name}
                                                     </p>
                                                 )}
-                                                <p style={{ fontSize: 11, color: 'var(--slate-600)', margin: 0 }}>
-                                                    {details?.email || ''}
-                                                </p>
-                                            </div>
-                                            {iAmCreator && !isMe && (
-                                                kickingUid === uid ? (
-                                                    <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                                                {details?.email && (
+                                                    <p style={{
+                                                        fontSize: 11,
+                                                        color: 'var(--slate-600)',
+                                                        margin: 0,
+                                                        whiteSpace: 'nowrap',
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis',
+                                                    }}>
+                                                        {details.email}
+                                                    </p>
+                                                )}
+                                            </button>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                                <button
+                                                    onClick={() => {
+                                                        setShowMembersModal(false);
+                                                        setKickingUid(null);
+                                                        void handleViewProfile(uid);
+                                                    }}
+                                                    title={isMe ? 'View your profile' : `View ${(details?.name || 'member')}'s profile`}
+                                                    style={{
+                                                        height: 30,
+                                                        padding: '0 10px',
+                                                        borderRadius: 8,
+                                                        border: '1px solid rgba(255,255,255,0.1)',
+                                                        background: 'rgba(255,255,255,0.04)',
+                                                        color: 'var(--slate-300)',
+                                                        cursor: 'pointer',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        gap: 5,
+                                                        fontSize: 11,
+                                                        fontWeight: 600,
+                                                        transition: 'all 150ms',
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                        e.currentTarget.style.background = 'rgba(16,185,129,0.12)';
+                                                        e.currentTarget.style.borderColor = 'rgba(16,185,129,0.28)';
+                                                        e.currentTarget.style.color = 'var(--primary-300)';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                        e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                                                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+                                                        e.currentTarget.style.color = 'var(--slate-300)';
+                                                    }}
+                                                >
+                                                    <ExternalLink size={12} /> View
+                                                </button>
+
+                                                {iAmCreator && !isMe && (
+                                                    kickingUid === uid ? (
+                                                        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
                                                         <button
                                                             onClick={async () => {
                                                                 const endGlobalLoading = beginGlobalLoading();
@@ -3728,27 +4879,28 @@ export default function ChatPage() {
                                                             Cancel
                                                         </button>
                                                     </div>
-                                                ) : (
-                                                    <button
-                                                        onClick={() => setKickingUid(uid)}
-                                                        title={`Remove ${details?.name || 'member'}`}
-                                                        style={{
-                                                            width: 30, height: 30, borderRadius: 8,
-                                                            background: 'rgba(239,68,68,0.08)',
-                                                            border: '1px solid rgba(239,68,68,0.15)',
-                                                            color: '#f87171',
-                                                            cursor: 'pointer',
-                                                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                            flexShrink: 0,
-                                                            transition: 'all 150ms',
-                                                        }}
-                                                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.4)'; }}
-                                                        onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.15)'; }}
-                                                    >
-                                                        <UserMinus size={14} />
-                                                    </button>
-                                                )
-                                            )}
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => setKickingUid(uid)}
+                                                            title={`Remove ${details?.name || 'member'}`}
+                                                            style={{
+                                                                width: 30, height: 30, borderRadius: 8,
+                                                                background: 'rgba(239,68,68,0.08)',
+                                                                border: '1px solid rgba(239,68,68,0.15)',
+                                                                color: '#f87171',
+                                                                cursor: 'pointer',
+                                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                                flexShrink: 0,
+                                                                transition: 'all 150ms',
+                                                            }}
+                                                            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.4)'; }}
+                                                            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.15)'; }}
+                                                        >
+                                                            <UserMinus size={14} />
+                                                        </button>
+                                                    )
+                                                )}
+                                            </div>
                                         </div>
                                     );
                                 })}
