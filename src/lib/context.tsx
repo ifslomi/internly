@@ -284,6 +284,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return () => unsubscribe();
     }, [refreshData]);
 
+    // Keep chat directory in sync for authenticated sessions so newly registered users
+    // appear in New Conversation without requiring a profile edit.
+    useEffect(() => {
+        const firebaseUser = auth.currentUser;
+        if (!firebaseUser || !user) return;
+
+        const fallbackName = (firebaseUser.email || 'User').split('@')[0] || 'User';
+        void upsertChatUser({
+            uid: firebaseUser.uid,
+            name: user.name || firebaseUser.displayName || fallbackName,
+            email: (user.email || firebaseUser.email || '').trim().toLowerCase(),
+            profileImage: user.profileImage,
+            online: true,
+        }).catch((err) => {
+            console.error('[Context] Failed to sync chat directory profile:', err);
+        });
+    }, [user?.id, user?.name, user?.email, user?.profileImage]);
+
     // ─── Sign Up ────────────────────────────────────────
     const handleSignUp = async (name: string, email: string, password: string, hours: number, startDate: string, role?: string) => {
         if (role !== 'dean' && !isUbEmail(email)) {
