@@ -4120,7 +4120,7 @@ export default function ChatPage() {
                                             bottom: 'calc(100% + 8px)',
                                             borderRadius: 12,
                                             border: '1px solid rgba(255,255,255,0.1)',
-                                            background: 'rgba(15,23,42,0.96)',
+                                            background: 'rgba(24,24,27,0.96)',
                                             boxShadow: '0 12px 28px rgba(0,0,0,0.4)',
                                             overflow: 'hidden',
                                             zIndex: 50,
