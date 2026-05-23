@@ -15,7 +15,10 @@ const firebaseConfig = {
 // Initialize Firebase (prevent duplicate initialization)
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
-export const auth = getAuth(app);
+// Avoid evaluating Auth during server prerender/build where env may be unavailable.
+export const auth = typeof window === 'undefined'
+  ? (null as unknown as ReturnType<typeof getAuth>)
+  : getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
   hd: 'ub.edu.ph',
