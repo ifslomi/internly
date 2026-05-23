@@ -159,7 +159,7 @@ export default function LoginPage() {
                 message: 'Your browser blocked opening a new tab. Allow popups/new tabs for this site, then try UB Mail again.',
             });
             reservedFallbackTabRef.current = null;
-            return;
+            return false;
         }
 
         try {
@@ -171,7 +171,7 @@ export default function LoginPage() {
                 message: 'Could not start fallback sign-in in the new tab. Please try UB Mail again.',
             });
             reservedFallbackTabRef.current = null;
-            return;
+            return false;
         }
 
         showToast({
@@ -183,6 +183,7 @@ export default function LoginPage() {
         setShowUbPopupModal(false);
         setGoogleLoading(false);
         stopRouteLoading();
+        return true;
     };
 
     const switchAuthMode = (nextMode: AuthMode) => {
@@ -722,12 +723,25 @@ export default function LoginPage() {
                                                 firebaseErr.code === 'auth/cancelled-popup-request'
                                             )
                                         ) {
-                                            openUbFallbackTab();
+                                            const opened = openUbFallbackTab();
+                                            if (!opened) {
+                                                setUbPopupTimedOut(true);
+                                                setShowUbPopupModal(true);
+                                            }
                                         }
                                         if (mode === 'login') {
                                             stopRouteLoading();
                                         }
-                                        setShowUbPopupModal(false);
+                                        if (
+                                            mode !== 'login' ||
+                                            (
+                                                firebaseErr.code !== 'auth/popup-blocked' &&
+                                                firebaseErr.code !== 'auth/popup-closed-by-user' &&
+                                                firebaseErr.code !== 'auth/cancelled-popup-request'
+                                            )
+                                        ) {
+                                            setShowUbPopupModal(false);
+                                        }
                                     } finally {
                                         if (mode !== 'login') {
                                             closeReservedFallbackTab();
@@ -938,22 +952,38 @@ export default function LoginPage() {
                                 : 'Signing in with UB Mail. Please complete sign-in in the popup window.'}
                         </p>
                         {ubPopupTimedOut && (
-                            <button
-                                type="button"
-                                onClick={openUbFallbackTab}
-                                style={{
-                                    border: '1px solid rgba(255,255,255,0.2)',
-                                    background: 'rgba(255,255,255,0.08)',
-                                    color: 'white',
-                                    borderRadius: 10,
-                                    padding: '10px 14px',
-                                    fontSize: 13,
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                }}
-                            >
-                                Open sign-in in new tab
-                            </button>
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={openUbFallbackTab}
+                                    style={{
+                                        border: '1px solid rgba(255,255,255,0.2)',
+                                        background: 'rgba(255,255,255,0.08)',
+                                        color: 'white',
+                                        borderRadius: 10,
+                                        padding: '10px 14px',
+                                        fontSize: 13,
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    Open sign-in in new tab
+                                </button>
+                                <a
+                                    href="/login?ubFlow=redirect"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                        color: 'var(--primary-300)',
+                                        fontSize: 13,
+                                        fontWeight: 600,
+                                        textDecoration: 'underline',
+                                        textUnderlineOffset: 3,
+                                    }}
+                                >
+                                    Open fallback in a new tab manually
+                                </a>
+                            </>
                         )}
                     </div>
                 </div>,

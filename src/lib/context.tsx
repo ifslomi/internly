@@ -33,7 +33,7 @@ import {
     updateSanctionRenderStatus,
 } from './firestore';
 import { upsertChatUser, syncChatUserProfileInConversations } from './chat';
-import { auth } from './firebase';
+import { auth, googleProvider } from './firebase';
 import { beginGlobalLoading } from './global-loading';
 
 interface AppContextType {
@@ -525,8 +525,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // ─── Google Sign-Up ─────────────────────────────────
     const handleSignUpWithGoogle = async (password: string, role?: string) => {
-        const { signInWithPopup } = await import('firebase/auth');
-        const { googleProvider } = await import('./firebase');
         const result = await signInWithPopup(auth, googleProvider);
         const firebaseUser = result.user;
         const name = firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User';
@@ -620,8 +618,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // ─── Google Login ───────────────────────────────────
     const handleLoginWithGoogle = async (options?: { preferRedirect?: boolean }) => {
-        const { googleProvider } = await import('./firebase');
-
         if (options?.preferRedirect) {
             await signInWithRedirect(auth, googleProvider);
             return;
