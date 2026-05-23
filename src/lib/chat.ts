@@ -13,6 +13,7 @@ import {
     Timestamp,
     updateDoc,
     arrayRemove,
+    arrayUnion,
     limit,
     increment,
     writeBatch,
@@ -901,6 +902,55 @@ export async function kickGroupMember(
     // Update last message
     await updateDoc(convRef, {
         lastMessage: `${kickedName} was removed from the group`,
+        lastMessageTime: serverTimestamp(),
+        lastMessageSenderId: null,
+    });
+}
+
+export async function addGroupMember(
+    conversationId: string,
+    member: ChatUser,
+): Promise<void> {
+    const effectiveUid = auth.currentUser?.uid;
+    if (!effectiveUid) throw new Error('Not authenticated');
+    if (!member?.uid) throw new Error('Member is required');
+
+    const convRef = doc(db, 'conversations', conversationId);
+    const convSnap = await getDoc(convRef);
+    if (!convSnap.exists()) throw new Error('Conversation not found');
+
+    const data = convSnap.data();
+    if (!data.isGroup) throw new Error('Can only add members to group chats');
+    if (data.createdBy !== effectiveUid) {
+        throw new Error('Only the group creator can add members');
+    }
+    if (data.participants?.includes(member.uid)) {
+        throw new Error('User is already in this group');
+    }
+
+    await updateDoc(convRef, {
+        participants: arrayUnion(member.uid),
+        [`participantDetails.${member.uid}`]: {
+            name: member.name || 'Unknown',
+            email: member.email || '',
+            profileImage: member.profileImage || null,
+        },
+        [`unreadCount.${member.uid}`]: 0,
+    });
+
+    const addedName = member.name || 'A member';
+    await addDoc(collection(db, 'conversations', conversationId, 'messages'), {
+        senderId: 'system',
+        text: `${addedName} was added to the group`,
+        imageUrl: null,
+        timestamp: serverTimestamp(),
+        read: true,
+        status: 'seen',
+        readBy: {},
+    });
+
+    await updateDoc(convRef, {
+        lastMessage: `${addedName} was added to the group`,
         lastMessageTime: serverTimestamp(),
         lastMessageSenderId: null,
     });

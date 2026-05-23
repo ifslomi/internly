@@ -23,6 +23,7 @@ import {
     setNickname,
     setTypingStatus,
     kickGroupMember,
+    addGroupMember,
     editChatMessage,
     unsendChatMessage,
     setMessageReaction,
@@ -866,6 +867,11 @@ export default function ChatPage() {
     const [savingNickname, setSavingNickname] = useState(false);
     const [showMembersModal, setShowMembersModal] = useState(false);
     const [kickingUid, setKickingUid] = useState<string | null>(null);
+    const [showAddMembersPanel, setShowAddMembersPanel] = useState(false);
+    const [addMemberSearchQuery, setAddMemberSearchQuery] = useState('');
+    const [addMemberResults, setAddMemberResults] = useState<ChatUser[]>([]);
+    const [loadingAddMemberResults, setLoadingAddMemberResults] = useState(false);
+    const [addingMemberUid, setAddingMemberUid] = useState<string | null>(null);
     const [showMediaGallery, setShowMediaGallery] = useState(false);
     const [mediaTab, setMediaTab] = useState<'images' | 'files' | 'links'>('images');
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -897,7 +903,7 @@ export default function ChatPage() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const attachFileInputRef = useRef<HTMLInputElement>(null);
-    const messageInputRef = useRef<HTMLInputElement>(null);
+    const messageInputRef = useRef<HTMLTextAreaElement>(null);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const isTypingRef = useRef(false);
     const lastTypingWriteRef = useRef<number>(0);
@@ -926,6 +932,30 @@ export default function ChatPage() {
         const nickname = conv.nicknames?.[uid];
         if (nickname) return nickname;
         return conv.participantDetails?.[uid]?.name || 'Unknown';
+    }, []);
+
+    const getParticipantMeta = useCallback((conv: Conversation, uid: string) => {
+        const details = conv.participantDetails?.[uid];
+        const nickname = (conv.nicknames?.[uid] || '').trim();
+        const actualName = (details?.name || 'Unknown').trim() || 'Unknown';
+        const baseDisplayName = nickname || actualName;
+        return {
+            uid,
+            displayName: uid === currentUserId ? `${baseDisplayName} (You)` : baseDisplayName,
+            subtitle: nickname && actualName && nickname !== actualName
+                ? actualName
+                : (uid === currentUserId ? 'You' : (details?.email || '')),
+            profileImage: details?.profileImage,
+        };
+    }, [currentUserId]);
+
+    const closeMembersModal = useCallback(() => {
+        setShowMembersModal(false);
+        setKickingUid(null);
+        setShowAddMembersPanel(false);
+        setAddMemberSearchQuery('');
+        setAddMemberResults([]);
+        setAddingMemberUid(null);
     }, []);
 
     // Get the other user from a conversation (for 1:1 chats)
@@ -1022,6 +1052,40 @@ export default function ChatPage() {
             clearTimeout(timer);
         };
     }, [user, firebaseUser, currentUserId, showUserSearch, showGroupCreate, searchQuery, groupSearchQuery]);
+
+    useEffect(() => {
+        const currentConversation = conversations.find((conversation) => conversation.id === activeConversationId);
+        if (!showMembersModal || !showAddMembersPanel || !currentConversation?.isGroup) return;
+        if (currentUserId !== currentConversation.createdBy) return;
+
+        let cancelled = false;
+        const existingMembers = new Set(currentConversation.participants || []);
+
+        setLoadingAddMemberResults(true);
+        const timer = setTimeout(() => {
+            void searchChatUsers(addMemberSearchQuery, { limitCount: 150, excludeUid: currentUserId })
+                .then((users) => {
+                    if (cancelled) return;
+                    setAddMemberResults(users.filter((candidate) => candidate.uid && !existingMembers.has(candidate.uid)));
+                })
+                .catch((err) => {
+                    console.error('Failed to search addable group members:', err);
+                    if (!cancelled) {
+                        setChatError('Failed to load members you can add right now.');
+                    }
+                })
+                .finally(() => {
+                    if (!cancelled) {
+                        setLoadingAddMemberResults(false);
+                    }
+                });
+        }, 220);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [showMembersModal, showAddMembersPanel, conversations, activeConversationId, currentUserId, addMemberSearchQuery]);
 
     // Subscribe to conversations (only after Firebase Auth is ready)
     useEffect(() => {
@@ -1334,6 +1398,23 @@ export default function ChatPage() {
         );
     };
 
+    const handleAddMemberToCurrentGroup = async (member: ChatUser) => {
+        if (!activeConversationId || !activeConversation?.isGroup || !member?.uid) return;
+
+        const endGlobalLoading = beginGlobalLoading();
+        setAddingMemberUid(member.uid);
+        try {
+            await addGroupMember(activeConversationId, member);
+            setAddMemberSearchQuery('');
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Failed to add member to group';
+            setChatError(message);
+        } finally {
+            setAddingMemberUid(null);
+            endGlobalLoading();
+        }
+    };
+
     const openNicknameModal = (targetUid: string) => {
         if (!activeConversation) return;
         setNicknameTarget(targetUid);
@@ -1404,6 +1485,9 @@ export default function ChatPage() {
         const endGlobalLoading = beginGlobalLoading();
         const text = messageText.trim();
         setMessageText('');
+        if (messageInputRef.current) {
+            messageInputRef.current.style.height = '40px';
+        }
         setMentionQuery('');
         setMentionStartIndex(null);
         setSending(true);
@@ -1777,13 +1861,19 @@ export default function ChatPage() {
         ? (messages.find((message) => message.id === reactionDetailsMessageId) || null)
         : null;
     const reactionDetailsRows = React.useMemo(() => {
-        if (!reactionDetailsMessage || !activeConversation) return [] as Array<{ key: string; emoji: string; label: string; names: string[] }>;
+        if (!reactionDetailsMessage || !activeConversation) {
+            return [] as Array<{
+                key: string;
+                emoji: string;
+                label: string;
+                people: Array<{ uid: string; displayName: string; subtitle: string; profileImage?: string }>;
+            }>;
+        }
 
-        const grouped = new Map<string, string[]>();
+        const grouped = new Map<string, Array<{ uid: string; displayName: string; subtitle: string; profileImage?: string }>>();
         for (const [uid, reactionKey] of Object.entries(reactionDetailsMessage.reactions || {})) {
             const current = grouped.get(reactionKey) || [];
-            const name = uid === currentUserId ? 'You' : getDisplayName(activeConversation, uid);
-            current.push(name);
+            current.push(getParticipantMeta(activeConversation, uid));
             grouped.set(reactionKey, current);
         }
 
@@ -1793,9 +1883,9 @@ export default function ChatPage() {
                 key: reaction.key,
                 emoji: reaction.emoji,
                 label: reaction.label,
-                names: grouped.get(reaction.key) || [],
+                people: grouped.get(reaction.key) || [],
             }));
-    }, [reactionDetailsMessage, activeConversation, currentUserId, getDisplayName]);
+    }, [reactionDetailsMessage, activeConversation, getParticipantMeta]);
 
     const toggleEditHistoryInline = (messageId: string) => {
         setExpandedEditHistoryMessageId((current) => (current === messageId ? null : messageId));
@@ -3507,11 +3597,11 @@ export default function ChatPage() {
                                             {/* Text message */}
                                             {isEditingThisMessage ? (
                                                 <div style={{ display: 'grid', gap: 8, marginTop: 4 }}>
-                                                    <input
+                                                    <textarea
                                                         value={editingMessageText}
                                                         onChange={(e) => setEditingMessageText(e.target.value)}
                                                         onKeyDown={(e) => {
-                                                            if (e.key === 'Enter') {
+                                                            if (e.key === 'Enter' && !e.shiftKey) {
                                                                 e.preventDefault();
                                                                 void saveEditMessage();
                                                             }
@@ -3522,6 +3612,8 @@ export default function ChatPage() {
                                                         }}
                                                         style={{
                                                             width: '100%',
+                                                            minHeight: 76,
+                                                            maxHeight: 180,
                                                             padding: '8px 12px',
                                                             borderRadius: 10,
                                                             border: '1px solid rgba(255,255,255,0.14)',
@@ -3529,6 +3621,13 @@ export default function ChatPage() {
                                                             color: 'white',
                                                             fontSize: 13,
                                                             outline: 'none',
+                                                            resize: 'vertical',
+                                                            lineHeight: 1.5,
+                                                            overflowWrap: 'anywhere',
+                                                            wordBreak: 'break-word',
+                                                            whiteSpace: 'pre-wrap',
+                                                            boxSizing: 'border-box',
+                                                            fontFamily: 'inherit',
                                                         }}
                                                         autoFocus
                                                     />
@@ -3705,7 +3804,7 @@ export default function ChatPage() {
                                                         const effectiveStatus = allSeen ? 'seen' : status;
                                                         const seenByIds = otherParticipants.filter((uid) => msg.readBy?.[uid]);
                                                         const seenByNames = seenByIds
-                                                            .map((uid) => getDisplayName(activeConversation, uid))
+                                                            .map((uid) => getParticipantMeta(activeConversation, uid).displayName)
                                                             .filter(Boolean);
                                                         const seenSummary = seenByNames.length > 2
                                                             ? `${seenByNames.slice(0, 2).join(', ')} +${seenByNames.length - 2}`
@@ -3725,10 +3824,12 @@ export default function ChatPage() {
                                                                         style={{
                                                                             fontSize: 10,
                                                                             color: 'var(--slate-500)',
-                                                                            maxWidth: 180,
-                                                                            overflow: 'hidden',
-                                                                            textOverflow: 'ellipsis',
-                                                                            whiteSpace: 'nowrap',
+                                                                            maxWidth: 240,
+                                                                            overflowWrap: 'anywhere',
+                                                                            wordBreak: 'break-word',
+                                                                            whiteSpace: 'normal',
+                                                                            lineHeight: 1.35,
+                                                                            textAlign: isMine ? 'right' : 'left',
                                                                         }}
                                                                         title={`Seen by ${seenByNames.join(', ')}`}
                                                                     >
@@ -4148,13 +4249,14 @@ export default function ChatPage() {
                                         ))}
                                     </div>
                                 )}
-                                <input
+                                <textarea
                                     ref={messageInputRef}
-                                    type="text"
                                     placeholder="Type a message..."
                                     value={messageText}
                                     onChange={(e) => {
                                         const nextValue = e.target.value;
+                                        e.currentTarget.style.height = '40px';
+                                        e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 120)}px`;
                                         setMessageText(nextValue);
                                         handleTyping();
 
@@ -4185,6 +4287,8 @@ export default function ChatPage() {
                                     }}
                                     style={{
                                         width: '100%',
+                                        minHeight: 40,
+                                        maxHeight: 120,
                                         padding: '10px 16px',
                                         borderRadius: 12,
                                         border: '1px solid rgba(255,255,255,0.08)',
@@ -4192,6 +4296,14 @@ export default function ChatPage() {
                                         color: 'white',
                                         fontSize: 14,
                                         outline: 'none',
+                                        resize: 'none',
+                                        overflowY: 'auto',
+                                        lineHeight: 1.45,
+                                        overflowWrap: 'anywhere',
+                                        wordBreak: 'break-word',
+                                        whiteSpace: 'pre-wrap',
+                                        boxSizing: 'border-box',
+                                        fontFamily: 'inherit',
                                     }}
                                 />
                             </div>
@@ -4592,9 +4704,80 @@ export default function ChatPage() {
                                         <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'white' }}>
                                             {row.emoji} {row.label}
                                         </p>
-                                        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--slate-400)' }}>
-                                            {row.names.join(', ')}
-                                        </p>
+                                        <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+                                            {row.people.map((person) => (
+                                                <div
+                                                    key={`${row.key}-${person.uid}`}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 10,
+                                                        minWidth: 0,
+                                                    }}
+                                                >
+                                                    {person.profileImage ? (
+                                                        <img
+                                                            src={person.profileImage}
+                                                            alt=""
+                                                            style={{
+                                                                width: 32,
+                                                                height: 32,
+                                                                borderRadius: '50%',
+                                                                objectFit: 'cover',
+                                                                flexShrink: 0,
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <div
+                                                            style={{
+                                                                width: 32,
+                                                                height: 32,
+                                                                borderRadius: '50%',
+                                                                background: 'linear-gradient(135deg, #10b981, #34d399)',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                color: 'white',
+                                                                fontSize: 12,
+                                                                fontWeight: 700,
+                                                                flexShrink: 0,
+                                                            }}
+                                                        >
+                                                            {(person.displayName || '?').charAt(0).toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                    <div style={{ minWidth: 0, display: 'grid', gap: 2 }}>
+                                                        <p
+                                                            style={{
+                                                                margin: 0,
+                                                                fontSize: 12,
+                                                                fontWeight: 600,
+                                                                color: 'white',
+                                                                overflowWrap: 'anywhere',
+                                                                wordBreak: 'break-word',
+                                                                whiteSpace: 'normal',
+                                                            }}
+                                                        >
+                                                            {person.displayName}
+                                                        </p>
+                                                        {person.subtitle && (
+                                                            <p
+                                                                style={{
+                                                                    margin: 0,
+                                                                    fontSize: 11,
+                                                                    color: 'var(--slate-400)',
+                                                                    overflowWrap: 'anywhere',
+                                                                    wordBreak: 'break-word',
+                                                                    whiteSpace: 'normal',
+                                                                }}
+                                                            >
+                                                                {person.subtitle}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -4900,7 +5083,7 @@ export default function ChatPage() {
             {/* Members Modal (Group Chat) */}
             {showMembersModal && activeConversation?.isGroup && (
                 <div
-                    onClick={() => { setShowMembersModal(false); setKickingUid(null); }}
+                    onClick={closeMembersModal}
                     style={{
                         position: 'fixed',
                         inset: 0,
@@ -4920,7 +5103,7 @@ export default function ChatPage() {
                             background: 'var(--slate-900)',
                             border: '1px solid rgba(255,255,255,0.08)',
                             borderRadius: 16,
-                            maxWidth: 420,
+                            maxWidth: 560,
                             width: '100%',
                             overflow: 'hidden',
                         }}
@@ -4936,15 +5119,129 @@ export default function ChatPage() {
                                 <Users size={16} style={{ color: 'var(--primary-400)' }} />
                                 Group Members ({Array.from(new Set(activeConversation.participants)).length})
                             </h3>
-                            <button
-                                onClick={() => { setShowMembersModal(false); setKickingUid(null); }}
-                                style={{ background: 'none', border: 'none', color: 'var(--slate-400)', cursor: 'pointer', padding: 4 }}
-                            >
-                                <X size={18} />
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                {currentUserId === activeConversation.createdBy && (
+                                    <button
+                                        onClick={() => setShowAddMembersPanel((current) => !current)}
+                                        style={{
+                                            height: 30,
+                                            padding: '0 10px',
+                                            borderRadius: 8,
+                                            border: '1px solid rgba(16,185,129,0.24)',
+                                            background: showAddMembersPanel ? 'rgba(16,185,129,0.16)' : 'rgba(255,255,255,0.04)',
+                                            color: showAddMembersPanel ? 'var(--primary-300)' : 'var(--slate-300)',
+                                            cursor: 'pointer',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                        }}
+                                    >
+                                        <Plus size={12} /> {showAddMembersPanel ? 'Hide Add' : 'Add Members'}
+                                    </button>
+                                )}
+                                <button
+                                    onClick={closeMembersModal}
+                                    style={{ background: 'none', border: 'none', color: 'var(--slate-400)', cursor: 'pointer', padding: 4 }}
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
                         </div>
 
                         <div style={{ padding: '12px 20px', maxHeight: '50vh', overflowY: 'auto' }}>
+                            {currentUserId === activeConversation.createdBy && showAddMembersPanel && (
+                                <div
+                                    style={{
+                                        marginBottom: 14,
+                                        padding: 12,
+                                        borderRadius: 12,
+                                        border: '1px solid rgba(255,255,255,0.08)',
+                                        background: 'rgba(255,255,255,0.03)',
+                                    }}
+                                >
+                                    <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'white' }}>Add new members</p>
+                                    <p style={{ margin: '4px 0 10px', fontSize: 11, color: 'var(--slate-400)' }}>
+                                        Search chat users who are not already in this group.
+                                    </p>
+                                    <input
+                                        value={addMemberSearchQuery}
+                                        onChange={(e) => setAddMemberSearchQuery(e.target.value)}
+                                        placeholder="Search by name or email..."
+                                        style={{
+                                            width: '100%',
+                                            padding: '10px 12px',
+                                            borderRadius: 10,
+                                            border: '1px solid rgba(255,255,255,0.08)',
+                                            background: 'rgba(255,255,255,0.04)',
+                                            color: 'white',
+                                            fontSize: 13,
+                                            outline: 'none',
+                                            boxSizing: 'border-box',
+                                        }}
+                                    />
+                                    <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+                                        {loadingAddMemberResults ? (
+                                            <p style={{ margin: 0, fontSize: 11, color: 'var(--slate-500)' }}>Loading members...</p>
+                                        ) : addMemberResults.length === 0 ? (
+                                            <p style={{ margin: 0, fontSize: 11, color: 'var(--slate-500)' }}>No available members found.</p>
+                                        ) : (
+                                            addMemberResults.slice(0, 8).map((candidate) => (
+                                                <div
+                                                    key={candidate.uid}
+                                                    style={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: 10,
+                                                        minWidth: 0,
+                                                        padding: '8px 10px',
+                                                        borderRadius: 10,
+                                                        border: '1px solid rgba(255,255,255,0.06)',
+                                                        background: 'rgba(24,24,27,0.7)',
+                                                    }}
+                                                >
+                                                    {candidate.profileImage ? (
+                                                        <img src={candidate.profileImage} alt="" style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                                                    ) : (
+                                                        <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg, #10b981, #34d399)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, color: 'white', flexShrink: 0 }}>
+                                                            {(candidate.name || '?').charAt(0).toUpperCase()}
+                                                        </div>
+                                                    )}
+                                                    <div style={{ flex: 1, minWidth: 0, display: 'grid', gap: 2 }}>
+                                                        <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'white', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                                                            {candidate.name || 'Unknown'}
+                                                        </p>
+                                                        <p style={{ margin: 0, fontSize: 11, color: 'var(--slate-500)', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                                                            {candidate.email || 'No email'}
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => void handleAddMemberToCurrentGroup(candidate)}
+                                                        disabled={addingMemberUid === candidate.uid}
+                                                        style={{
+                                                            height: 30,
+                                                            padding: '0 10px',
+                                                            borderRadius: 8,
+                                                            border: 'none',
+                                                            background: 'var(--primary-500)',
+                                                            color: 'white',
+                                                            fontSize: 11,
+                                                            fontWeight: 700,
+                                                            cursor: addingMemberUid === candidate.uid ? 'not-allowed' : 'pointer',
+                                                            opacity: addingMemberUid === candidate.uid ? 0.7 : 1,
+                                                            flexShrink: 0,
+                                                        }}
+                                                    >
+                                                        {addingMemberUid === candidate.uid ? 'Adding...' : 'Add'}
+                                                    </button>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                 {Array.from(new Set(activeConversation.participants)).map(uid => {
                                     const details = activeConversation.participantDetails?.[uid];
@@ -4979,8 +5276,7 @@ export default function ChatPage() {
                                             )}
                                             <button
                                                 onClick={() => {
-                                                    setShowMembersModal(false);
-                                                    setKickingUid(null);
+                                                    closeMembersModal();
                                                     void handleViewProfile(uid);
                                                 }}
                                                 style={{
@@ -4994,10 +5290,10 @@ export default function ChatPage() {
                                                 }}
                                                 title={isMe ? 'View your profile' : `View ${(details?.name || 'member')}'s profile`}
                                             >
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, minWidth: 0 }}>
                                                     <p style={{
                                                         fontSize: 13, fontWeight: 600, color: 'white', margin: 0,
-                                                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                                        overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'normal',
                                                     }}>
                                                         {nickname || details?.name || 'Unknown'}
                                                         {isMe ? ' (You)' : ''}
@@ -5024,9 +5320,9 @@ export default function ChatPage() {
                                                         fontSize: 11,
                                                         color: 'var(--slate-600)',
                                                         margin: 0,
-                                                        whiteSpace: 'nowrap',
-                                                        overflow: 'hidden',
-                                                        textOverflow: 'ellipsis',
+                                                        overflowWrap: 'anywhere',
+                                                        wordBreak: 'break-word',
+                                                        whiteSpace: 'normal',
                                                     }}>
                                                         {details.email}
                                                     </p>
@@ -5035,8 +5331,7 @@ export default function ChatPage() {
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                                                 <button
                                                     onClick={() => {
-                                                        setShowMembersModal(false);
-                                                        setKickingUid(null);
+                                                        closeMembersModal();
                                                         void handleViewProfile(uid);
                                                     }}
                                                     title={isMe ? 'View your profile' : `View ${(details?.name || 'member')}'s profile`}
@@ -5080,7 +5375,7 @@ export default function ChatPage() {
                                                                     await kickGroupMember(activeConversation.id, uid);
                                                                     setKickingUid(null);
                                                                     if (activeConversation.participants.length <= 2) {
-                                                                        setShowMembersModal(false);
+                                                                        closeMembersModal();
                                                                     }
                                                                 } catch (err) {
                                                                     console.error('Kick failed:', err);
@@ -5145,7 +5440,7 @@ export default function ChatPage() {
                                     fontSize: 12, color: 'var(--slate-500)', marginTop: 12, textAlign: 'center',
                                     fontStyle: 'italic',
                                 }}>
-                                    Only the group admin can remove members
+                                    Only the group admin can add or remove members
                                 </p>
                             )}
                         </div>
