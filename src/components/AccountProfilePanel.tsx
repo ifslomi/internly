@@ -54,7 +54,7 @@ export default function AccountProfilePanel({
   const [guardianPhone, setGuardianPhone] = useState('');
   const [programCourse, setProgramCourse] = useState('');
   const [department, setDepartment] = useState('');
-  const [hoursToRender, setHoursToRender] = useState(480);
+  const [hoursToRender, setHoursToRender] = useState(486);
   const [startDate, setStartDate] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -72,7 +72,7 @@ export default function AccountProfilePanel({
       setGuardianPhone(user.guardianPhone || user.guardian?.phone || '');
       setDepartment(normalizedDepartment);
       setProgramCourse(normalizedProgram);
-      setHoursToRender(user.totalRequiredHours || 480);
+      setHoursToRender(user.totalRequiredHours || 486);
       setStartDate(user.startDate || new Date().toISOString().split('T')[0]);
     }
   }, [user]);

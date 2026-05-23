@@ -170,7 +170,7 @@ export function googleSignIn(
         name,
         email,
         password: '',
-        totalRequiredHours: 480,
+        totalRequiredHours: 486,
         startDate: new Date().toISOString().split('T')[0],
         createdAt: new Date().toISOString(),
         supervisors: [],

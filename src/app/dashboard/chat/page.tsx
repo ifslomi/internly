@@ -133,10 +133,12 @@ function ImageEditorModal({
     imageSrc,
     onSave,
     onCancel,
+    onError,
 }: {
     imageSrc: string;
     onSave: (croppedBlob: Blob, previewUrl: string) => void;
     onCancel: () => void;
+    onError?: (message: string) => void;
 }) {
     const [crop, setCrop] = useState({ x: 0, y: 0 });
     const [zoom, setZoom] = useState(1);
@@ -158,7 +160,7 @@ function ImageEditorModal({
             onSave(blob, url);
         } catch (err) {
             console.error('Crop failed:', err);
-            alert('Failed to crop image.');
+            onError?.('Failed to crop image.');
         }
         setSaving(false);
     };
@@ -824,6 +826,8 @@ export default function ChatPage() {
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [messageText, setMessageText] = useState('');
+    const [mentionQuery, setMentionQuery] = useState('');
+    const [mentionStartIndex, setMentionStartIndex] = useState<number | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [showUserSearch, setShowUserSearch] = useState(false);
     const [userSearchVisibleCount, setUserSearchVisibleCount] = useState(80);
@@ -842,6 +846,7 @@ export default function ChatPage() {
     const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
     const [reactionPickerMessageId, setReactionPickerMessageId] = useState<string | null>(null);
     const [updatingReactionMessageId, setUpdatingReactionMessageId] = useState<string | null>(null);
+    const [reactionDetailsMessageId, setReactionDetailsMessageId] = useState<string | null>(null);
     const [showUnsendConfirmModal, setShowUnsendConfirmModal] = useState(false);
     const [pendingUnsendMessage, setPendingUnsendMessage] = useState<Message | null>(null);
     const [rememberUnsendChoice, setRememberUnsendChoice] = useState(false);
@@ -1102,6 +1107,32 @@ export default function ChatPage() {
 
     const activeConversation = conversations.find(c => c.id === activeConversationId);
 
+    const mentionCandidates = React.useMemo(() => {
+        if (!activeConversation?.isGroup) return [] as Array<{ uid: string; name: string; email: string }>;
+
+        const uniqueParticipantIds = Array.from(new Set(activeConversation.participants || []));
+        return uniqueParticipantIds
+            .filter((uid) => uid && uid !== currentUserId)
+            .map((uid) => ({
+                uid,
+                name: getDisplayName(activeConversation, uid),
+                email: activeConversation.participantDetails?.[uid]?.email || '',
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+    }, [activeConversation, currentUserId, getDisplayName]);
+
+    const mentionSuggestions = React.useMemo(() => {
+        if (!mentionCandidates.length) return [];
+        const normalizedQuery = mentionQuery.trim().toLowerCase();
+        if (!normalizedQuery) return mentionCandidates.slice(0, 6);
+        return mentionCandidates
+            .filter((candidate) =>
+                candidate.name.toLowerCase().includes(normalizedQuery) ||
+                candidate.email.toLowerCase().includes(normalizedQuery),
+            )
+            .slice(0, 6);
+    }, [mentionCandidates, mentionQuery]);
+
     // Periodic tick to re-evaluate stale typing indicators (every 1s when someone is typing)
     useEffect(() => {
         if (!activeConversation?.typing || Object.keys(activeConversation.typing).length === 0) return;
@@ -1350,6 +1381,19 @@ export default function ChatPage() {
         setPendingFiles(prev => prev.filter((_, fileIndex) => fileIndex !== index));
     };
 
+    const insertMention = (candidateName: string) => {
+        if (mentionStartIndex === null) return;
+        setMessageText((prev) => {
+            const before = prev.slice(0, mentionStartIndex);
+            const afterRaw = prev.slice(mentionStartIndex);
+            const after = afterRaw.replace(/^@[^\s@]*/, '');
+            return `${before}@${candidateName} ${after}`;
+        });
+        setMentionQuery('');
+        setMentionStartIndex(null);
+        requestAnimationFrame(() => messageInputRef.current?.focus());
+    };
+
     const handleSendMessage = async () => {
         if (sendInFlightRef.current) return;
         const hasText = messageText.trim().length > 0;
@@ -1360,6 +1404,8 @@ export default function ChatPage() {
         const endGlobalLoading = beginGlobalLoading();
         const text = messageText.trim();
         setMessageText('');
+        setMentionQuery('');
+        setMentionStartIndex(null);
         setSending(true);
         setChatError(null); // Clear any previous error
 
@@ -1438,11 +1484,11 @@ export default function ChatPage() {
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             if (!file.type.startsWith('image/')) {
-                alert(`"${file.name}" is not an image file. Skipped.`);
+                setChatError(`"${file.name}" is not an image file. Skipped.`);
                 continue;
             }
             if (file.size > 5 * 1024 * 1024) {
-                alert(`"${file.name}" exceeds 5MB. Skipped.`);
+                setChatError(`"${file.name}" exceeds 5MB. Skipped.`);
                 continue;
             }
             newImages.push({ file, preview: URL.createObjectURL(file) });
@@ -1467,7 +1513,7 @@ export default function ChatPage() {
 
             if (file.type.startsWith('image/')) {
                 if (file.size > 5 * 1024 * 1024) {
-                    alert(`"${file.name}" exceeds 5MB. Skipped.`);
+                    setChatError(`"${file.name}" exceeds 5MB. Skipped.`);
                     continue;
                 }
                 newImages.push({ file, preview: URL.createObjectURL(file) });
@@ -1475,7 +1521,7 @@ export default function ChatPage() {
             }
 
             if (file.size > 10 * 1024 * 1024) {
-                alert(`"${file.name}" exceeds 10 MB. Skipped.`);
+                setChatError(`"${file.name}" exceeds 10 MB. Skipped.`);
                 continue;
             }
 
@@ -1726,6 +1772,30 @@ export default function ChatPage() {
         { key: 'angry', emoji: '😡', label: 'Angry' },
         { key: 'like', emoji: '👍', label: 'Like' },
     ] as const;
+
+    const reactionDetailsMessage = reactionDetailsMessageId
+        ? (messages.find((message) => message.id === reactionDetailsMessageId) || null)
+        : null;
+    const reactionDetailsRows = React.useMemo(() => {
+        if (!reactionDetailsMessage || !activeConversation) return [] as Array<{ key: string; emoji: string; label: string; names: string[] }>;
+
+        const grouped = new Map<string, string[]>();
+        for (const [uid, reactionKey] of Object.entries(reactionDetailsMessage.reactions || {})) {
+            const current = grouped.get(reactionKey) || [];
+            const name = uid === currentUserId ? 'You' : getDisplayName(activeConversation, uid);
+            current.push(name);
+            grouped.set(reactionKey, current);
+        }
+
+        return reactionOptions
+            .filter((reaction) => grouped.has(reaction.key))
+            .map((reaction) => ({
+                key: reaction.key,
+                emoji: reaction.emoji,
+                label: reaction.label,
+                names: grouped.get(reaction.key) || [],
+            }));
+    }, [reactionDetailsMessage, activeConversation, currentUserId, getDisplayName]);
 
     const toggleEditHistoryInline = (messageId: string) => {
         setExpandedEditHistoryMessageId((current) => (current === messageId ? null : messageId));
@@ -3164,7 +3234,13 @@ export default function ChatPage() {
                                                     }}
                                                 >
                                                     <button
-                                                        onClick={() => setReactionPickerMessageId((current) => (current === msg.id ? null : msg.id))}
+                                                        onClick={() => {
+                                                            if (totalReactions > 0) {
+                                                                setReactionDetailsMessageId(msg.id);
+                                                                return;
+                                                            }
+                                                            setReactionPickerMessageId((current) => (current === msg.id ? null : msg.id));
+                                                        }}
                                                         style={{
                                                             fontSize: 11,
                                                             color: 'var(--slate-500)',
@@ -3177,9 +3253,9 @@ export default function ChatPage() {
                                                             gap: 4,
                                                             whiteSpace: 'nowrap',
                                                         }}
-                                                        title="React"
+                                                        title={totalReactions > 0 ? 'View reactions' : 'React'}
                                                     >
-                                                        <Smile size={11} /> React
+                                                        <Smile size={11} /> {totalReactions > 0 ? 'Reactions' : 'React'}
                                                     </button>
                                                     {isMine && msg.text && canEditByTime && (
                                                         <button
@@ -3224,7 +3300,7 @@ export default function ChatPage() {
                                                 </div>
                                             )}
 
-                                            {reactionPickerMessageId === msg.id && !msg.isUnsent && (
+                                            {reactionPickerMessageId === msg.id && !msg.isUnsent && totalReactions === 0 && (
                                                 <div style={{
                                                     position: 'absolute',
                                                     [pickerOnRight ? 'left' : 'right']: '100%',
@@ -3506,6 +3582,8 @@ export default function ChatPage() {
                                                     fontSize: 14,
                                                     lineHeight: 1.5,
                                                     wordBreak: 'break-word',
+                                                    overflowWrap: 'anywhere',
+                                                    whiteSpace: 'pre-wrap',
                                                     fontStyle: msg.isUnsent ? 'italic' : 'normal',
                                                     opacity: msg.isUnsent ? 0.82 : 1,
                                                 }}>
@@ -3515,7 +3593,7 @@ export default function ChatPage() {
 
                                             {!msg.isUnsent && totalReactions > 0 && (
                                                 <button
-                                                    onClick={() => setReactionPickerMessageId((current) => (current === msg.id ? null : msg.id))}
+                                                    onClick={() => setReactionDetailsMessageId(msg.id)}
                                                     style={{
                                                         position: 'absolute',
                                                         right: 6,
@@ -3598,7 +3676,7 @@ export default function ChatPage() {
                                                                 <p style={{ margin: 0, fontSize: 10, color: 'var(--slate-500)', fontWeight: 600 }}>
                                                                     Previous version {msg.editHistory ? msg.editHistory.length - index : ''}
                                                                 </p>
-                                                                <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--slate-300)', whiteSpace: 'pre-wrap' }}>
+                                                                <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--slate-300)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
                                                                     {item.text}
                                                                 </p>
                                                             </div>
@@ -3624,18 +3702,45 @@ export default function ChatPage() {
                                                         {formatMessageTime(msg.timestamp)}
                                                     </span>
                                                     {isMine && (() => {
+                                                        if (!activeConversation) return null;
                                                         const status = msg.status || (msg.read ? 'seen' : 'sent');
-                                                        const otherParticipants = activeConversation?.participants.filter(p => p !== currentUserId) || [];
+                                                        const otherParticipants = Array.from(new Set(activeConversation?.participants.filter(p => p !== currentUserId) || []));
                                                         const allSeen = otherParticipants.every(p => msg.readBy?.[p]);
                                                         const effectiveStatus = allSeen ? 'seen' : status;
+                                                        const seenByIds = otherParticipants.filter((uid) => msg.readBy?.[uid]);
+                                                        const seenByNames = seenByIds
+                                                            .map((uid) => getDisplayName(activeConversation, uid))
+                                                            .filter(Boolean);
+                                                        const seenSummary = seenByNames.length > 2
+                                                            ? `${seenByNames.slice(0, 2).join(', ')} +${seenByNames.length - 2}`
+                                                            : seenByNames.join(', ');
 
-                                                        if (effectiveStatus === 'seen') {
-                                                            return <CheckCheck size={14} style={{ color: '#34d399' }} />;
-                                                        } else if (effectiveStatus === 'delivered') {
-                                                            return <CheckCheck size={14} style={{ color: 'var(--slate-500)' }} />;
-                                                        } else {
-                                                            return <Check size={14} style={{ color: 'var(--slate-500)' }} />;
-                                                        }
+                                                        return (
+                                                            <>
+                                                                {effectiveStatus === 'seen' ? (
+                                                                    <CheckCheck size={14} style={{ color: '#34d399' }} />
+                                                                ) : effectiveStatus === 'delivered' ? (
+                                                                    <CheckCheck size={14} style={{ color: 'var(--slate-500)' }} />
+                                                                ) : (
+                                                                    <Check size={14} style={{ color: 'var(--slate-500)' }} />
+                                                                )}
+                                                                {activeConversation?.isGroup && seenByNames.length > 0 && (
+                                                                    <span
+                                                                        style={{
+                                                                            fontSize: 10,
+                                                                            color: 'var(--slate-500)',
+                                                                            maxWidth: 180,
+                                                                            overflow: 'hidden',
+                                                                            textOverflow: 'ellipsis',
+                                                                            whiteSpace: 'nowrap',
+                                                                        }}
+                                                                        title={`Seen by ${seenByNames.join(', ')}`}
+                                                                    >
+                                                                        Seen by {seenSummary}
+                                                                    </span>
+                                                                )}
+                                                            </>
+                                                        );
                                                     })()}
                                                 </div>
                                             )}
@@ -4009,30 +4114,91 @@ export default function ChatPage() {
                                 HD
                             </button>
 
-                            <input
-                                ref={messageInputRef}
-                                type="text"
-                                placeholder="Type a message..."
-                                value={messageText}
-                                onChange={(e) => { setMessageText(e.target.value); handleTyping(); }}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                        e.preventDefault();
-                                        if (sending || uploading || sendInFlightRef.current) return;
-                                        handleSendMessage();
-                                    }
-                                }}
-                                style={{
-                                    flex: 1,
-                                    padding: '10px 16px',
-                                    borderRadius: 12,
-                                    border: '1px solid rgba(255,255,255,0.08)',
-                                    background: 'rgba(255,255,255,0.04)',
-                                    color: 'white',
-                                    fontSize: 14,
-                                    outline: 'none',
-                                }}
-                            />
+                            <div style={{ flex: 1, position: 'relative' }}>
+                                {activeConversation?.isGroup && mentionStartIndex !== null && mentionSuggestions.length > 0 && (
+                                    <div
+                                        style={{
+                                            position: 'absolute',
+                                            left: 0,
+                                            right: 0,
+                                            bottom: 'calc(100% + 8px)',
+                                            borderRadius: 12,
+                                            border: '1px solid rgba(255,255,255,0.1)',
+                                            background: 'rgba(15,23,42,0.96)',
+                                            boxShadow: '0 12px 28px rgba(0,0,0,0.4)',
+                                            overflow: 'hidden',
+                                            zIndex: 50,
+                                        }}
+                                    >
+                                        {mentionSuggestions.map((candidate) => (
+                                            <button
+                                                key={candidate.uid}
+                                                type="button"
+                                                onClick={() => insertMention(candidate.name)}
+                                                style={{
+                                                    width: '100%',
+                                                    textAlign: 'left',
+                                                    padding: '10px 12px',
+                                                    border: 'none',
+                                                    borderBottom: '1px solid rgba(255,255,255,0.06)',
+                                                    background: 'transparent',
+                                                    cursor: 'pointer',
+                                                    color: 'white',
+                                                }}
+                                            >
+                                                <div style={{ fontSize: 13, fontWeight: 600 }}>@{candidate.name}</div>
+                                                <div style={{ fontSize: 11, color: 'var(--slate-400)' }}>{candidate.email}</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                <input
+                                    ref={messageInputRef}
+                                    type="text"
+                                    placeholder="Type a message..."
+                                    value={messageText}
+                                    onChange={(e) => {
+                                        const nextValue = e.target.value;
+                                        setMessageText(nextValue);
+                                        handleTyping();
+
+                                        if (!activeConversation?.isGroup) {
+                                            setMentionQuery('');
+                                            setMentionStartIndex(null);
+                                            return;
+                                        }
+
+                                        const mentionMatch = nextValue.match(/(?:^|\s)@([^\s@]*)$/);
+                                        if (!mentionMatch) {
+                                            setMentionQuery('');
+                                            setMentionStartIndex(null);
+                                            return;
+                                        }
+
+                                        const atToken = `@${mentionMatch[1]}`;
+                                        const atIndex = nextValue.lastIndexOf(atToken);
+                                        setMentionQuery((mentionMatch[1] || '').toLowerCase());
+                                        setMentionStartIndex(atIndex >= 0 ? atIndex : null);
+                                    }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            if (sending || uploading || sendInFlightRef.current) return;
+                                            handleSendMessage();
+                                        }
+                                    }}
+                                    style={{
+                                        width: '100%',
+                                        padding: '10px 16px',
+                                        borderRadius: 12,
+                                        border: '1px solid rgba(255,255,255,0.08)',
+                                        background: 'rgba(255,255,255,0.04)',
+                                        color: 'white',
+                                        fontSize: 14,
+                                        outline: 'none',
+                                    }}
+                                />
+                            </div>
 
                             <button
                                 onClick={handleSendMessage}
@@ -4370,6 +4536,77 @@ export default function ChatPage() {
                 />
             )}
 
+            {reactionDetailsMessage && (
+                <div
+                    onClick={() => setReactionDetailsMessageId(null)}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(0,0,0,0.6)',
+                        backdropFilter: 'blur(8px)',
+                        WebkitBackdropFilter: 'blur(8px)',
+                        zIndex: 1000,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 24,
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            background: 'var(--slate-900)',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: 14,
+                            width: '100%',
+                            maxWidth: 460,
+                            padding: 16,
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 }}>
+                            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'white' }}>Message Reactions</h3>
+                            <button
+                                onClick={() => setReactionDetailsMessageId(null)}
+                                style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: 'var(--slate-400)',
+                                    cursor: 'pointer',
+                                }}
+                                title="Close"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        {reactionDetailsRows.length === 0 ? (
+                            <p style={{ margin: 0, fontSize: 13, color: 'var(--slate-400)' }}>No reactions on this message.</p>
+                        ) : (
+                            <div style={{ display: 'grid', gap: 10 }}>
+                                {reactionDetailsRows.map((row) => (
+                                    <div
+                                        key={`${reactionDetailsMessage.id}-${row.key}`}
+                                        style={{
+                                            border: '1px solid rgba(255,255,255,0.08)',
+                                            borderRadius: 10,
+                                            padding: '10px 12px',
+                                            background: 'rgba(255,255,255,0.03)',
+                                        }}
+                                    >
+                                        <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: 'white' }}>
+                                            {row.emoji} {row.label}
+                                        </p>
+                                        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--slate-400)' }}>
+                                            {row.names.join(', ')}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {showUnsendConfirmModal && (
                 <div
                     onClick={cancelUnsendConfirmation}
@@ -4461,6 +4698,7 @@ export default function ChatPage() {
             {editingImageIndex !== null && pendingImages[editingImageIndex] && (
                 <ImageEditorModal
                     imageSrc={pendingImages[editingImageIndex].preview}
+                    onError={setChatError}
                     onSave={(croppedBlob, previewUrl) => {
                         setPendingImages(prev => {
                             const updated = [...prev];

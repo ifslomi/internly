@@ -12,6 +12,8 @@ export default function SanctionsPage() {
   const [myRenders, setMyRenders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState<string | null>(null);
+  const [confirmEnrollSlotId, setConfirmEnrollSlotId] = useState<string | null>(null);
+  const [feedbackModal, setFeedbackModal] = useState<{ title: string; message: string; tone: 'success' | 'error' | 'warning' } | null>(null);
   const tiles = [
     { label: 'Days of Sanctions', value: useMemo(() => sanctions.reduce((sum, sanction) => sum + sanction.days, 0).toString(), [sanctions]), icon: AlertTriangle, tone: 'rose' },
     { label: 'Available Slots', value: '--', icon: Clock3, tone: 'amber' },
@@ -21,19 +23,31 @@ export default function SanctionsPage() {
     if (enrolling) return;
 
     if (!user || sanctions.length === 0) {
-      alert('You need active sanctions to enroll in a duty slot.');
+      setFeedbackModal({
+        title: 'Active Sanction Required',
+        message: 'You need an active sanction to enroll in a duty slot.',
+        tone: 'warning',
+      });
       return;
     }
 
     const activeSanction = sanctions.find((s) => s.status === 'active');
     if (!activeSanction) {
-      alert('You need active sanctions to enroll in a duty slot.');
+      setFeedbackModal({
+        title: 'Active Sanction Required',
+        message: 'You need an active sanction to enroll in a duty slot.',
+        tone: 'warning',
+      });
       return;
     }
 
     const alreadyEnrolled = myRenders.some((render) => render.dutySlotId === slotId && render.status === 'availed');
     if (alreadyEnrolled) {
-      alert('You are already enrolled for this duty slot.');
+      setFeedbackModal({
+        title: 'Already Enrolled',
+        message: 'You are already enrolled in this duty slot.',
+        tone: 'warning',
+      });
       return;
     }
 
@@ -57,14 +71,26 @@ export default function SanctionsPage() {
         ...prev,
       ]);
 
-      alert('Successfully enrolled in the duty slot!');
+      setFeedbackModal({
+        title: 'Enrollment Successful',
+        message: 'You have successfully enrolled in the duty slot.',
+        tone: 'success',
+      });
     } catch (err) {
       console.error('Failed to enroll in duty slot:', err);
       const code = (err as { code?: string } | null)?.code || '';
       if (code === 'sanction/already-enrolled') {
-        alert('You are already enrolled for this duty slot.');
+        setFeedbackModal({
+          title: 'Already Enrolled',
+          message: 'You are already enrolled in this duty slot.',
+          tone: 'warning',
+        });
       } else {
-        alert('Failed to enroll. Please try again.');
+        setFeedbackModal({
+          title: 'Enrollment Failed',
+          message: 'Failed to enroll. Please try again.',
+          tone: 'error',
+        });
       }
     } finally {
       setEnrolling(null);
@@ -294,7 +320,7 @@ export default function SanctionsPage() {
                             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary-400)' }}>Already Enrolled</span>
                           ) : (
                           <button
-                            onClick={() => handleAvailSlot(slot.id)}
+                            onClick={() => setConfirmEnrollSlotId(slot.id)}
                             disabled={enrolling === slot.id}
                             style={{
                               padding: '6px 12px',
@@ -319,6 +345,145 @@ export default function SanctionsPage() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {confirmEnrollSlotId && (
+        <div
+          onClick={() => setConfirmEnrollSlotId(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.55)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+            zIndex: 1000,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: 420,
+              borderRadius: 14,
+              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'var(--slate-900)',
+              padding: 18,
+            }}
+          >
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'white' }}>Confirm Enrollment</h3>
+            <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--slate-400)', lineHeight: 1.6 }}>
+              Enroll in this duty slot now?
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <button
+                onClick={() => setConfirmEnrollSlotId(null)}
+                style={{
+                  padding: '7px 12px',
+                  borderRadius: 8,
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  background: 'rgba(255,255,255,0.05)',
+                  color: 'var(--slate-300)',
+                  fontSize: 12,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const slotToEnroll = confirmEnrollSlotId;
+                  setConfirmEnrollSlotId(null);
+                  if (slotToEnroll) {
+                    void handleAvailSlot(slotToEnroll);
+                  }
+                }}
+                style={{
+                  padding: '7px 12px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: 'var(--primary-600)',
+                  color: 'white',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {feedbackModal && (
+        <div
+          onClick={() => setFeedbackModal(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.55)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+            zIndex: 1000,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: 440,
+              borderRadius: 14,
+              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'var(--slate-900)',
+              padding: 18,
+            }}
+          >
+            <h3
+              style={{
+                margin: 0,
+                fontSize: 16,
+                fontWeight: 700,
+                color:
+                  feedbackModal.tone === 'success'
+                    ? '#34d399'
+                    : feedbackModal.tone === 'warning'
+                      ? '#fbbf24'
+                      : '#f87171',
+              }}
+            >
+              {feedbackModal.title}
+            </h3>
+            <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--slate-300)', lineHeight: 1.6 }}>
+              {feedbackModal.message}
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+              <button
+                onClick={() => setFeedbackModal(null)}
+                style={{
+                  padding: '7px 12px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: 'var(--primary-600)',
+                  color: 'white',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                OK
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

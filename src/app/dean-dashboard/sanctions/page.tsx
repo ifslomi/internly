@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Plus, Calendar, Users, AlertTriangle, CheckCircle, Clock, X, Pencil } from 'lucide-react';
+import { Search, Plus, Calendar, Users, CheckCircle, X, Pencil } from 'lucide-react';
 import type { User, Sanction, DutySlot, SanctionRender } from '@/lib/types';
 import { useApp } from '@/lib/context';
 
@@ -41,6 +41,11 @@ export default function DeanSanctionsPage() {
     const [updatingSanction, setUpdatingSanction] = useState(false);
     const [showEditSanctionModal, setShowEditSanctionModal] = useState(false);
     const [savingEditedSanction, setSavingEditedSanction] = useState(false);
+    const [feedbackModal, setFeedbackModal] = useState<{
+        title: string;
+        message: string;
+        tone: 'success' | 'error' | 'warning';
+    } | null>(null);
     const [editSanctionForm, setEditSanctionForm] = useState({
         id: '',
         days: 1,
@@ -116,11 +121,6 @@ export default function DeanSanctionsPage() {
         );
     }, [searchQuery, students]);
 
-    const totalSanctionDays = useMemo(
-        () => sanctions.reduce((sum, sanction) => sum + (sanction.days || 0), 0),
-        [sanctions]
-    );
-
     const filteredSanctions = useMemo(() => {
         if (!searchQuery.trim()) return sanctions;
         const query = searchQuery.toLowerCase();
@@ -147,12 +147,20 @@ export default function DeanSanctionsPage() {
 
     const handleIssueSanction = async () => {
         if (!sanctionForm.studentId || sanctionForm.days < 1 || !sanctionForm.reason.trim()) {
-            alert('Please fill in all required fields');
+            setFeedbackModal({
+                title: 'Missing Required Fields',
+                message: 'Please fill in all required fields.',
+                tone: 'warning',
+            });
             return;
         }
 
         if (!user) {
-            alert('You must be signed in as a dean to issue sanctions.');
+            setFeedbackModal({
+                title: 'Sign In Required',
+                message: 'You must be signed in as a dean to issue sanctions.',
+                tone: 'warning',
+            });
             return;
         }
 
@@ -190,7 +198,11 @@ export default function DeanSanctionsPage() {
             setSanctionForm({ studentId: '', days: 1, reason: '', description: '' });
         } catch (err) {
             console.error('Failed to save sanction:', err);
-            alert('Failed to save sanction. Please try again.');
+            setFeedbackModal({
+                title: 'Failed to Save Sanction',
+                message: 'Please try again.',
+                tone: 'error',
+            });
         } finally {
             setSavingSanction(false);
         }
@@ -199,7 +211,11 @@ export default function DeanSanctionsPage() {
     const handleReduceSanctionDays = async () => {
         if (!editingSanctionId) return;
         if (editingDays < 0) {
-            alert('Days cannot be negative');
+            setFeedbackModal({
+                title: 'Invalid Days Value',
+                message: 'Days cannot be negative.',
+                tone: 'warning',
+            });
             return;
         }
 
@@ -213,10 +229,18 @@ export default function DeanSanctionsPage() {
             
             setEditingSanctionId(null);
             setEditingDays(0);
-            alert('Sanction days updated successfully');
+            setFeedbackModal({
+                title: 'Sanction Updated',
+                message: 'Sanction days updated successfully.',
+                tone: 'success',
+            });
         } catch (err) {
             console.error('Failed to update sanction days:', err);
-            alert('Failed to update sanction days. Please try again.');
+            setFeedbackModal({
+                title: 'Update Failed',
+                message: 'Failed to update sanction days. Please try again.',
+                tone: 'error',
+            });
         } finally {
             setUpdatingSanction(false);
         }
@@ -224,7 +248,11 @@ export default function DeanSanctionsPage() {
 
     const handleCreateDutySlot = async () => {
         if (!dutySlotForm.title || !dutySlotForm.date || !dutySlotForm.startTime || !dutySlotForm.endTime) {
-            alert('Please fill in all required fields');
+            setFeedbackModal({
+                title: 'Missing Required Fields',
+                message: 'Please fill in all required fields.',
+                tone: 'warning',
+            });
             return;
         }
 
@@ -267,7 +295,11 @@ export default function DeanSanctionsPage() {
             });
         } catch (err) {
             console.error('Failed to save duty slot:', err);
-            alert('Failed to save duty slot. Please try again.');
+            setFeedbackModal({
+                title: 'Failed to Save Duty Slot',
+                message: 'Please try again.',
+                tone: 'error',
+            });
         }
     };
 
@@ -284,7 +316,11 @@ export default function DeanSanctionsPage() {
 
     const handleSaveEditedSanction = async () => {
         if (!editSanctionForm.id || editSanctionForm.days < 1 || !editSanctionForm.reason.trim()) {
-            alert('Please provide valid sanction details.');
+            setFeedbackModal({
+                title: 'Invalid Sanction Details',
+                message: 'Please provide valid sanction details.',
+                tone: 'warning',
+            });
             return;
         }
 
@@ -316,7 +352,11 @@ export default function DeanSanctionsPage() {
             setEditSanctionForm({ id: '', days: 1, reason: '', description: '', status: 'active' });
         } catch (err) {
             console.error('Failed to update sanction:', err);
-            alert('Failed to update sanction. Please try again.');
+            setFeedbackModal({
+                title: 'Failed to Update Sanction',
+                message: 'Please try again.',
+                tone: 'error',
+            });
         } finally {
             setSavingEditedSanction(false);
         }
@@ -349,37 +389,6 @@ export default function DeanSanctionsPage() {
                 <p style={{ color: 'var(--slate-400)', fontSize: 14 }}>
                     Issue sanctions, schedule duty slots, and track renders
                 </p>
-            </div>
-
-            <div
-                style={{
-                    display: 'grid',
-                    gap: 16,
-                    marginBottom: 24,
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-                }}
-            >
-                <div className="stat-tile stat-tile-rose">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-400)' }}>
-                            <AlertTriangle size={20} />
-                        </div>
-                        <span className="badge badge-primary">Sanctions</span>
-                    </div>
-                    <div className="stat-value">{totalSanctionDays}</div>
-                    <div className="stat-label">Days of Sanctions</div>
-                </div>
-
-                <div className="stat-tile stat-tile-amber">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary-400)' }}>
-                            <Clock size={20} />
-                        </div>
-                        <span className="badge badge-primary">Sanctions</span>
-                    </div>
-                    <div className="stat-value">{dutySlots.length}</div>
-                    <div className="stat-label">Scheduled Slots</div>
-                </div>
             </div>
 
             <div style={{ marginBottom: 16, display: 'flex', gap: 10, padding: 6, borderRadius: 999, background: 'rgba(24,24,27,0.72)', border: '1px solid rgba(255,255,255,0.06)', width: '100%' }}>
@@ -892,6 +901,72 @@ export default function DeanSanctionsPage() {
                                     {savingEditedSanction ? 'Saving...' : 'Save Changes'}
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {feedbackModal && (
+                <div
+                    onClick={() => setFeedbackModal(null)}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(0,0,0,0.55)',
+                        backdropFilter: 'blur(6px)',
+                        WebkitBackdropFilter: 'blur(6px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 24,
+                        zIndex: 1000,
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            width: '100%',
+                            maxWidth: 440,
+                            borderRadius: 14,
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            background: 'var(--slate-900)',
+                            padding: 18,
+                        }}
+                    >
+                        <h3
+                            style={{
+                                margin: 0,
+                                fontSize: 16,
+                                fontWeight: 700,
+                                color:
+                                    feedbackModal.tone === 'success'
+                                        ? '#34d399'
+                                        : feedbackModal.tone === 'warning'
+                                          ? '#fbbf24'
+                                          : '#f87171',
+                            }}
+                        >
+                            {feedbackModal.title}
+                        </h3>
+                        <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--slate-300)', lineHeight: 1.6 }}>
+                            {feedbackModal.message}
+                        </p>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+                            <button
+                                onClick={() => setFeedbackModal(null)}
+                                style={{
+                                    padding: '7px 12px',
+                                    borderRadius: 8,
+                                    border: 'none',
+                                    background: 'var(--primary-600)',
+                                    color: 'white',
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                OK
+                            </button>
                         </div>
                     </div>
                 </div>

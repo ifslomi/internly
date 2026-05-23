@@ -23,7 +23,7 @@ export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [totalHours, setTotalHours] = useState(480);
+    const [totalHours, setTotalHours] = useState(486);
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
     const [role, setRole] = useState<'intern' | 'dean'>('intern');
     const [rememberMe, setRememberMe] = useState(false);

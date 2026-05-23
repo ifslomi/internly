@@ -945,40 +945,6 @@ function ReportsContent({
                 </div>
             </div>
 
-            <div
-                style={{
-                    marginBottom: 24,
-                    display: 'flex',
-                    gap: 10,
-                    padding: 6,
-                    borderRadius: 999,
-                    background: 'rgba(24,24,27,0.72)',
-                    border: '1px solid rgba(255,255,255,0.06)',
-                    width: '100%',
-                    justifyContent: 'center',
-                }}
-            >
-                <div
-                    style={{
-                        padding: '10px 18px',
-                        borderRadius: 999,
-                        background: 'linear-gradient(135deg, rgba(16,185,129,0.35), rgba(16,185,129,0.15))',
-                        color: 'white',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        border: '1px solid rgba(16,185,129,0.45)',
-                        boxShadow: '0 8px 20px rgba(16,185,129,0.2)',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 8,
-                    }}
-                >
-                    <FileText size={16} />
-                    Weekly Reports
-                </div>
-            </div>
-
             {weeks.length === 0 ? (
                 <div className="card" style={{ padding: '64px 32px', textAlign: 'center' }}>
                     <FileText size={48} style={{ margin: '0 auto 16px', opacity: 0.2, color: 'var(--slate-400)' }} />

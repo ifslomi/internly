@@ -180,7 +180,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                         email: normalizedEmail,
                         password: '',
                         role: 'intern',
-                        totalRequiredHours: 480,
+                        totalRequiredHours: 486,
                         startDate: now.split('T')[0],
                         createdAt: now,
                         supervisors: [],
@@ -593,7 +593,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 email,
                 password,
                 role: 'dean',
-                totalRequiredHours: 480,
+                totalRequiredHours: 486,
                 startDate: new Date().toISOString().split('T')[0],
                 createdAt: new Date().toISOString(),
                 supervisors: [],
@@ -624,7 +624,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             name,
             email,
             password,
-            totalRequiredHours: 480,
+            totalRequiredHours: 486,
             startDate: new Date().toISOString().split('T')[0],
             role: role as UserRole,
             verificationToken: data.token,
@@ -701,7 +701,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 email,
                 password: '',
                 role: 'intern',
-                totalRequiredHours: 480,
+                totalRequiredHours: 486,
                 startDate: now.split('T')[0],
                 createdAt: now,
                 supervisors: [],
@@ -1018,7 +1018,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const handleGetStudentHourStats = useCallback(async (studentId: string, totalRequiredHours?: number, email?: string): Promise<HourStats> => {
         try {
-            const requiredHours = totalRequiredHours ?? 480;
+            const requiredHours = totalRequiredHours ?? 486;
 
             const resolvedStudent =
                 (await getUserFromFirestore(studentId)) ||
@@ -1058,7 +1058,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             console.error('Error getting student hour stats:', err);
             return {
                 ...emptyStats,
-                totalRequired: totalRequiredHours ?? 480,
+                totalRequired: totalRequiredHours ?? 486,
             };
         }
     }, []);
