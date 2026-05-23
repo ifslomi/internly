@@ -47,6 +47,17 @@ type WeekRange = {
     report: WeeklyReport | null;
 }
 
+function blockScientificNumberKeys(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (['e', 'E', '+', '-'].includes(event.key)) {
+        event.preventDefault();
+    }
+}
+
+function sanitizeDecimalInput(value: string) {
+    const normalized = value.replace(/[^\d.]/g, '');
+    return normalized.replace(/(\..*)\./g, '$1');
+}
+
 export default function ReportsPage() {
     const { user, logs, saveWeeklyReport: ctxSaveReport, getWeeklyReports: ctxGetReports, deleteLog, updateLog } = useApp();
     
@@ -93,17 +104,6 @@ export default function ReportsPage() {
     const [editHours, setEditHours] = useState(8);
     const [savingEdit, setSavingEdit] = useState(false);
     const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
-
-    const blockScientificNumberKeys = (event: React.KeyboardEvent<HTMLInputElement>) => {
-        if (['e', 'E', '+', '-'].includes(event.key)) {
-            event.preventDefault();
-        }
-    };
-
-    const sanitizeDecimalInput = (value: string) => {
-        const normalized = value.replace(/[^\d.]/g, '');
-        return normalized.replace(/(\..*)\./g, '$1');
-    };
 
     const weeks = useMemo(
         () => buildWeeklyReportSchedule(user?.startDate, savedReports),
