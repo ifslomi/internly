@@ -53,7 +53,7 @@ interface AppContextType {
     deleteCompetency: (id: string) => Promise<void>;
     refreshData: () => Promise<void>;
     signUpWithGoogle: (password: string, role?: string) => Promise<void>;
-    loginWithGoogle: () => Promise<void>;
+    loginWithGoogle: (options?: { preferRedirect?: boolean }) => Promise<void>;
     verifyCode: (code: string) => Promise<void>;
     resendCode: () => Promise<void>;
     saveWeeklyReport: (report: Omit<WeeklyReport, 'id' | 'createdAt'>) => Promise<WeeklyReport>;
@@ -166,6 +166,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     const localReports = storage.getWeeklyReports(localUser.id);
                     await migrateLocalDataToFirestore(localUser, localLogs, localReports);
                     firestoreUser = await getUserFromFirestore(firebaseUser.uid);
+                }
+            }
+
+            if (!firestoreUser) {
+                // Support redirect-based Google sign-in by auto-provisioning first-time UB users.
+                const normalizedEmail = (firebaseUser.email || '').trim().toLowerCase();
+                if (isUbEmail(normalizedEmail)) {
+                    const now = new Date().toISOString();
+                    const newUser: User = {
+                        id: firebaseUser.uid,
+                        name: firebaseUser.displayName || normalizedEmail.split('@')[0] || 'User',
+                        email: normalizedEmail,
+                        password: '',
+                        role: 'intern',
+                        totalRequiredHours: 480,
+                        startDate: now.split('T')[0],
+                        createdAt: now,
+                        supervisors: [],
+                        reminderEnabled: true,
+                        profileImage: googlePhoto,
+                    };
+                    await saveUserToFirestore(newUser);
+                    firestoreUser = newUser;
                 }
             }
 
@@ -596,11 +619,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
 
     // ─── Google Login ───────────────────────────────────
-    const handleLoginWithGoogle = async () => {
-        const { signInWithPopup } = await import('firebase/auth');
+    const handleLoginWithGoogle = async (options?: { preferRedirect?: boolean }) => {
+        const { signInWithPopup, signInWithRedirect } = await import('firebase/auth');
         const { googleProvider } = await import('./firebase');
-        const result = await signInWithPopup(auth, googleProvider);
-        const firebaseUser = result.user;
+
+        if (options?.preferRedirect) {
+            await signInWithRedirect(auth, googleProvider);
+            return;
+        }
+
+        let firebaseUser: FirebaseAuthUser;
+        try {
+            const result = await signInWithPopup(auth, googleProvider);
+            firebaseUser = result.user;
+        } catch (err) {
+            const code = (err as { code?: string } | null)?.code || '';
+            if (
+                code === 'auth/popup-blocked' ||
+                code === 'auth/popup-closed-by-user' ||
+                code === 'auth/cancelled-popup-request'
+            ) {
+                await signInWithRedirect(auth, googleProvider);
+                return;
+            }
+            throw err;
+        }
+
         const email = (firebaseUser.email || '').trim().toLowerCase();
         const uid = firebaseUser.uid;
         const googlePhoto = getGoogleProfileImage(firebaseUser);

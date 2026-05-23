@@ -16,6 +16,7 @@ export default function LoginPage() {
     const searchParams = useSearchParams();
 
     const requestedMode = useMemo<AuthMode>(() => (searchParams.get('mode') === 'signup' ? 'signup' : 'login'), [searchParams]);
+    const ubFlow = useMemo(() => searchParams.get('ubFlow'), [searchParams]);
     const [mode, setMode] = useState<AuthMode>(requestedMode);
 
     const [name, setName] = useState('');
@@ -71,6 +72,62 @@ export default function LoginPage() {
             setRememberMe(true);
         }
     }, []);
+
+    useEffect(() => {
+        if (mode !== 'login' || ubFlow !== 'redirect' || loading || !!user || googleLoading) return;
+
+        let cancelled = false;
+        const startRedirectFlow = async () => {
+            setGoogleLoading(true);
+            setShowUbPopupModal(true);
+            setUbPopupTimedOut(false);
+            startRouteLoading();
+            try {
+                await loginWithGoogle({ preferRedirect: true });
+            } catch (err: unknown) {
+                if (cancelled) return;
+                const firebaseErr = err as { code?: string; message?: string };
+                const msg =
+                    firebaseErr.code === 'auth/unauthorized-domain'
+                        ? 'This domain is not authorized in Firebase Auth. Add your Vercel domain in Firebase Console > Authentication > Settings > Authorized domains.'
+                        : err instanceof Error
+                            ? err.message
+                            : 'UB Mail redirect sign-in failed. Please try again.';
+                showToast({ kind: 'error', title: 'UB Mail Sign-in Failed', message: msg });
+                setShowUbPopupModal(false);
+                setGoogleLoading(false);
+                stopRouteLoading();
+            }
+        };
+
+        void startRedirectFlow();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [googleLoading, loading, loginWithGoogle, mode, ubFlow, user]);
+
+    const openUbFallbackTab = () => {
+        const opened = window.open('/login?ubFlow=redirect', '_blank', 'noopener,noreferrer');
+        if (!opened) {
+            showToast({
+                kind: 'warning',
+                title: 'New Tab Blocked',
+                message: 'Your browser blocked opening a new tab. Using redirect sign-in in this tab instead.',
+            });
+            void loginWithGoogle({ preferRedirect: true });
+            return;
+        }
+
+        showToast({
+            kind: 'info',
+            title: 'Fallback Started',
+            message: 'Opened UB Mail sign-in in a new tab. Complete login there.',
+        });
+        setShowUbPopupModal(false);
+        setGoogleLoading(false);
+        stopRouteLoading();
+    };
 
     const switchAuthMode = (nextMode: AuthMode) => {
         if (nextMode === mode) return;
@@ -591,12 +648,20 @@ export default function LoginPage() {
                                                 ? 'Popup closed before sign-in completed.'
                                                 : firebaseErr.code === 'auth/popup-blocked'
                                                     ? 'Popup was blocked by your browser. Allow popups and try again.'
+                                                : firebaseErr.code === 'auth/unauthorized-domain'
+                                                    ? 'This domain is not authorized in Firebase Auth. Add your Vercel domain in Firebase Console > Authentication > Settings > Authorized domains.'
                                                     : err instanceof Error
                                                         ? err.message
                                                         : mode === 'login'
                                                             ? 'UB Mail sign-in failed. Please try again.'
                                                             : 'UB Mail sign-up failed. Please try again.';
                                         showToast({ kind: 'error', title: mode === 'login' ? 'UB Mail Sign-in Failed' : 'UB Mail Sign-up Failed', message: msg });
+                                        if (
+                                            mode === 'login' &&
+                                            (firebaseErr.code === 'auth/popup-blocked' || firebaseErr.code === 'auth/popup-closed-by-user')
+                                        ) {
+                                            openUbFallbackTab();
+                                        }
                                         if (mode === 'login') {
                                             stopRouteLoading();
                                         }
@@ -807,6 +872,24 @@ export default function LoginPage() {
                                 ? 'Still waiting. If the popup is open, finish sign-in there. If it was closed, try UB Mail again.'
                                 : 'Signing in with UB Mail. Please complete sign-in in the popup window.'}
                         </p>
+                        {ubPopupTimedOut && (
+                            <button
+                                type="button"
+                                onClick={openUbFallbackTab}
+                                style={{
+                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    background: 'rgba(255,255,255,0.08)',
+                                    color: 'white',
+                                    borderRadius: 10,
+                                    padding: '10px 14px',
+                                    fontSize: 13,
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                Open sign-in in new tab
+                            </button>
+                        )}
                     </div>
                 </div>,
                 document.body,

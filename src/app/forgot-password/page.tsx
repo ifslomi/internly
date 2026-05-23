@@ -22,6 +22,7 @@ export default function ForgotPasswordPage() {
         try {
             const { sendPasswordResetEmail, fetchSignInMethodsForEmail } = await import('firebase/auth');
             const { auth } = await import('@/lib/firebase');
+            const appBaseUrl = (process.env.NEXT_PUBLIC_APP_URL || window.location.origin).replace(/\/$/, '');
 
             const signInMethods = await fetchSignInMethodsForEmail(auth, normalizedEmail);
             const localOnlyUser = storage.findUserByEmail(normalizedEmail);
@@ -34,7 +35,7 @@ export default function ForgotPasswordPage() {
 
             if (signInMethods.length > 0) {
                 await sendPasswordResetEmail(auth, normalizedEmail, {
-                    url: `${window.location.origin}/login`,
+                    url: `${appBaseUrl}/login`,
                     handleCodeInApp: false,
                 });
             }
