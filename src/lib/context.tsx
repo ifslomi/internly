@@ -633,15 +633,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const result = await signInWithPopup(auth, googleProvider);
             firebaseUser = result.user;
         } catch (err) {
-            const code = (err as { code?: string } | null)?.code || '';
-            if (
-                code === 'auth/popup-blocked' ||
-                code === 'auth/popup-closed-by-user' ||
-                code === 'auth/cancelled-popup-request'
-            ) {
-                await signInWithRedirect(auth, googleProvider);
-                return;
-            }
             throw err;
         }
 

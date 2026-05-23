@@ -111,11 +111,10 @@ export default function LoginPage() {
         const opened = window.open('/login?ubFlow=redirect', '_blank', 'noopener,noreferrer');
         if (!opened) {
             showToast({
-                kind: 'warning',
+                kind: 'error',
                 title: 'New Tab Blocked',
-                message: 'Your browser blocked opening a new tab. Using redirect sign-in in this tab instead.',
+                message: 'Your browser blocked opening a new tab. Allow popups/new tabs for this site, then try UB Mail again.',
             });
-            void loginWithGoogle({ preferRedirect: true });
             return;
         }
 
@@ -658,7 +657,11 @@ export default function LoginPage() {
                                         showToast({ kind: 'error', title: mode === 'login' ? 'UB Mail Sign-in Failed' : 'UB Mail Sign-up Failed', message: msg });
                                         if (
                                             mode === 'login' &&
-                                            (firebaseErr.code === 'auth/popup-blocked' || firebaseErr.code === 'auth/popup-closed-by-user')
+                                            (
+                                                firebaseErr.code === 'auth/popup-blocked' ||
+                                                firebaseErr.code === 'auth/popup-closed-by-user' ||
+                                                firebaseErr.code === 'auth/cancelled-popup-request'
+                                            )
                                         ) {
                                             openUbFallbackTab();
                                         }
