@@ -1,6 +1,6 @@
 'use client';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect } from 'firebase/auth';
 import type { User as FirebaseAuthUser } from 'firebase/auth';
 import { User, DailyLog, WeeklyReport, HourStats, Competency, UserRole } from './types';
 import * as storage from './storage';
@@ -620,7 +620,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // ─── Google Login ───────────────────────────────────
     const handleLoginWithGoogle = async (options?: { preferRedirect?: boolean }) => {
-        const { signInWithPopup, signInWithRedirect } = await import('firebase/auth');
         const { googleProvider } = await import('./firebase');
 
         if (options?.preferRedirect) {

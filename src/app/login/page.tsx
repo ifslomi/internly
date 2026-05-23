@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApp } from '@/lib/context';
 import { getRememberedEmail } from '@/lib/storage';
@@ -36,6 +36,7 @@ export default function LoginPage() {
     const [showUbPopupModal, setShowUbPopupModal] = useState(false);
     const [ubPopupTimedOut, setUbPopupTimedOut] = useState(false);
     const [mounted, setMounted] = useState(false);
+    const reservedFallbackTabRef = useRef<Window | null>(null);
 
     useEffect(() => {
         setMode(requestedMode);
@@ -107,14 +108,69 @@ export default function LoginPage() {
         };
     }, [googleLoading, loading, loginWithGoogle, mode, ubFlow, user]);
 
+    const reserveUbFallbackTab = () => {
+        const reservedFallbackTab = reservedFallbackTabRef.current;
+        if (reservedFallbackTab && !reservedFallbackTab.closed) return reservedFallbackTab;
+        const tab = window.open('', '_blank');
+        if (!tab) {
+            return null;
+        }
+
+        try {
+            tab.document.title = 'Internly UB Mail Sign-in';
+            tab.document.body.style.margin = '0';
+            tab.document.body.style.background = '#0f172a';
+            tab.document.body.style.color = '#e2e8f0';
+            tab.document.body.style.fontFamily = 'system-ui, -apple-system, Segoe UI, sans-serif';
+            tab.document.body.innerHTML = '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px;line-height:1.6">Preparing UB Mail sign-in fallback...</div>';
+        } catch {
+            // Ignore if browser prevents writing to blank tab content.
+        }
+
+        reservedFallbackTabRef.current = tab;
+        return tab;
+    };
+
+    const closeReservedFallbackTab = () => {
+        const reservedFallbackTab = reservedFallbackTabRef.current;
+        if (!reservedFallbackTab || reservedFallbackTab.closed) {
+            reservedFallbackTabRef.current = null;
+            return;
+        }
+
+        try {
+            reservedFallbackTab.close();
+        } catch {
+            // ignore
+        }
+        reservedFallbackTabRef.current = null;
+    };
+
     const openUbFallbackTab = () => {
-        const opened = window.open('/login?ubFlow=redirect', '_blank', 'noopener,noreferrer');
-        if (!opened) {
+        let tab = reservedFallbackTabRef.current;
+        if (!tab || tab.closed) {
+            tab = window.open('', '_blank');
+        }
+
+        if (!tab) {
             showToast({
                 kind: 'error',
                 title: 'New Tab Blocked',
                 message: 'Your browser blocked opening a new tab. Allow popups/new tabs for this site, then try UB Mail again.',
             });
+            reservedFallbackTabRef.current = null;
+            return;
+        }
+
+        try {
+            tab.location.href = '/login?ubFlow=redirect';
+        } catch {
+            showToast({
+                kind: 'error',
+                title: 'New Tab Navigation Failed',
+                message: 'Could not start fallback sign-in in the new tab. Please try UB Mail again.',
+            });
+            reservedFallbackTabRef.current = null;
             return;
         }
 
@@ -123,6 +179,7 @@ export default function LoginPage() {
             title: 'Fallback Started',
             message: 'Opened UB Mail sign-in in a new tab. Complete login there.',
         });
+        reservedFallbackTabRef.current = null;
         setShowUbPopupModal(false);
         setGoogleLoading(false);
         stopRouteLoading();
@@ -620,6 +677,7 @@ export default function LoginPage() {
 
                                     setGoogleLoading(true);
                                     if (mode === 'login') {
+                                        reserveUbFallbackTab();
                                         setShowUbPopupModal(true);
                                         setUbPopupTimedOut(false);
                                         startRouteLoading();
@@ -628,6 +686,7 @@ export default function LoginPage() {
                                     try {
                                         if (mode === 'login') {
                                             await loginWithGoogle();
+                                            closeReservedFallbackTab();
                                             showToast({ kind: 'success', title: 'Welcome Back', message: 'UB Mail login successful.' });
                                             // Let the auth listener redirect based on role (dean -> /dean-dashboard)
                                         } else {
@@ -670,6 +729,9 @@ export default function LoginPage() {
                                         }
                                         setShowUbPopupModal(false);
                                     } finally {
+                                        if (mode !== 'login') {
+                                            closeReservedFallbackTab();
+                                        }
                                         setGoogleLoading(false);
                                     }
                                 }}
