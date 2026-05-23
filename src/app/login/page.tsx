@@ -24,6 +24,7 @@ export default function LoginPage() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [totalHours, setTotalHours] = useState(480);
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [role, setRole] = useState<'intern' | 'dean'>('intern');
     const [rememberMe, setRememberMe] = useState(false);
     const [agreedTerms, setAgreedTerms] = useState(false);
     const [policyModal, setPolicyModal] = useState<'Privacy' | 'Terms' | null>(null);
@@ -57,7 +58,10 @@ export default function LoginPage() {
     }, [googleLoading, mode]);
 
     useEffect(() => {
-        if (!loading && user) navigateWithLoader(router, '/dashboard');
+                if (!loading && user) {
+            const destination = user.role === 'dean' ? '/dean-dashboard/ojt-profiles' : '/dashboard';
+            navigateWithLoader(router, destination);
+        }
     }, [user, loading, router]);
 
     useEffect(() => {
@@ -86,7 +90,7 @@ export default function LoginPage() {
         try {
             await login(email, password, rememberMe);
             showToast({ kind: 'success', title: 'Welcome Back', message: 'Login successful.' });
-            navigateWithLoader(router, '/dashboard');
+            // Will be handled by useEffect above
         } catch (err: unknown) {
             const firebaseErr = err as { code?: string; message?: string };
             if (firebaseErr.code === 'auth/wrong-password' || firebaseErr.code === 'auth/invalid-credential') {
@@ -111,7 +115,7 @@ export default function LoginPage() {
             showToast({ kind: 'error', title: 'Sign Up Failed', message: 'You must agree to the Terms of Service and Privacy Policy.' });
             return;
         }
-        if (!isUbEmail(email)) {
+        if (role !== 'dean' && !isUbEmail(email)) {
             showToast({ kind: 'error', title: 'Sign Up Failed', message: 'Please use your @ub.edu.ph email address.' });
             return;
         }
@@ -119,8 +123,14 @@ export default function LoginPage() {
             showToast({ kind: 'error', title: 'Sign Up Failed', message: 'Passwords do not match.' });
             return;
         }
-        if (password.length < 6) {
-            showToast({ kind: 'error', title: 'Sign Up Failed', message: 'Password must be at least 6 characters.' });
+        const hasUpperCase = /[A-Z]/.test(password);
+        const hasNumber = /\d/.test(password);
+        if (password.length < 8 || !hasUpperCase || !hasNumber) {
+            showToast({ 
+                kind: 'error', 
+                title: 'Weak Password', 
+                message: 'Password must be at least 8 characters long and contain both an uppercase letter and a number.' 
+            });
             return;
         }
         if (totalHours < 1) {
@@ -130,9 +140,14 @@ export default function LoginPage() {
 
         setSubmitting(true);
         try {
-            await signUp(name, email, password, totalHours, startDate);
-            showToast({ kind: 'success', title: 'Account Created', message: 'Verify your UB email to continue.' });
-            navigateWithLoader(router, '/verify-email');
+            await signUp(name, email, password, totalHours, startDate, role);
+            if (role === 'dean') {
+                showToast({ kind: 'success', title: 'Account Created', message: 'Dean account created successfully.' });
+                navigateWithLoader(router, '/dean-dashboard/ojt-profiles');
+            } else {
+                showToast({ kind: 'success', title: 'Account Created', message: 'Verify your UB email to continue.' });
+                navigateWithLoader(router, '/verify-email');
+            }
         } catch (err: unknown) {
             const firebaseErr = err as { code?: string; message?: string };
             if (firebaseErr.code === 'auth/email-already-in-use') {
@@ -374,7 +389,7 @@ export default function LoginPage() {
                                                     id="signup-password"
                                                     className="input"
                                                     type={showPassword ? 'text' : 'password'}
-                                                    placeholder="Min 6 characters"
+                                                    placeholder="Min 8 chars, A-Z, 0-9"
                                                     value={password}
                                                     onChange={(e) => setPassword(e.target.value)}
                                                     required
@@ -523,8 +538,14 @@ export default function LoginPage() {
                                             showToast({ kind: 'error', title: 'UB Mail Sign-up Failed', message: 'Passwords do not match.' });
                                             return;
                                         }
-                                        if (password.length < 6) {
-                                            showToast({ kind: 'error', title: 'UB Mail Sign-up Failed', message: 'Password must be at least 6 characters.' });
+                                        const hasUpperCase = /[A-Z]/.test(password);
+                                        const hasNumber = /\d/.test(password);
+                                        if (password.length < 8 || !hasUpperCase || !hasNumber) {
+                                            showToast({ 
+                                                kind: 'error', 
+                                                title: 'UB Mail Sign-up Failed', 
+                                                message: 'Password must be at least 8 characters long and contain both an uppercase letter and a number.' 
+                                            });
                                             return;
                                         }
                                     }
@@ -540,11 +561,16 @@ export default function LoginPage() {
                                         if (mode === 'login') {
                                             await loginWithGoogle();
                                             showToast({ kind: 'success', title: 'Welcome Back', message: 'UB Mail login successful.' });
-                                            navigateWithLoader(router, '/dashboard');
+                                            // Let the auth listener redirect based on role (dean -> /dean-dashboard)
                                         } else {
-                                            await signUpWithGoogle(password);
-                                            showToast({ kind: 'success', title: 'Account Created', message: 'Verify your UB email to continue.' });
-                                            navigateWithLoader(router, '/verify-email');
+                                            await signUpWithGoogle(password, role);
+                                            if (role === 'dean') {
+                                                showToast({ kind: 'success', title: 'Account Created', message: 'Dean account created successfully.' });
+                                                navigateWithLoader(router, '/dean-dashboard/ojt-profiles');
+                                            } else {
+                                                showToast({ kind: 'success', title: 'Account Created', message: 'Verify your UB email to continue.' });
+                                                navigateWithLoader(router, '/verify-email');
+                                            }
                                         }
                                     } catch (err: unknown) {
                                         const firebaseErr = err as { code?: string; message?: string };
@@ -616,18 +642,11 @@ export default function LoginPage() {
 
                             <div style={{ height: 14 }} />
 
-                            <p style={{ textAlign: 'center', fontSize: 14, color: 'var(--slate-400)' }}>
-                                {mode === 'login' ? 'Don&apos;t have an account?' : 'Already have an account?'}{' '}
+                            <p style={{ textAlign: 'center', fontSize: 14, color: 'var(--slate-400)', marginTop: 8 }}>
+                                {mode === 'login' ? "Don't have an account?" : "Already have an account?"}{' '}
                                 <button
                                     onClick={() => switchAuthMode(mode === 'login' ? 'signup' : 'login')}
-                                    style={{
-                                        color: 'var(--primary-400)',
-                                        fontWeight: 600,
-                                        background: 'none',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        fontSize: 14,
-                                    }}
+                                    className="auth-toggle-btn"
                                 >
                                     {mode === 'login' ? 'Sign Up' : 'Log In'}
                                 </button>
@@ -809,6 +828,25 @@ export default function LoginPage() {
                     .auth-card {
                         min-height: auto !important;
                     }
+                }
+                .auth-toggle-btn {
+                    color: var(--primary-400);
+                    font-weight: 700;
+                    background: none;
+                    border: none;
+                    cursor: pointer;
+                    font-size: 14px;
+                    padding: 0 4px;
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                    text-underline-offset: 4px;
+                }
+                .auth-toggle-btn:hover {
+                    color: var(--primary-300);
+                    text-decoration: underline;
+                    transform: translateY(-1px);
+                }
+                .auth-toggle-btn:active {
+                    transform: translateY(0);
                 }
             `}</style>
         </div>

@@ -1,9 +1,12 @@
+export type UserRole = 'intern' | 'dean';
+
 export interface User {
   id: string;
   name: string;
   fullName?: string;
   email: string;
   password: string;
+  role?: UserRole;
   address?: string;
   phoneNumber?: string;
   contact?: string;
@@ -65,8 +68,16 @@ export interface Competency {
 export interface WeeklyReport {
   id: string;
   userId: string;
+  weekNumber: number;
   weekStart: string;
   weekEnd: string;
+  deadline: string;
+  hoursRendered: number;
+  fileUrl: string;
+  fileName: string;
+  filePublicId?: string;
+  submittedAt: string;
+  status: 'submitted';
   reflection: string;
   logs: DailyLog[];
   importedPdfUrl?: string;
@@ -138,5 +149,58 @@ export interface Supervisor {
   email?: string;
   department?: string;
   addedBy: string;
+  createdAt: string;
+}
+
+export interface Sanction {
+  id: string;
+  userId: string;
+  userEmail?: string;
+  deanId: string;
+  days: number;
+  reason: string;
+  description: string;
+  issuedDate: string;
+  status: 'active' | 'completed' | 'cancelled';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DutySlot {
+  id: string;
+  deanId: string;
+  title: string;
+  description: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  location?: string;
+  capacity: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SanctionRender {
+  id: string;
+  sanctionId: string;
+  userId: string;
+  dutySlotId: string;
+  status: 'available' | 'availed' | 'completed' | 'missed';
+  attendanceDate?: string;
+  hoursCompleted?: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DeanNotification {
+  id: string;
+  userId: string;
+  type: 'duty_slot_available' | 'sanction_issued' | 'report_submitted' | 'system';
+  title: string;
+  message: string;
+  dutySlotId?: string;
+  sanctionId?: string;
+  read: boolean;
   createdAt: string;
 }

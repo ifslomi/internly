@@ -1088,6 +1088,17 @@ select.input {
   padding-right: 40px;
 }
 
+select.input option {
+  background: var(--slate-900);
+  color: white;
+}
+
+/* Fix for browsers that don't respect background on option tags via inherited styles */
+select option {
+    background-color: #18181b !important;
+    color: white !important;
+}
+
 /* === RANGE INPUT === */
 .hours-range {
   width: 100%;

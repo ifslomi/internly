@@ -23,14 +23,14 @@ function signToken(code: string, email: string, expiresAt: number): string {
 
 export async function POST(request: NextRequest) {
     try {
-        const { email, name } = await request.json();
+        const { email, name, role } = await request.json();
 
         const normalizedEmail = String(email || '').trim().toLowerCase();
 
         if (!normalizedEmail) {
             return NextResponse.json({ error: 'Email is required' }, { status: 400 });
         }
-        if (!normalizedEmail.endsWith('@ub.edu.ph')) {
+        if (role !== 'dean' && !normalizedEmail.endsWith('@ub.edu.ph')) {
             return NextResponse.json(
                 { error: 'Please use your @ub.edu.ph email address.' },
                 { status: 400 }

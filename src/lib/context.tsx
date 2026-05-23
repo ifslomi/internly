@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import type { User as FirebaseAuthUser } from 'firebase/auth';
-import { User, DailyLog, WeeklyReport, HourStats, Competency } from './types';
+import { User, DailyLog, WeeklyReport, HourStats, Competency, UserRole } from './types';
 import * as storage from './storage';
 import { calculateHourStats } from './calculations';
 import {
@@ -21,6 +21,15 @@ import {
     saveWeeklyReportToFirestore,
     migrateLocalDataToFirestore,
     migrateFromFlatToSubcollections,
+    getAllStudentsFromFirestore,
+    getSanctionsForStudent,
+    saveSanctionToFirestore,
+    updateSanctionDaysInFirestore,
+    getDutySlotsFromFirestore,
+    createDutySlotInFirestore,
+    getSanctionRendersFromFirestore,
+    createSanctionRenderInFirestore,
+    updateSanctionRenderStatus,
 } from './firestore';
 import { upsertChatUser, syncChatUserProfileInConversations } from './chat';
 import { auth } from './firebase';
@@ -32,7 +41,7 @@ interface AppContextType {
     competencies: Competency[];
     stats: HourStats;
     loading: boolean;
-    signUp: (name: string, email: string, password: string, hours: number, startDate: string) => Promise<void>;
+    signUp: (name: string, email: string, password: string, hours: number, startDate: string, role?: string) => Promise<void>;
     login: (email: string, password: string, rememberMe: boolean) => Promise<void>;
     logout: () => void;
     updateUser: (updates: Partial<User>) => Promise<void>;
@@ -42,7 +51,7 @@ interface AppContextType {
     addCompetency: (competency: Omit<Competency, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
     deleteCompetency: (id: string) => Promise<void>;
     refreshData: () => Promise<void>;
-    signUpWithGoogle: (password: string) => Promise<void>;
+    signUpWithGoogle: (password: string, role?: string) => Promise<void>;
     loginWithGoogle: () => Promise<void>;
     verifyCode: (code: string) => Promise<void>;
     resendCode: () => Promise<void>;
@@ -50,6 +59,17 @@ interface AppContextType {
     getWeeklyReports: (userId: string) => Promise<WeeklyReport[]>;
     requiresPasswordCredentialSetup: boolean;
     setupPasswordCredential: (password: string) => Promise<void>;
+    // Dean functions
+    getAllStudents: () => Promise<User[]>;
+    getStudentHourStats: (studentId: string, totalRequiredHours?: number, email?: string) => Promise<HourStats>;
+    getSanctionsForStudent: (studentId: string, studentEmail?: string) => Promise<any[]>;
+    saveSanction: (sanction: any) => Promise<string>;
+    updateSanctionDays: (sanctionId: string, newDays: number) => Promise<void>;
+    getDutySlots: () => Promise<any[]>;
+    createDutySlot: (slot: any) => Promise<string>;
+    getSanctionRenders: (filters?: any) => Promise<any[]>;
+    createSanctionRender: (render: any) => Promise<string>;
+    updateSanctionRenderStatus: (renderId: string, status: string, updates?: any) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -150,15 +170,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                     await migrateFromFlatToSubcollections();
                 } catch { /* non-critical */ }
 
-                // Load logs from Firestore (now from subcollections)
-                const firestoreLogs = await getDailyLogsFromFirestore(firebaseUser.uid);
-                storage.cacheDailyLogs(firestoreUser.id, firestoreLogs);
-                setLogs(firestoreLogs);
-                setStats(calculateHourStats(firestoreLogs, firestoreUser.totalRequiredHours));
+                // Load logs and competencies independently so one permission failure does not drop the whole session.
+                const [logsResult, competenciesResult] = await Promise.allSettled([
+                    getDailyLogsFromFirestore(firestoreUser.id),
+                    getCompetenciesFromFirestore(firestoreUser.id),
+                ]);
 
-                const firestoreCompetencies = await getCompetenciesFromFirestore(firebaseUser.uid);
+                const firestoreLogs = logsResult.status === 'fulfilled' ? logsResult.value : [];
+                const firestoreCompetencies = competenciesResult.status === 'fulfilled' ? competenciesResult.value : [];
+
+                if (logsResult.status === 'rejected') {
+                    console.error('[Context] Failed to load Firestore logs:', logsResult.reason);
+                }
+                if (competenciesResult.status === 'rejected') {
+                    console.error('[Context] Failed to load Firestore competencies:', competenciesResult.reason);
+                }
+
+                storage.cacheDailyLogs(firestoreUser.id, firestoreLogs);
                 storage.cacheCompetencies(firestoreUser.id, firestoreCompetencies);
+                setLogs(firestoreLogs);
                 setCompetencies(firestoreCompetencies);
+                setStats(calculateHourStats(firestoreLogs, firestoreUser.totalRequiredHours));
             } else {
                 setUser(null);
                 setLogs([]);
@@ -216,8 +248,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }, [refreshData]);
 
     // ─── Sign Up ────────────────────────────────────────
-    const handleSignUp = async (name: string, email: string, password: string, hours: number, startDate: string) => {
-        if (!isUbEmail(email)) {
+    const handleSignUp = async (name: string, email: string, password: string, hours: number, startDate: string, role?: string) => {
+        if (role !== 'dean' && !isUbEmail(email)) {
             throw new Error('Please use your @ub.edu.ph email address.');
         }
         // Check localStorage for existing account (quick check)
@@ -226,13 +258,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             throw new Error('An account with this email already exists.');
         }
 
+        // Dean signup: skip OTP, create account immediately
+        if (role === 'dean') {
+            const { createUserWithEmailAndPassword } = await import('firebase/auth');
+            const credential = await createUserWithEmailAndPassword(auth, email, password);
+            const uid = credential.user.uid;
+
+            const newUser: User = {
+                id: uid,
+                name,
+                email,
+                password,
+                role: 'dean',
+                totalRequiredHours: hours,
+                startDate,
+                createdAt: new Date().toISOString(),
+                supervisors: [],
+                reminderEnabled: true,
+            };
+
+            // Save to both localStorage and Firestore
+            storage.cacheUser(newUser);
+            await saveUserToFirestore(newUser);
+            storage.clearPendingSignup();
+
+            // Keep them signed in (don't sign out)
+            setUser(newUser);
+            return;
+        }
+
+        // Intern signup: send verification code
         // Note: We don't check Firestore here because the user isn't authenticated yet.
         // Firebase Auth will reject duplicate emails when createUserWithEmailAndPassword is called.
 
         const res = await fetch('/api/send-verification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, name }),
+            body: JSON.stringify({ email, name, role }),
         });
 
         const data = await res.json();
@@ -246,6 +308,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             password,
             totalRequiredHours: hours,
             startDate,
+            role: role as UserRole,
             verificationToken: data.token,
             tokenExpiresAt: data.expiresAt,
         });
@@ -326,7 +389,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const res = await fetch('/api/send-verification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: pending.email, name: pending.name }),
+            body: JSON.stringify({ email: pending.email, name: pending.name, role: pending.role }),
         });
 
         const data = await res.json();
@@ -431,7 +494,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
 
     // ─── Google Sign-Up ─────────────────────────────────
-    const handleSignUpWithGoogle = async (password: string) => {
+    const handleSignUpWithGoogle = async (password: string, role?: string) => {
         const { signInWithPopup } = await import('firebase/auth');
         const { googleProvider } = await import('./firebase');
         const result = await signInWithPopup(auth, googleProvider);
@@ -443,7 +506,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             throw new Error('Password must be at least 6 characters.');
         }
 
-        if (!isUbEmail(email)) {
+        if (role !== 'dean' && !isUbEmail(email)) {
             try {
                 const { signOut } = await import('firebase/auth');
                 await signOut(auth);
@@ -458,10 +521,55 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             throw new Error('An account with this email already exists. Please log in instead.');
         }
 
+        // Dean signup: skip OTP, create account immediately
+        if (role === 'dean') {
+            // Link email/password credential to the Google account
+            if (password) {
+                const { EmailAuthProvider, linkWithCredential } = await import('firebase/auth');
+                try {
+                    const credential = EmailAuthProvider.credential(email, password);
+                    await linkWithCredential(firebaseUser, credential);
+                } catch (err: unknown) {
+                    const code = (err as { code?: string })?.code || '';
+                    if (
+                        code !== 'auth/provider-already-linked' &&
+                        code !== 'auth/email-already-in-use' &&
+                        code !== 'auth/credential-already-in-use'
+                    ) {
+                        throw err;
+                    }
+                }
+            }
+
+            const newUser: User = {
+                id: firebaseUser.uid,
+                name,
+                email,
+                password,
+                role: 'dean',
+                totalRequiredHours: 480,
+                startDate: new Date().toISOString().split('T')[0],
+                createdAt: new Date().toISOString(),
+                supervisors: [],
+                reminderEnabled: true,
+                profileImage: firebaseUser.photoURL || undefined,
+            };
+
+            // Save to both localStorage and Firestore
+            storage.cacheUser(newUser);
+            await saveUserToFirestore(newUser);
+            storage.clearPendingSignup();
+
+            // Keep them signed in
+            setUser(newUser);
+            return;
+        }
+
+        // Intern signup: send verification code
         const res = await fetch('/api/send-verification', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, name }),
+            body: JSON.stringify({ email, name, role }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to send verification code.');
@@ -472,6 +580,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             password,
             totalRequiredHours: 480,
             startDate: new Date().toISOString().split('T')[0],
+            role: role as UserRole,
             verificationToken: data.token,
             tokenExpiresAt: data.expiresAt,
             googleUid: firebaseUser.uid,
@@ -536,6 +645,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 name: firebaseUser.displayName || email.split('@')[0] || 'User',
                 email,
                 password: '',
+                role: 'intern',
                 totalRequiredHours: 480,
                 startDate: now.split('T')[0],
                 createdAt: now,
@@ -794,17 +904,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const handleSaveWeeklyReport = async (report: Omit<WeeklyReport, 'id' | 'createdAt'>): Promise<WeeklyReport> => {
         const endGlobalLoading = beginGlobalLoading();
         try {
-            // Save to localStorage cache
-            const localReport = storage.saveWeeklyReport(report);
-
-            // Persist to Firestore
             if (auth.currentUser) {
+                console.log('[Context] Saving weekly report to Firestore:', { weekNumber: report.weekNumber, userId: report.userId });
                 try {
-                    return await saveWeeklyReportToFirestore(report);
-                } catch (err) {
-                    console.error('[Context] Failed to save report to Firestore:', err);
+                    const savedReport = await saveWeeklyReportToFirestore(report);
+                    console.log('[Context] Weekly report saved successfully:', savedReport);
+                    storage.cacheWeeklyReport(savedReport);
+                    return savedReport;
+                } catch (firestoreError) {
+                    console.error('[Context] Firestore save failed, falling back to localStorage:', firestoreError);
+                    const localReport = storage.saveWeeklyReport(report);
+                    storage.cacheWeeklyReport(localReport);
+                    // Still throw the error so the caller knows Firestore failed
+                    throw firestoreError;
                 }
             }
+            console.log('[Context] No auth user, saving to localStorage');
+            const localReport = storage.saveWeeklyReport(report);
+            storage.cacheWeeklyReport(localReport);
             return localReport;
         } finally {
             endGlobalLoading();
@@ -824,6 +941,163 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         // Fall back to localStorage
         return storage.getWeeklyReports(userId);
     };
+
+    // ─── Dean Functions ─────────────────────────────────
+    const handleGetAllStudents = useCallback(async (): Promise<User[]> => {
+        try {
+            return await getAllStudentsFromFirestore();
+        } catch (err) {
+            console.error('Error getting all students:', err);
+            return [];
+        }
+    }, []);
+
+    const handleGetStudentHourStats = useCallback(async (studentId: string, totalRequiredHours?: number, email?: string): Promise<HourStats> => {
+        try {
+            const requiredHours = totalRequiredHours ?? 480;
+
+            const resolvedStudent =
+                (await getUserFromFirestore(studentId)) ||
+                (email ? await findUserByEmailInFirestore(email) : null);
+            const resolvedStudentId = resolvedStudent?.id || studentId;
+
+            const [studentLogsResult, studentReportsResult] = await Promise.allSettled([
+                getDailyLogsFromFirestore(resolvedStudentId),
+                getWeeklyReportsFromFirestore(resolvedStudentId),
+            ]);
+
+            const firestoreLogs = studentLogsResult.status === 'fulfilled' ? studentLogsResult.value : [];
+            const firestoreReports = studentReportsResult.status === 'fulfilled' ? studentReportsResult.value : [];
+
+            const cachedLogs = storage.getDailyLogs(resolvedStudentId);
+            const cachedReports = storage.getWeeklyReports(resolvedStudentId);
+
+            const studentLogs = firestoreLogs.length > 0 ? firestoreLogs : cachedLogs;
+            const studentReports = firestoreReports.length > 0 ? firestoreReports : cachedReports;
+
+            const logStats = calculateHourStats(studentLogs, requiredHours);
+            const weeklyReportHours = studentReports.reduce((sum, report) => sum + report.hoursRendered, 0);
+            const totalRendered = Math.max(logStats.totalRendered, weeklyReportHours);
+            const remaining = Math.max(0, requiredHours - totalRendered);
+            const progressPercentage = requiredHours > 0 ? Math.min(100, (totalRendered / requiredHours) * 100) : 0;
+
+            return {
+                totalRequired: requiredHours,
+                totalRendered: Math.round(totalRendered * 100) / 100,
+                hoursThisWeek: logStats.hoursThisWeek,
+                remaining: Math.round(remaining * 100) / 100,
+                progressPercentage: Math.round(progressPercentage * 10) / 10,
+                weeklyAverage: logStats.weeklyAverage,
+                daysLogged: logStats.daysLogged,
+            };
+        } catch (err) {
+            console.error('Error getting student hour stats:', err);
+            return {
+                ...emptyStats,
+                totalRequired: totalRequiredHours ?? 480,
+            };
+        }
+    }, []);
+
+    const handleGetSanctionsForStudent = useCallback(async (studentId: string, studentEmail?: string) => {
+        try {
+            const identifiers = new Set<string>([studentId]);
+
+            if (studentEmail) {
+                identifiers.add(studentEmail);
+
+                try {
+                    const canonicalUser = await findUserByEmailInFirestore(studentEmail);
+                    if (canonicalUser?.id) {
+                        identifiers.add(canonicalUser.id);
+                    }
+                } catch (lookupErr) {
+                    console.error('Error resolving canonical student id:', lookupErr);
+                }
+            }
+
+            const results = await Promise.all(
+                [...identifiers].map(async (identifier) => getSanctionsForStudent(identifier, studentEmail))
+            );
+
+            const deduped = new Map<string, any>();
+            for (const sanction of results.flat()) {
+                deduped.set(sanction.id, sanction);
+            }
+
+            return [...deduped.values()].sort((a, b) => {
+                const left = new Date(a.createdAt || a.issuedDate || 0).getTime();
+                const right = new Date(b.createdAt || b.issuedDate || 0).getTime();
+                return right - left;
+            });
+        } catch (err) {
+            console.error('Error getting sanctions:', err);
+            return [];
+        }
+    }, []);
+
+    const handleSaveSanction = useCallback(async (sanction: any): Promise<string> => {
+        try {
+            return await saveSanctionToFirestore(sanction);
+        } catch (err) {
+            console.error('Error saving sanction:', err);
+            throw err;
+        }
+    }, []);
+
+    const handleUpdateSanctionDays = useCallback(async (sanctionId: string, newDays: number): Promise<void> => {
+        try {
+            return await updateSanctionDaysInFirestore(sanctionId, newDays);
+        } catch (err) {
+            console.error('Error updating sanction days:', err);
+            throw err;
+        }
+    }, []);
+
+    const handleGetDutySlots = useCallback(async () => {
+        try {
+            return await getDutySlotsFromFirestore();
+        } catch (err) {
+            console.error('Error getting duty slots:', err);
+            return [];
+        }
+    }, []);
+
+    const handleCreateDutySlot = useCallback(async (slot: any): Promise<string> => {
+        try {
+            return await createDutySlotInFirestore(slot);
+        } catch (err) {
+            console.error('Error creating duty slot:', err);
+            throw err;
+        }
+    }, []);
+
+    const handleGetSanctionRenders = useCallback(async (filters?: any) => {
+        try {
+            return await getSanctionRendersFromFirestore(filters);
+        } catch (err) {
+            console.error('Error getting sanction renders:', err);
+            return [];
+        }
+    }, []);
+
+    const handleCreateSanctionRender = useCallback(async (render: any): Promise<string> => {
+        try {
+            return await createSanctionRenderInFirestore(render);
+        } catch (err) {
+            console.error('Error creating sanction render:', err);
+            throw err;
+        }
+    }, []);
+
+    const handleUpdateSanctionRenderStatus = useCallback(async (renderId: string, status: string, updates?: any) => {
+        try {
+            await updateSanctionRenderStatus(renderId, status as any, updates);
+        } catch (err) {
+            console.error('Error updating sanction render status:', err);
+            throw err;
+        }
+    }, []);
 
     return (
         <AppContext.Provider
@@ -851,6 +1125,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 getWeeklyReports: handleGetWeeklyReports,
                 requiresPasswordCredentialSetup,
                 setupPasswordCredential: handleSetupPasswordCredential,
+                // Dean functions
+                getAllStudents: handleGetAllStudents,
+                getStudentHourStats: handleGetStudentHourStats,
+                getSanctionsForStudent: handleGetSanctionsForStudent,
+                saveSanction: handleSaveSanction,
+                updateSanctionDays: handleUpdateSanctionDays,
+                getDutySlots: handleGetDutySlots,
+                createDutySlot: handleCreateDutySlot,
+                getSanctionRenders: handleGetSanctionRenders,
+                createSanctionRender: handleCreateSanctionRender,
+                updateSanctionRenderStatus: handleUpdateSanctionRenderStatus,
             }}
         >
             {children}

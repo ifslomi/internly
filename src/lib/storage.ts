@@ -1,4 +1,4 @@
-import { User, DailyLog, WeeklyReport, Competency } from './types';
+import { User, DailyLog, WeeklyReport, Competency, UserRole } from './types';
 import { v4 as uuidv4 } from 'uuid';
 
 const KEYS = {
@@ -17,6 +17,7 @@ export interface PendingSignup {
     password: string;
     totalRequiredHours: number;
     startDate: string;
+    role?: UserRole;
     verificationToken: string;
     tokenExpiresAt: number;
     googleUid?: string;
@@ -44,7 +45,8 @@ export function signUp(
     email: string,
     password: string,
     totalRequiredHours: number,
-    startDate: string
+    startDate: string,
+    role: UserRole = 'intern'
 ): User {
     const users = getItem<User[]>(KEYS.USERS, []);
     if (users.find((u) => u.email === email)) {
@@ -55,6 +57,7 @@ export function signUp(
         name,
         email,
         password,
+        role,
         totalRequiredHours,
         startDate,
         createdAt: new Date().toISOString(),
@@ -118,6 +121,7 @@ export function completeSignUp(pending: PendingSignup, firebaseUid: string): Use
         name: pending.name,
         email: pending.email,
         password: pending.password,
+        role: pending.role || 'intern',
         totalRequiredHours: pending.totalRequiredHours,
         startDate: pending.startDate,
         createdAt: new Date().toISOString(),
@@ -243,24 +247,34 @@ export function getWeeklyReports(userId: string): WeeklyReport[] {
 
 export function saveWeeklyReport(report: Omit<WeeklyReport, 'id' | 'createdAt'>): WeeklyReport {
     const reports = getItem<WeeklyReport[]>(KEYS.WEEKLY_REPORTS, []);
-    // Check if a report already exists for this week
-    const existingIdx = reports.findIndex(
-        (r) => r.userId === report.userId && r.weekStart === report.weekStart
-    );
-    const existingReport = existingIdx >= 0 ? reports[existingIdx] : null;
-    const newReport: WeeklyReport = {
-        ...(existingReport || {}),
-        ...report,
-        id: existingReport?.id || uuidv4(),
-        createdAt: existingReport?.createdAt || new Date().toISOString(),
-    };
+    const existingIdx = reports.findIndex((r) => r.userId === report.userId && r.weekNumber === report.weekNumber);
+
     if (existingIdx >= 0) {
-        reports[existingIdx] = newReport;
-    } else {
-        reports.push(newReport);
+        throw new Error(`Weekly report for Week ${report.weekNumber} has already been submitted.`);
     }
+
+    const now = report.submittedAt || new Date().toISOString();
+    const newReport: WeeklyReport = {
+        ...report,
+        id: uuidv4(),
+        submittedAt: now,
+        status: 'submitted',
+        createdAt: now,
+    };
+    reports.push(newReport);
     setItem(KEYS.WEEKLY_REPORTS, reports);
     return newReport;
+}
+
+export function cacheWeeklyReport(report: WeeklyReport): void {
+    const reports = getItem<WeeklyReport[]>(KEYS.WEEKLY_REPORTS, []);
+    const idx = reports.findIndex((r) => r.userId === report.userId && r.weekNumber === report.weekNumber);
+    if (idx >= 0) {
+        reports[idx] = report;
+    } else {
+        reports.push(report);
+    }
+    setItem(KEYS.WEEKLY_REPORTS, reports);
 }
 
 // --- Competencies ---

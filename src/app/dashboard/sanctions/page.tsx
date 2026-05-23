@@ -1,13 +1,77 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { CalendarDays, Users, Clock3, AlertTriangle } from 'lucide-react';
+import { useApp } from '@/lib/context';
+import type { Sanction } from '@/lib/types';
 
 export default function SanctionsPage() {
+  const { user, getSanctionsForStudent, getDutySlots, createSanctionRender } = useApp();
   const [activeTab, setActiveTab] = useState<'students' | 'schedule'>('students');
+  const [sanctions, setSanctions] = useState<Sanction[]>([]);
+  const [dutySlots, setDutySlots] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [enrolling, setEnrolling] = useState<string | null>(null);
   const tiles = [
-    { label: 'Days of Sanctions', value: '--', icon: AlertTriangle, tone: 'rose' },
+    { label: 'Days of Sanctions', value: useMemo(() => sanctions.reduce((sum, sanction) => sum + sanction.days, 0).toString(), [sanctions]), icon: AlertTriangle, tone: 'rose' },
     { label: 'Available Slots', value: '--', icon: Clock3, tone: 'amber' },
   ];
+
+  const handleAvailSlot = async (slotId: string) => {
+    if (!user || sanctions.length === 0) {
+      alert('You need active sanctions to enroll in a duty slot.');
+      return;
+    }
+
+    const activeSanction = sanctions.find((s) => s.status === 'active');
+    if (!activeSanction) {
+      alert('You need active sanctions to enroll in a duty slot.');
+      return;
+    }
+
+    setEnrolling(slotId);
+    try {
+      await createSanctionRender({
+        sanctionId: activeSanction.id,
+        userId: user.id,
+        dutySlotId: slotId,
+        status: 'availed',
+      });
+      alert('Successfully enrolled in the duty slot!');
+    } catch (err) {
+      console.error('Failed to enroll in duty slot:', err);
+      alert('Failed to enroll. Please try again.');
+    } finally {
+      setEnrolling(null);
+    }
+  };
+
+  useEffect(() => {
+    const loadData = async () => {
+      if (!user) {
+        setSanctions([]);
+        setDutySlots([]);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const [sanctionsData, slotsData] = await Promise.all([
+          getSanctionsForStudent(user.id, user.email),
+          getDutySlots(),
+        ]);
+        setSanctions(sanctionsData);
+        setDutySlots(slotsData);
+      } catch (err) {
+        console.error('Failed to load data:', err);
+        setSanctions([]);
+        setDutySlots([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [getSanctionsForStudent, getDutySlots, user]);
 
   return (
     <div>
@@ -119,18 +183,35 @@ export default function SanctionsPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Student Number</th>
-                  <th>Student</th>
-                  <th>Total Days of Sanctions</th>
+                  <th>Days</th>
                   <th>Reason</th>
+                  <th>Status</th>
+                  <th>Issued</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td colSpan={4} style={{ textAlign: 'center', padding: '18px 12px', color: 'var(--slate-500)' }}>
-                    No sanctioned students found.
-                  </td>
-                </tr>
+                {loading ? (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'center', padding: '18px 12px', color: 'var(--slate-500)' }}>
+                      Loading sanctions...
+                    </td>
+                  </tr>
+                ) : sanctions.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} style={{ textAlign: 'center', padding: '18px 12px', color: 'var(--slate-500)' }}>
+                      No sanctions found.
+                    </td>
+                  </tr>
+                ) : (
+                  sanctions.map((sanction) => (
+                    <tr key={sanction.id}>
+                      <td>{sanction.days} {sanction.days === 1 ? 'day' : 'days'}</td>
+                      <td>{sanction.reason}</td>
+                      <td style={{ textTransform: 'capitalize' }}>{sanction.status}</td>
+                      <td>{new Date(sanction.issuedDate).toLocaleDateString()}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -142,29 +223,69 @@ export default function SanctionsPage() {
               <Clock3 size={18} />
             </div>
             <div>
-              <h3 style={{ fontSize: 16, fontWeight: 700 }}>Dean's Sanction Schedule</h3>
-              <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Sessions scheduled for sanction rendering.</p>
+              <h3 style={{ fontSize: 16, fontWeight: 700 }}>Available Duty Slots</h3>
+              <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Enroll in a duty slot to render your sanction. You must have an active sanction.</p>
             </div>
           </div>
 
-          <div className="table-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Work</th>
-                  <th>Scheduled Time</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td colSpan={3} style={{ textAlign: 'center', padding: '18px 12px', color: 'var(--slate-500)' }}>
-                    No scheduled sanctions found.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          {sanctions.length === 0 || !sanctions.some((s) => s.status === 'active') ? (
+            <div style={{ textAlign: 'center', padding: '24px 12px', color: 'var(--slate-500)' }}>
+              <p>You don't have any active sanctions. Once sanctioned, you can enroll in available duty slots.</p>
+            </div>
+          ) : (
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Location</th>
+                    <th>Slots Needed</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dutySlots.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: '18px 12px', color: 'var(--slate-500)' }}>
+                        No duty slots available.
+                      </td>
+                    </tr>
+                  ) : (
+                    dutySlots.map((slot) => (
+                      <tr key={slot.id}>
+                        <td>{slot.title}</td>
+                        <td>{new Date(slot.date).toLocaleDateString()}</td>
+                        <td>{slot.startTime} - {slot.endTime}</td>
+                        <td>{slot.location || '-'}</td>
+                        <td>{slot.capacity}</td>
+                        <td>
+                          <button
+                            onClick={() => handleAvailSlot(slot.id)}
+                            disabled={enrolling === slot.id}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: '6px',
+                              background: 'var(--primary-600)',
+                              border: 'none',
+                              color: 'white',
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              opacity: enrolling === slot.id ? 0.7 : 1,
+                            }}
+                          >
+                            {enrolling === slot.id ? 'Enrolling...' : 'Enroll'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>

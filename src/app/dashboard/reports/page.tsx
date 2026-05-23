@@ -1,16 +1,22 @@
-"use client";
-import React, { useState, useMemo, useEffect } from 'react';
+'use client';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '@/lib/context';
-import { getWeeksForLogs, getLogsForWeek } from '@/lib/calculations';
+import { getLogsForWeek } from '@/lib/calculations';
 import { generateSimpleWeeklyReportPDF, generateUBWeeklyReportPDF } from '@/lib/pdf';
 import { WeeklyReport, ActivityType, DailyLog, ACTIVITY_TYPES } from '@/lib/types';
-import { addWeeks, endOfWeek, format, isValid, parseISO, startOfWeek } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import LogWorkModal from '@/components/LogWorkModal';
 import WeeklyReportFilters from '@/components/WeeklyReportFilters';
 import WeeklyReportTable from '@/components/WeeklyReportTable';
 import LogsHistoryFilters from '@/components/LogsHistoryFilters';
 import LogsHistoryTable from '@/components/LogsHistoryTable';
 import { showToast } from '@/lib/toast';
+import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import {
+    buildWeeklyReportSchedule,
+    getWeeklyReportDeadline,
+    validateWeeklyReportSubmission,
+} from '@/lib/weekly-reports';
 import {
     FileText,
     Download,
@@ -31,116 +37,14 @@ import {
     Loader2,
 } from 'lucide-react';
 
-type WeekRange = { start: Date; end: Date; label: string };
-
-const WEEK_STARTS_ON = 1 as const;
-
-function safeParseIsoDate(value?: string): Date | null {
-    if (!value) return null;
-    const parsed = parseISO(value);
-    return isValid(parsed) ? parsed : null;
-}
-
-function getWeekKeyFromDate(date: Date): string {
-    return startOfWeek(date, { weekStartsOn: WEEK_STARTS_ON }).toISOString();
-}
-
-function getWeekKeyFromIso(value?: string): string | null {
-    const parsed = safeParseIsoDate(value);
-    return parsed ? getWeekKeyFromDate(parsed) : null;
-}
-
-function tryExtractCloudinaryPublicId(url?: string): string | null {
-    if (!url) return null;
-    try {
-        const parsed = new URL(url);
-        const marker = '/upload/';
-        const markerIndex = parsed.pathname.indexOf(marker);
-        if (markerIndex < 0) return null;
-        let tail = parsed.pathname.slice(markerIndex + marker.length);
-        tail = tail.replace(/^v\d+\//, '');
-        const withoutExtension = tail.replace(/\.[^/.]+$/, '');
-        return withoutExtension || null;
-    } catch {
-        return null;
-    }
-}
-
-function buildSelectableWeeks({
-    logs,
-    savedReports,
-    startDate,
-    endDate,
-}: {
-    logs: DailyLog[];
-    savedReports: WeeklyReport[];
-    startDate?: string;
-    endDate?: string;
-}): WeekRange[] {
-    const weekMap = new Map<string, { start: Date; end: Date }>();
-
-    for (const week of getWeeksForLogs(logs)) {
-        weekMap.set(getWeekKeyFromDate(week.start), {
-            start: startOfWeek(week.start, { weekStartsOn: WEEK_STARTS_ON }),
-            end: endOfWeek(week.start, { weekStartsOn: WEEK_STARTS_ON }),
-        });
-    }
-
-    for (const report of savedReports) {
-        const reportWeekStart = safeParseIsoDate(report.weekStart);
-        if (!reportWeekStart) continue;
-        const normalizedStart = startOfWeek(reportWeekStart, { weekStartsOn: WEEK_STARTS_ON });
-        weekMap.set(getWeekKeyFromDate(normalizedStart), {
-            start: normalizedStart,
-            end: endOfWeek(normalizedStart, { weekStartsOn: WEEK_STARTS_ON }),
-        });
-    }
-
-    const parsedStartDate = safeParseIsoDate(startDate);
-    const parsedEndDate = safeParseIsoDate(endDate);
-    let timelineStart = parsedStartDate
-        ? startOfWeek(parsedStartDate, { weekStartsOn: WEEK_STARTS_ON })
-        : null;
-    let timelineEnd = parsedEndDate
-        ? endOfWeek(parsedEndDate, { weekStartsOn: WEEK_STARTS_ON })
-        : endOfWeek(new Date(), { weekStartsOn: WEEK_STARTS_ON });
-
-    if (!timelineStart) {
-        const earliestKnownWeek = Array.from(weekMap.values())
-            .map((week) => week.start.getTime())
-            .sort((a, b) => a - b)[0];
-        timelineStart = earliestKnownWeek
-            ? new Date(earliestKnownWeek)
-            : startOfWeek(new Date(), { weekStartsOn: WEEK_STARTS_ON });
-    }
-
-    if (timelineEnd.getTime() < timelineStart.getTime()) {
-        timelineEnd = endOfWeek(timelineStart, { weekStartsOn: WEEK_STARTS_ON });
-    }
-
-    for (let cursor = new Date(timelineStart); cursor.getTime() <= timelineEnd.getTime(); cursor = addWeeks(cursor, 1)) {
-        const normalizedStart = startOfWeek(cursor, { weekStartsOn: WEEK_STARTS_ON });
-        weekMap.set(getWeekKeyFromDate(normalizedStart), {
-            start: normalizedStart,
-            end: endOfWeek(normalizedStart, { weekStartsOn: WEEK_STARTS_ON }),
-        });
-    }
-
-    const weeksAsc = Array.from(weekMap.values()).sort((a, b) => a.start.getTime() - b.start.getTime());
-    const weekNumberByKey = new Map<string, number>();
-    weeksAsc.forEach((week, idx) => {
-        weekNumberByKey.set(getWeekKeyFromDate(week.start), idx + 1);
-    });
-
-    return [...weeksAsc]
-        .sort((a, b) => b.start.getTime() - a.start.getTime())
-        .map((week) => {
-            const number = weekNumberByKey.get(getWeekKeyFromDate(week.start)) || 1;
-            return {
-                ...week,
-                label: `Week ${number}: ${format(week.start, 'MMM d')} - ${format(week.end, 'MMM d, yyyy')}`,
-            };
-        });
+type WeekRange = {
+    weekNumber: number;
+    start: Date;
+    end: Date;
+    deadline: Date;
+    label: string;
+    status: 'pending' | 'overdue' | 'submitted';
+    report: WeeklyReport | null;
 }
 
 export default function ReportsPage() {
@@ -155,10 +59,12 @@ export default function ReportsPage() {
     // Reports state
     const [selectedWeekIdx, setSelectedWeekIdx] = useState(0);
     const [reflection, setReflection] = useState('');
+    const [hoursRendered, setHoursRendered] = useState('');
+    const [reportFile, setReportFile] = useState<File | null>(null);
+    const [submittingReport, setSubmittingReport] = useState(false);
     const [showPreview] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [showExportOptions, setShowExportOptions] = useState(false);
-    const [importingPdf, setImportingPdf] = useState(false);
     const [paperViewOpen, setPaperViewOpen] = useState(false);
     const [paperWeekIdx, setPaperWeekIdx] = useState(0);
     const [savedReports, setSavedReports] = useState<WeeklyReport[]>([]);
@@ -179,7 +85,6 @@ export default function ReportsPage() {
     const [filterDateTo, setFilterDateTo] = useState('');
     const [showFilters, setShowFilters] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-    const [deleteImportedPdfConfirm, setDeleteImportedPdfConfirm] = useState(false);
     const [editingLog, setEditingLog] = useState<DailyLog | null>(null);
     const [editDate, setEditDate] = useState('');
     const [editActivities, setEditActivities] = useState<ActivityType[]>([]);
@@ -190,14 +95,8 @@ export default function ReportsPage() {
     const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
 
     const weeks = useMemo(
-        () =>
-            buildSelectableWeeks({
-                logs,
-                savedReports,
-                startDate: user?.startDate,
-                endDate: user?.endDate,
-            }),
-        [logs, savedReports, user?.startDate, user?.endDate]
+        () => buildWeeklyReportSchedule(user?.startDate, savedReports),
+        [savedReports, user?.startDate]
     );
 
     useEffect(() => {
@@ -303,11 +202,8 @@ export default function ReportsPage() {
         ? getLogsForWeek(logs, selectedWeek.start, selectedWeek.end)
         : [];
 
-    // Load saved reflection when switching weeks
     const currentSavedReport = selectedWeek
-        ? savedReports.find(
-            (r) => getWeekKeyFromIso(r.weekStart) === getWeekKeyFromDate(selectedWeek.start)
-        ) || null
+        ? savedReports.find((report) => report.weekNumber === selectedWeek.weekNumber) || null
         : null;
 
     React.useEffect(() => {
@@ -320,49 +216,103 @@ export default function ReportsPage() {
 
     if (!user) return null;
 
-    const handleSaveReport = async () => {
-        if (!selectedWeek) return;
-        const baseReport = {
-            userId: user.id,
-            weekStart: selectedWeek.start.toISOString(),
-            weekEnd: selectedWeek.end.toISOString(),
-            reflection,
-            logs: weekLogs,
-        };
-        const reportWithPdf = currentSavedReport?.importedPdfUrl
-            ? {
-                ...baseReport,
-                importedPdfUrl: currentSavedReport.importedPdfUrl,
-                importedPdfName: currentSavedReport.importedPdfName,
-                importedPdfUploadedAt: currentSavedReport.importedPdfUploadedAt,
-                ...(currentSavedReport.importedPdfPublicId
-                    ? { importedPdfPublicId: currentSavedReport.importedPdfPublicId }
-                    : {}),
-                ...(currentSavedReport.importedPdfResourceType
-                    ? { importedPdfResourceType: currentSavedReport.importedPdfResourceType }
-                    : {}),
-            }
-            : baseReport;
+    const submitWeeklyReport = async () => {
+        if (!selectedWeek || !user) return;
 
-        const saved = await ctxSaveReport(reportWithPdf);
-        const savedWeekKey = getWeekKeyFromIso(saved.weekStart);
-        // Update local state with the saved report
-        setSavedReports(prev => {
-            const idx = prev.findIndex((r) => getWeekKeyFromIso(r.weekStart) === savedWeekKey);
-            if (idx >= 0) {
-                const updated = [...prev];
-                updated[idx] = saved;
-                return updated;
-            }
-            return [...prev, saved];
+        const validationError = validateWeeklyReportSubmission({
+            weekNumber: selectedWeek.weekNumber,
+            hoursRendered,
+            file: reportFile,
+            startDate: user.startDate,
+            reports: savedReports,
         });
-        showToast({ kind: 'success', title: 'Saved', message: 'Weekly report saved.' });
+
+        if (validationError) {
+            showToast({ kind: 'error', title: 'Submission Failed', message: validationError });
+            return;
+        }
+
+        const parsedHours = Number(hoursRendered);
+        const deadline = getWeeklyReportDeadline(user.startDate, selectedWeek.weekNumber);
+
+        setSubmittingReport(true);
+        try {
+            const uploadFormData = new FormData();
+            uploadFormData.append('file', reportFile as File);
+            uploadFormData.append('userId', user.id);
+            uploadFormData.append('weekNumber', String(selectedWeek.weekNumber));
+
+            const uploadResponse = await fetch('/api/weekly-reports/upload-file', {
+                method: 'POST',
+                body: uploadFormData,
+            });
+
+            if (!uploadResponse.ok) {
+                const payload = (await uploadResponse.json().catch(() => ({}))) as { error?: string };
+                throw new Error(payload.error || 'Unable to upload the PDF file.');
+            }
+
+            const uploadPayload = (await uploadResponse.json()) as {
+                fileUrl: string;
+                fileName: string;
+                filePublicId: string;
+                fileResourceType: 'raw';
+            };
+
+            const saved = await ctxSaveReport({
+                userId: user.id,
+                weekNumber: selectedWeek.weekNumber,
+                weekStart: selectedWeek.start.toISOString(),
+                weekEnd: selectedWeek.end.toISOString(),
+                deadline: deadline.toISOString(),
+                hoursRendered: parsedHours,
+                fileUrl: uploadPayload.fileUrl,
+                fileName: uploadPayload.fileName,
+                filePublicId: uploadPayload.filePublicId,
+                submittedAt: new Date().toISOString(),
+                status: 'submitted',
+                reflection,
+                logs: weekLogs,
+                importedPdfUrl: uploadPayload.fileUrl,
+                importedPdfName: uploadPayload.fileName,
+                importedPdfUploadedAt: new Date().toISOString(),
+                importedPdfPublicId: uploadPayload.filePublicId,
+                importedPdfResourceType: uploadPayload.fileResourceType,
+            });
+
+            setSavedReports((prev) => {
+                const idx = prev.findIndex((report) => report.weekNumber === saved.weekNumber);
+                if (idx >= 0) {
+                    const updated = [...prev];
+                    updated[idx] = saved;
+                    return updated;
+                }
+                return [...prev, saved];
+            });
+
+            // Refresh reports from Firestore to ensure persistence
+            try {
+                const refreshedReports = await ctxGetReports(user.id);
+                setSavedReports(refreshedReports);
+            } catch (refreshError) {
+                console.warn('Failed to refresh reports from Firestore:', refreshError);
+            }
+
+            setReportFile(null);
+            setHoursRendered('');
+            showToast({ kind: 'success', title: 'Submitted', message: `Week ${selectedWeek.weekNumber} report submitted successfully.` });
+        } catch (error) {
+            console.error('Weekly report submission failed:', error);
+            const message = error instanceof Error ? error.message : 'Could not submit the weekly report.';
+            showToast({ kind: 'error', title: 'Submission Failed', message });
+        } finally {
+            setSubmittingReport(false);
+        }
     };
 
     const handleExportPaperPDF = async () => {
         if (!selectedWeek) return;
         setGenerating(true);
-        await handleSaveReport();
         try {
             await generateUBWeeklyReportPDF({
                 logs: weekLogs,
@@ -387,7 +337,6 @@ export default function ReportsPage() {
     const handleExportSimplePDF = async () => {
         if (!selectedWeek) return;
         setGenerating(true);
-        await handleSaveReport();
         try {
             await generateSimpleWeeklyReportPDF({
                 logs: weekLogs,
@@ -401,56 +350,6 @@ export default function ReportsPage() {
             showToast({ kind: 'error', title: 'Export Failed', message: 'Could not generate simple PDF. Please try again.' });
         }
         setGenerating(false);
-    };
-
-    const handleDeleteImportedPdf = async () => {
-        if (!selectedWeek || !user || !currentSavedReport?.id) return;
-
-        const publicId = currentSavedReport.importedPdfPublicId || tryExtractCloudinaryPublicId(currentSavedReport.importedPdfUrl);
-        const resourceType = currentSavedReport.importedPdfResourceType || 'raw';
-
-        setImportingPdf(true);
-        try {
-            if (publicId) {
-                const response = await fetch('/api/cloudinary/delete-asset', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ publicId, resourceType }),
-                });
-                if (!response.ok) {
-                    const payload = (await response.json().catch(() => ({}))) as { error?: string };
-                    console.warn('Cloudinary delete warning:', payload.error || 'unknown');
-                }
-            }
-
-            const saved = await ctxSaveReport({
-                userId: user.id,
-                weekStart: selectedWeek.start.toISOString(),
-                weekEnd: selectedWeek.end.toISOString(),
-                reflection,
-                logs: weekLogs,
-                importedPdfUrl: '',
-                importedPdfName: '',
-                importedPdfUploadedAt: '',
-                importedPdfPublicId: '',
-            });
-            const savedWeekKey = getWeekKeyFromIso(saved.weekStart);
-            setSavedReports((prev) => {
-                const idx = prev.findIndex((r) => getWeekKeyFromIso(r.weekStart) === savedWeekKey);
-                if (idx >= 0) {
-                    const updated = [...prev];
-                    updated[idx] = saved;
-                    return updated;
-                }
-                return [...prev, saved];
-            });
-            showToast({ kind: 'success', title: 'Deleted', message: 'Imported PDF removed from this week.' });
-        } catch (error) {
-            console.error('Delete imported PDF failed:', error);
-            showToast({ kind: 'error', title: 'Delete Failed', message: 'Could not remove the imported PDF.' });
-        } finally {
-            setImportingPdf(false);
-        }
     };
 
     return (
@@ -661,44 +560,6 @@ export default function ReportsPage() {
                 </div>
             )}
 
-            {deleteImportedPdfConfirm && (
-                <div className="modal-overlay" onClick={() => setDeleteImportedPdfConfirm(false)}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 420, padding: 32 }}>
-                        <div style={{ textAlign: 'center' }}>
-                            <div style={{
-                                width: 56,
-                                height: 56,
-                                borderRadius: 16,
-                                background: 'rgba(244,63,94,0.1)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                margin: '0 auto 16px',
-                            }}>
-                                <AlertTriangle size={28} style={{ color: 'var(--rose-400)' }} />
-                            </div>
-                            <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Delete Imported PDF?</h3>
-                            <p style={{ fontSize: 14, color: 'var(--slate-400)', marginBottom: 24 }}>
-                                This removes the imported PDF attachment from this week report.
-                            </p>
-                            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-                                <button className="btn btn-secondary" onClick={() => setDeleteImportedPdfConfirm(false)} disabled={importingPdf}>Cancel</button>
-                                <button
-                                    className="btn btn-danger"
-                                    disabled={importingPdf}
-                                    onClick={async () => {
-                                        await handleDeleteImportedPdf();
-                                        setDeleteImportedPdfConfirm(false);
-                                    }}
-                                >
-                                    {importingPdf ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Trash2 size={16} />} {importingPdf ? 'Deleting...' : 'Delete'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {showExportOptions && (
                 <div className="modal-overlay" onClick={() => setShowExportOptions(false)}>
                     <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460, padding: 28 }}>
@@ -749,9 +610,7 @@ export default function ReportsPage() {
                     setSelectedWeekIdx={setSelectedWeekIdx}
                     showPreview={showPreview}
                     generating={generating}
-                    importingPdf={importingPdf}
                     onExportPDF={() => setShowExportOptions(true)}
-                    onDeleteImportedPDF={() => setDeleteImportedPdfConfirm(true)}
                     onOpenPaperView={() => {
                         if (!selectedWeek) {
                             showToast({ kind: 'error', title: 'No Week Selected', message: 'Add or select a week before opening Paper View.' });
@@ -764,6 +623,12 @@ export default function ReportsPage() {
                     selectedWeekReport={currentSavedReport}
                     reflection={reflection}
                     setReflection={setReflection}
+                    hoursRendered={hoursRendered}
+                    setHoursRendered={setHoursRendered}
+                    reportFile={reportFile}
+                    setReportFile={setReportFile}
+                    submittingReport={submittingReport}
+                    onSubmitWeeklyReport={submitWeeklyReport}
                     previewSearch={previewSearch}
                     setPreviewSearch={setPreviewSearch}
                     previewSupervisor={previewSupervisor}
@@ -818,14 +683,18 @@ type ReportsContentProps = {
     setSelectedWeekIdx: React.Dispatch<React.SetStateAction<number>>;
     showPreview: boolean;
     generating: boolean;
-    importingPdf: boolean;
     onExportPDF: () => void;
-    onDeleteImportedPDF: () => void;
     onOpenPaperView: () => void;
     onOpenLogModal: () => void;
     selectedWeekReport: WeeklyReport | null;
     reflection: string;
     setReflection: React.Dispatch<React.SetStateAction<string>>;
+    hoursRendered: string;
+    setHoursRendered: React.Dispatch<React.SetStateAction<string>>;
+    reportFile: File | null;
+    setReportFile: React.Dispatch<React.SetStateAction<File | null>>;
+    submittingReport: boolean;
+    onSubmitWeeklyReport: () => void;
     previewSearch: string;
     setPreviewSearch: React.Dispatch<React.SetStateAction<string>>;
     previewSupervisor: string;
@@ -849,14 +718,18 @@ function ReportsContent({
     setSelectedWeekIdx,
     showPreview,
     generating,
-    importingPdf,
     onExportPDF,
-    onDeleteImportedPDF,
     onOpenPaperView,
     onOpenLogModal,
     selectedWeekReport,
     reflection,
     setReflection,
+    hoursRendered,
+    setHoursRendered,
+    reportFile,
+    setReportFile,
+    submittingReport,
+    onSubmitWeeklyReport,
     previewSearch,
     setPreviewSearch,
     previewSupervisor,
@@ -875,6 +748,104 @@ function ReportsContent({
         () => (selectedWeek ? getLogsForWeek(logs, selectedWeek.start, selectedWeek.end) : []),
         [logs, selectedWeek]
     );
+    const [viewerReport, setViewerReport] = useState<WeeklyReport | null>(null);
+    const viewerContainerRef = useRef<HTMLDivElement | null>(null);
+
+    const getReportFileUrl = (report: WeeklyReport | null | undefined) => {
+        if (!report) return '';
+        return report.fileUrl || report.importedPdfUrl || '';
+    };
+
+    const getViewerSrc = (report: WeeklyReport | null | undefined) => {
+        const fileUrl = getReportFileUrl(report);
+        return fileUrl ? `/api/weekly-reports/view-file?url=${encodeURIComponent(fileUrl)}` : '';
+    };
+
+    useEffect(() => {
+        if (!viewerReport) return;
+
+        if (!GlobalWorkerOptions.workerSrc) {
+            GlobalWorkerOptions.workerSrc = new URL(
+                'pdfjs-dist/legacy/build/pdf.worker.min.mjs',
+                import.meta.url,
+            ).toString();
+        }
+
+        let cancelled = false;
+
+        const renderPdf = async () => {
+            const viewerSrc = getViewerSrc(viewerReport);
+            const container = viewerContainerRef.current;
+
+            if (!viewerSrc || !container) return;
+
+            container.innerHTML = '';
+            container.dataset.state = 'loading';
+            container.textContent = 'Loading PDF...';
+
+            try {
+                const response = await fetch(viewerSrc);
+                if (!response.ok) {
+                    throw new Error('Unable to load the PDF file.');
+                }
+
+                const pdfData = await response.arrayBuffer();
+                const pdf = await getDocument({ data: pdfData }).promise;
+
+                if (cancelled || !viewerContainerRef.current) return;
+
+                container.innerHTML = '';
+                delete container.dataset.state;
+
+                for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+                    const page = await pdf.getPage(pageNumber);
+                    if (cancelled || !viewerContainerRef.current) return;
+
+                    const viewport = page.getViewport({ scale: 1.4 });
+                    const pageWrap = document.createElement('div');
+                    pageWrap.style.margin = '0 auto 20px';
+                    pageWrap.style.maxWidth = '100%';
+                    pageWrap.style.background = '#111';
+                    pageWrap.style.border = '1px solid rgba(255,255,255,0.08)';
+                    pageWrap.style.borderRadius = '12px';
+                    pageWrap.style.overflow = 'hidden';
+
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    if (!context) {
+                        continue;
+                    }
+
+                    canvas.width = Math.floor(viewport.width);
+                    canvas.height = Math.floor(viewport.height);
+                    canvas.style.width = '100%';
+                    canvas.style.height = 'auto';
+                    canvas.style.display = 'block';
+                    pageWrap.appendChild(canvas);
+                    container.appendChild(pageWrap);
+
+                    await page.render({ canvasContext: context, viewport } as any).promise;
+                }
+            } catch (error) {
+                if (cancelled || !viewerContainerRef.current) return;
+                container.innerHTML = '';
+                delete container.dataset.state;
+                const message = error instanceof Error ? error.message : 'Unable to render the PDF.';
+                const fallback = document.createElement('div');
+                fallback.style.color = 'var(--rose-300)';
+                fallback.style.padding = '24px';
+                fallback.style.fontSize = '14px';
+                fallback.textContent = message;
+                container.appendChild(fallback);
+            }
+        };
+
+        renderPdf();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [viewerReport]);
 
     // Preview filters logic
     const previewSupervisors = useMemo(() => {
@@ -930,14 +901,6 @@ function ReportsContent({
                 <div id="report-top-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                     <button
                         type="button"
-                        className="btn btn-success btn-sm"
-                        onClick={onOpenLogModal}
-                        id="report-log-work"
-                    >
-                        <Plus size={16} /> Log Today&apos;s Work
-                    </button>
-                    <button
-                        type="button"
                         className="btn btn-secondary btn-sm"
                         onClick={onOpenPaperView}
                         id="report-open-paper-view"
@@ -975,60 +938,28 @@ function ReportsContent({
                     background: 'rgba(24,24,27,0.72)',
                     border: '1px solid rgba(255,255,255,0.06)',
                     width: '100%',
+                    justifyContent: 'center',
                 }}
             >
-                <button
-                    onClick={() => setActiveTab('reports')}
+                <div
                     style={{
                         padding: '10px 18px',
                         borderRadius: 999,
-                        background:
-                            activeTab === 'reports'
-                                ? 'linear-gradient(135deg, rgba(16,185,129,0.35), rgba(16,185,129,0.15))'
-                                : 'transparent',
-                        color: activeTab === 'reports' ? 'white' : 'var(--slate-400)',
+                        background: 'linear-gradient(135deg, rgba(16,185,129,0.35), rgba(16,185,129,0.15))',
+                        color: 'white',
                         fontSize: 13,
                         fontWeight: 700,
-                        border: activeTab === 'reports' ? '1px solid rgba(16,185,129,0.45)' : '1px solid transparent',
-                        boxShadow: activeTab === 'reports' ? '0 8px 20px rgba(16,185,129,0.2)' : 'none',
-                        cursor: 'pointer',
-                        transition: 'all 200ms',
+                        border: '1px solid rgba(16,185,129,0.45)',
+                        boxShadow: '0 8px 20px rgba(16,185,129,0.2)',
                         display: 'inline-flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        flex: 1,
                         gap: 8,
                     }}
                 >
                     <FileText size={16} />
                     Weekly Reports
-                </button>
-                <button
-                    onClick={() => setActiveTab('history')}
-                    style={{
-                        padding: '10px 18px',
-                        borderRadius: 999,
-                        background:
-                            activeTab === 'history'
-                                ? 'linear-gradient(135deg, rgba(16,185,129,0.35), rgba(16,185,129,0.15))'
-                                : 'transparent',
-                        color: activeTab === 'history' ? 'white' : 'var(--slate-400)',
-                        fontSize: 13,
-                        fontWeight: 700,
-                        border: activeTab === 'history' ? '1px solid rgba(16,185,129,0.45)' : '1px solid transparent',
-                        boxShadow: activeTab === 'history' ? '0 8px 20px rgba(16,185,129,0.2)' : 'none',
-                        cursor: 'pointer',
-                        transition: 'all 200ms',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flex: 1,
-                        gap: 8,
-                    }}
-                >
-                    <History size={16} />
-                    Logs History
-                </button>
+                </div>
             </div>
 
             {weeks.length === 0 ? (
@@ -1072,9 +1003,9 @@ function ReportsContent({
                     )}
 
                     <div className="card" style={{ padding: 20 }}>
-                        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div style={{ minWidth: 220, flex: '1 1 320px' }}>
-                                <label className="input-label" style={{ marginBottom: 8, display: 'block' }}>Selected Week</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
+                            <div className="input-group">
+                                <label className="input-label" style={{ marginBottom: 8, display: 'block' }}>Week Selection</label>
                                 <select
                                     className="input"
                                     value={selectedWeekIdx}
@@ -1082,44 +1013,184 @@ function ReportsContent({
                                     id="report-selected-week"
                                 >
                                     {weeks.map((week, idx) => (
-                                        <option key={week.start.toISOString()} value={idx}>
-                                            {week.label}
+                                        <option key={week.weekNumber} value={idx}>
+                                            Week {week.weekNumber}
                                         </option>
                                     ))}
                                 </select>
                             </div>
-                            {selectedWeekReport?.importedPdfUrl && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-                                    <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>
-                                        Imported file: {selectedWeekReport.importedPdfName || 'weekly-report.pdf'}
-                                    </p>
-                                    <div style={{ display: 'flex', gap: 8 }}>
-                                        <a
-                                            className="btn btn-ghost btn-sm"
-                                            href={selectedWeekReport.importedPdfUrl}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                        >
-                                            <ExternalLink size={14} /> Open
-                                        </a>
-                                        <a
-                                            className="btn btn-ghost btn-sm"
-                                            href={selectedWeekReport.importedPdfUrl}
-                                            download={selectedWeekReport.importedPdfName || 'weekly-report.pdf'}
-                                        >
-                                            <Download size={14} /> Download
-                                        </a>
-                                        <button
-                                            type="button"
-                                            className="btn btn-danger btn-sm"
-                                            onClick={onDeleteImportedPDF}
-                                            disabled={importingPdf}
-                                        >
-                                            <Trash2 size={14} /> Delete
-                                        </button>
-                                    </div>
+                            <div className="input-group">
+                                <label className="input-label" style={{ marginBottom: 8, display: 'block' }}>Deadline</label>
+                                <input
+                                    className="input"
+                                    readOnly
+                                    value={selectedWeek ? format(selectedWeek.deadline, 'MMM d, yyyy') : 'No internship start date'}
+                                />
+                            </div>
+                            <div className="input-group">
+                                <label className="input-label" htmlFor="weekly-report-hours" style={{ marginBottom: 8, display: 'block' }}>
+                                    Hours Rendered<span style={{ color: 'var(--rose-400)', marginLeft: 2 }}>*</span>
+                                </label>
+                                <input
+                                    id="weekly-report-hours"
+                                    className="input"
+                                    type="number"
+                                    min={0.5}
+                                    step={0.5}
+                                    value={hoursRendered}
+                                    onChange={(e) => setHoursRendered(e.target.value)}
+                                    placeholder="Total hours for the week"
+                                />
+                            </div>
+                            <div className="input-group">
+                                <label className="input-label" htmlFor="weekly-report-file" style={{ marginBottom: 12, display: 'block' }}>
+                                    Weekly Report PDF<span style={{ color: 'var(--rose-400)', marginLeft: 2 }}>*</span>
+                                </label>
+                                <div style={{
+                                    position: 'relative',
+                                    border: '2px dashed var(--slate-600)',
+                                    borderRadius: '12px',
+                                    padding: '24px',
+                                    textAlign: 'center',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+                                }}
+                                onMouseEnter={(e) => {
+                                    const el = e.currentTarget;
+                                    el.style.borderColor = 'var(--primary-400)';
+                                    el.style.backgroundColor = 'rgba(15, 23, 42, 0.8)';
+                                }}
+                                onMouseLeave={(e) => {
+                                    const el = e.currentTarget;
+                                    el.style.borderColor = 'var(--slate-600)';
+                                    el.style.backgroundColor = 'rgba(15, 23, 42, 0.5)';
+                                }}
+                                >
+                                    <input
+                                        id="weekly-report-file"
+                                        type="file"
+                                        accept="application/pdf"
+                                        onChange={(e) => setReportFile(e.target.files?.[0] || null)}
+                                        style={{ display: 'none' }}
+                                    />
+                                    <label htmlFor="weekly-report-file" style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--primary-400)' }}>
+                                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                            <polyline points="17 8 12 3 7 8"></polyline>
+                                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                                        </svg>
+                                        <div>
+                                            <p style={{ fontSize: 14, fontWeight: 600, color: 'white', margin: 0 }}>
+                                                {reportFile ? reportFile.name : 'Click to upload or drag file'}
+                                            </p>
+                                            <p style={{ fontSize: 12, color: 'var(--slate-400)', margin: '4px 0 0 0' }}>PDF files only</p>
+                                        </div>
+                                    </label>
                                 </div>
-                            )}
+                            </div>
+                        </div>
+
+                        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                <p style={{ fontSize: 13, color: 'var(--slate-500)' }}>
+                                    Current week: <span style={{ color: 'white', fontWeight: 700 }}>{selectedWeek?.label || 'Select a week'}</span>
+                                </p>
+                                <p style={{ fontSize: 13, color: 'var(--slate-500)' }}>
+                                    Status: <span style={{ color: selectedWeek?.status === 'submitted' ? 'var(--primary-300)' : selectedWeek?.status === 'overdue' ? 'var(--rose-400)' : 'var(--amber-300)', fontWeight: 700 }}>
+                                        {selectedWeek?.status ? selectedWeek.status.toUpperCase() : 'N/A'}
+                                    </span>
+                                </p>
+                                {selectedWeekReport && (
+                                    <p style={{ fontSize: 13, color: 'var(--slate-500)' }}>
+                                        Submitted file: <span style={{ color: 'white', fontWeight: 700 }}>{selectedWeekReport.fileName || selectedWeekReport.importedPdfName || 'weekly-report.pdf'}</span>
+                                    </p>
+                                )}
+                            </div>
+                            <button
+                                type="button"
+                                className="btn btn-primary"
+                                onClick={onSubmitWeeklyReport}
+                                disabled={submittingReport || generating || !selectedWeek || selectedWeek.status === 'submitted'}
+                            >
+                                {submittingReport ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Save size={16} />}
+                                {submittingReport ? 'Submitting...' : 'Submit Weekly Report'}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="card" style={{ padding: 20 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+                            <div>
+                                <h3 style={{ fontSize: 16, fontWeight: 700 }}>Week Status Overview</h3>
+                                <p style={{ fontSize: 13, color: 'var(--slate-500)' }}>Week 1 to Week 15 based on the intern&apos;s start date.</p>
+                            </div>
+                        </div>
+                        <div style={{ overflowX: 'auto' }}>
+                            <table className="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Week</th>
+                                        <th>Deadline</th>
+                                        <th>Status</th>
+                                        <th>Hours</th>
+                                        <th>File</th>
+                                        <th>Submitted</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {weeks.map((week) => {
+                                        const report = week.report;
+                                        return (
+                                            <tr key={week.weekNumber}>
+                                                <td>Week {week.weekNumber}</td>
+                                                <td>{format(week.deadline, 'MMM d, yyyy')}</td>
+                                                <td>
+                                                    <span
+                                                        className="tag"
+                                                        style={{
+                                                            background:
+                                                                week.status === 'submitted'
+                                                                    ? 'rgba(16,185,129,0.16)'
+                                                                    : week.status === 'overdue'
+                                                                        ? 'rgba(244,63,94,0.16)'
+                                                                        : 'rgba(245,158,11,0.16)',
+                                                            color:
+                                                                week.status === 'submitted'
+                                                                    ? 'var(--primary-300)'
+                                                                    : week.status === 'overdue'
+                                                                        ? 'var(--rose-300)'
+                                                                        : 'var(--amber-300)',
+                                                        }}
+                                                    >
+                                                        {week.status}
+                                                    </span>
+                                                </td>
+                                                <td>{report?.hoursRendered ? `${report.hoursRendered}h` : '-'}</td>
+                                                <td>
+                                                    {getReportFileUrl(report) ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setViewerReport(report)}
+                                                            className="btn btn-ghost btn-sm"
+                                                            style={{
+                                                                color: 'var(--primary-300)',
+                                                                fontWeight: 600,
+                                                                padding: '6px 10px',
+                                                            }}
+                                                        >
+                                                            {report?.fileName || report?.importedPdfName || 'View File'}
+                                                        </button>
+                                                    ) : (
+                                                        '-'
+                                                    )}
+                                                </td>
+                                                <td>{report?.submittedAt ? format(new Date(report.submittedAt), 'MMM d, yyyy h:mm a') : '-'}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
@@ -1135,6 +1206,39 @@ function ReportsContent({
                             style={{ minHeight: 130, lineHeight: 1.65 }}
                         />
                     </div>
+
+                    {viewerReport && getViewerSrc(viewerReport) && (
+                        <div className="modal-overlay" onClick={() => setViewerReport(null)}>
+                            <div
+                                className="modal-content"
+                                onClick={(e) => e.stopPropagation()}
+                                style={{ maxWidth: 1100, width: '96vw', padding: 0, overflow: 'hidden' }}
+                            >
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: 12,
+                                    padding: '14px 18px',
+                                    borderBottom: '1px solid rgba(255,255,255,0.08)',
+                                    background: 'rgba(10,10,12,0.95)',
+                                }}>
+                                    <div>
+                                        <h3 style={{ fontSize: 16, fontWeight: 700 }}>Weekly Report PDF</h3>
+                                        <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>
+                                            Week {viewerReport.weekNumber} · {viewerReport.fileName || viewerReport.importedPdfName || 'Uploaded file'}
+                                        </p>
+                                    </div>
+                                    <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setViewerReport(null)}>
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                                <div ref={viewerContainerRef} style={{ height: '80vh', overflowY: 'auto', background: '#0b0b0d', padding: 16 }}>
+                                    <div style={{ color: 'var(--slate-400)', fontSize: 14 }}>Loading PDF...</div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                 </div>
             )}
@@ -1160,7 +1264,7 @@ function PaperViewModal({
 }: {
     open: boolean;
     onClose: () => void;
-    weeks: { start: Date; end: Date; label: string }[];
+    weeks: WeekRange[];
     selectedWeekIdx: number;
     setSelectedWeekIdx: (value: number) => void;
     logs: DailyLog[];
@@ -1182,7 +1286,7 @@ function PaperViewModal({
     const selectedWeek = weeks[selectedWeekIdx];
     const weekLogs = selectedWeek ? getLogsForWeek(logs, selectedWeek.start, selectedWeek.end) : [];
     const savedReport = selectedWeek
-        ? savedReports.find((r) => getWeekKeyFromIso(r.weekStart) === getWeekKeyFromDate(selectedWeek.start))
+        ? savedReports.find((r) => r.weekNumber === selectedWeek.weekNumber)
         : null;
     const reflection = selectedWeekIdx === currentSelectedWeekIdx
         ? currentReflection

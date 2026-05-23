@@ -35,7 +35,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 // ─── Helper: resolve current UID ────────────────────────
 function resolveUid(fallback?: string): string {
-    return auth.currentUser?.uid || fallback || '';
+    return fallback || auth.currentUser?.uid || '';
 }
 
 // ═══════════════════════════════════════════════════════
@@ -48,6 +48,7 @@ export async function saveUserToFirestore(user: User): Promise<void> {
     const uid = resolveUid(user.id);
     const userRef = doc(db, 'users', uid);
     await setDoc(userRef, {
+        role: user.role || 'intern',
         id: uid,
         name: user.name,
         fullName: user.fullName || null,
@@ -83,8 +84,9 @@ export async function getUserFromFirestore(uid: string): Promise<User | null> {
     if (!snap.exists()) return null;
     const data = snap.data();
     return {
-        id: data.id || uid,
+        id: snap.id,
         name: data.name || '',
+        role: data.role || 'intern',
         fullName: data.fullName || undefined,
         email: data.email || '',
         password: '', // Never store passwords in Firestore
@@ -129,8 +131,9 @@ export async function findUserByEmailInFirestore(email: string): Promise<User | 
     if (snap.empty) return null;
     const data = snap.docs[0].data();
     return {
-        id: data.id || snap.docs[0].id,
+        id: snap.docs[0].id,
         name: data.name || '',
+        role: data.role || 'intern',
         fullName: data.fullName || undefined,
         email: data.email || '',
         password: '',
@@ -340,24 +343,46 @@ function weeklyReportsCol(uid: string) {
 /** Fetch all weekly reports for a user from Firestore */
 export async function getWeeklyReportsFromFirestore(userId: string): Promise<WeeklyReport[]> {
     const uid = resolveUid(userId);
-    const q = query(weeklyReportsCol(uid), orderBy('weekStart', 'desc'));
-    const snap = await getDocs(q);
-    return snap.docs.map((d) => {
+    const [subcollectionSnap, legacySnap] = await Promise.all([
+        getDocs(weeklyReportsCol(uid)),
+        getDocs(query(collection(db, 'weeklyReports'), where('userId', '==', uid))),
+    ]);
+
+    const reports = [...subcollectionSnap.docs, ...legacySnap.docs].map((d) => {
         const data = d.data();
         return {
             id: d.id,
-            userId: uid,
+            userId: data.userId || uid,
+            weekNumber: data.weekNumber || 0,
             weekStart: data.weekStart,
             weekEnd: data.weekEnd,
+            deadline: data.deadline || data.weekEnd || '',
+            hoursRendered: data.hoursRendered || 0,
+            fileUrl: data.fileUrl || data.importedPdfUrl || '',
+            fileName: data.fileName || data.importedPdfName || '',
+            filePublicId: data.filePublicId || data.importedPdfPublicId || undefined,
+            submittedAt: data.submittedAt || data.importedPdfUploadedAt || data.createdAt || '',
+            status: data.status || 'submitted',
             reflection: data.reflection || '',
             logs: data.logs || [],
-            importedPdfUrl: data.importedPdfUrl || undefined,
-            importedPdfName: data.importedPdfName || undefined,
-            importedPdfUploadedAt: data.importedPdfUploadedAt || undefined,
-            importedPdfPublicId: data.importedPdfPublicId || undefined,
-            importedPdfResourceType: data.importedPdfResourceType || undefined,
+            importedPdfUrl: data.importedPdfUrl || data.fileUrl || undefined,
+            importedPdfName: data.importedPdfName || data.fileName || undefined,
+            importedPdfUploadedAt: data.importedPdfUploadedAt || data.submittedAt || undefined,
+            importedPdfPublicId: data.importedPdfPublicId || data.filePublicId || undefined,
+            importedPdfResourceType: data.importedPdfResourceType || 'raw',
             createdAt: data.createdAt || '',
         } as WeeklyReport;
+    });
+
+    return reports.sort((a, b) => {
+        const aDate = a.submittedAt || a.createdAt || '';
+        const bDate = b.submittedAt || b.createdAt || '';
+
+        if (aDate !== bDate) {
+            return bDate.localeCompare(aDate);
+        }
+
+        return b.weekNumber - a.weekNumber;
     });
 }
 
@@ -366,39 +391,35 @@ export async function saveWeeklyReportToFirestore(
     report: Omit<WeeklyReport, 'id' | 'createdAt'>
 ): Promise<WeeklyReport> {
     const uid = resolveUid(report.userId);
+    const weekNumber = report.weekNumber;
+    const id = `week-${String(weekNumber).padStart(2, '0')}`;
+    const reportRef = doc(db, 'users', uid, 'weeklyReports', id);
+    const existing = await getDoc(reportRef);
 
-    // Check if a report already exists for this week
-    const q = query(
-        weeklyReportsCol(uid),
-        where('weekStart', '==', report.weekStart)
-    );
-    const existing = await getDocs(q);
-
-    let id: string;
-    let createdAt: string;
-
-    if (!existing.empty) {
-        id = existing.docs[0].id;
-        createdAt = existing.docs[0].data().createdAt || new Date().toISOString();
-        await updateDoc(doc(db, 'users', uid, 'weeklyReports', id), {
-            ...report,
-            userId: uid,
-            _updatedAt: serverTimestamp(),
-        });
-    } else {
-        id = uuidv4();
-        createdAt = new Date().toISOString();
-        await setDoc(doc(db, 'users', uid, 'weeklyReports', id), {
-            ...report,
-            userId: uid,
-            id,
-            createdAt,
-            _createdAt: serverTimestamp(),
-            _updatedAt: serverTimestamp(),
-        });
+    if (existing.exists()) {
+        throw new Error(`Weekly report for Week ${weekNumber} has already been submitted.`);
     }
 
-    return { ...report, id, createdAt };
+    const createdAt = report.submittedAt || new Date().toISOString();
+    const normalizedReport = {
+        ...report,
+        userId: uid,
+        id,
+        createdAt,
+        submittedAt: report.submittedAt || createdAt,
+        status: 'submitted' as const,
+        importedPdfUrl: report.importedPdfUrl || report.fileUrl,
+        importedPdfName: report.importedPdfName || report.fileName,
+        importedPdfUploadedAt: report.importedPdfUploadedAt || report.submittedAt || createdAt,
+        importedPdfPublicId: report.importedPdfPublicId || report.filePublicId,
+        importedPdfResourceType: report.importedPdfResourceType || 'raw',
+        _createdAt: serverTimestamp(),
+        _updatedAt: serverTimestamp(),
+    };
+
+    await setDoc(reportRef, normalizedReport);
+
+    return normalizedReport;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -701,4 +722,286 @@ export async function migrateFromFlatToSubcollections(): Promise<{ logs: number;
     }
 
     return result;
+}
+
+// ═══════════════════════════════════════════════════════
+// ─── Dean Functions ──────────────────────────────────
+// ═══════════════════════════════════════════════════════
+
+import type { Sanction, DutySlot, SanctionRender, DeanNotification } from './types';
+
+/** Get all students (interns) from Firestore */
+export async function getAllStudentsFromFirestore(): Promise<User[]> {
+    try {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('role', '==', 'intern'));
+        const snap = await getDocs(q);
+        console.log('[Firestore] getAllStudentsFromFirestore - Found', snap.docs.length, 'interns with role=intern');
+
+        const interns = snap.docs.map((doc) => {
+            const data = doc.data();
+            console.log('[Firestore] Student:', { name: data.name, email: data.email, role: data.role || 'not-set' });
+            return {
+                id: doc.id,
+                name: data.name || '',
+                fullName: data.fullName,
+                email: data.email || '',
+                password: '',
+                role: data.role || 'intern',
+                address: data.address,
+                phoneNumber: data.phoneNumber,
+                contact: data.contact,
+                guardianEmail: data.guardianEmail,
+                guardianPhone: data.guardianPhone,
+                guardian: data.guardian,
+                course: data.course,
+                department: data.department,
+                companyName: data.companyName,
+                companyAddress: data.companyAddress,
+                companyContactNumber: data.companyContactNumber,
+                companyEmail: data.companyEmail,
+                company: data.company,
+                totalRequiredHours: data.totalRequiredHours || 0,
+                startDate: data.startDate || new Date().toISOString(),
+                endDate: data.endDate,
+                createdAt: data.createdAt || new Date().toISOString(),
+                supervisors: data.supervisors || [],
+                reminderEnabled: data.reminderEnabled ?? true,
+                profileImage: data.profileImage,
+            };
+        });
+
+        console.log('[Firestore] Returning', interns.length, 'interns after filtering');
+        return interns;
+    } catch (err) {
+        console.error('[Firestore] Error fetching students from Firestore:', err);
+        return [];
+    }
+}
+
+export async function getSanctionsForStudent(studentId: string, studentEmail?: string): Promise<Sanction[]> {
+    try {
+        const sanctionsRef = collection(db, 'sanctions');
+        const queries = [query(sanctionsRef, where('userId', '==', studentId))];
+
+        if (studentEmail) {
+            queries.push(query(sanctionsRef, where('userEmail', '==', studentEmail)));
+        }
+
+        const snapshots = await Promise.all(queries.map((q) => getDocs(q)));
+        const seenIds = new Set<string>();
+        const sanctions = snapshots.flatMap((snap) =>
+            snap.docs
+                .filter((doc) => {
+                    if (seenIds.has(doc.id)) return false;
+                    seenIds.add(doc.id);
+                    return true;
+                })
+                .map((doc) => {
+                    const data = doc.data();
+                    return {
+                        id: doc.id,
+                        userId: data.userId,
+                        userEmail: data.userEmail,
+                        deanId: data.deanId,
+                        days: data.days || (data.type ? 1 : 0),
+                        reason: data.reason,
+                        description: data.description,
+                        issuedDate: data.issuedDate,
+                        status: data.status || 'active',
+                        createdAt: data.createdAt,
+                        updatedAt: data.updatedAt,
+                    };
+                })
+        );
+
+        return sanctions.sort((a, b) => {
+            const left = a.createdAt instanceof Timestamp ? a.createdAt.toMillis() : new Date(a.createdAt || a.issuedDate || 0).getTime();
+            const right = b.createdAt instanceof Timestamp ? b.createdAt.toMillis() : new Date(b.createdAt || b.issuedDate || 0).getTime();
+            return right - left;
+        });
+    } catch (err) {
+        console.error('Error fetching sanctions:', err);
+        return [];
+    }
+}
+
+/** Save a new sanction */
+export async function saveSanctionToFirestore(sanction: Omit<Sanction, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+    try {
+        const sanctionsRef = collection(db, 'sanctions');
+        const newId = uuidv4();
+        const docRef = doc(sanctionsRef, newId);
+        
+        await setDoc(docRef, {
+            ...sanction,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+        
+        return newId;
+    } catch (err) {
+        console.error('Error saving sanction:', err);
+        throw err;
+    }
+}
+
+/** Update sanction days by reducing them */
+export async function updateSanctionDaysInFirestore(sanctionId: string, newDays: number): Promise<void> {
+    try {
+        const sanctionRef = doc(db, 'sanctions', sanctionId);
+        await updateDoc(sanctionRef, {
+            days: newDays,
+            updatedAt: serverTimestamp(),
+        });
+    } catch (err) {
+        console.error('Error updating sanction days:', err);
+        throw err;
+    }
+}
+
+/** Get all duty slots */
+export async function getDutySlotsFromFirestore(): Promise<DutySlot[]> {
+    try {
+        const slotsRef = collection(db, 'dutySlots');
+        const q = query(slotsRef, orderBy('date', 'asc'));
+        const snap = await getDocs(q);
+        
+        return snap.docs.map((doc) => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                deanId: data.deanId,
+                title: data.title,
+                description: data.description,
+                date: data.date,
+                startTime: data.startTime,
+                endTime: data.endTime,
+                location: data.location,
+                capacity: data.capacity,
+                createdAt: data.createdAt,
+                updatedAt: data.updatedAt,
+            };
+        });
+    } catch (err) {
+        console.error('Error fetching duty slots:', err);
+        return [];
+    }
+}
+
+/** Create a new duty slot */
+export async function createDutySlotInFirestore(dutySlot: Omit<DutySlot, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+    try {
+        const slotsRef = collection(db, 'dutySlots');
+        const newId = uuidv4();
+        const docRef = doc(slotsRef, newId);
+        
+        await setDoc(docRef, {
+            ...dutySlot,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+        
+        return newId;
+    } catch (err) {
+        console.error('Error creating duty slot:', err);
+        throw err;
+    }
+}
+
+/** Get sanction renders for a duty slot or user */
+export async function getSanctionRendersFromFirestore(filters?: { dutySlotId?: string; userId?: string }): Promise<SanctionRender[]> {
+    try {
+        const rendersRef = collection(db, 'sanctionRenders');
+        let q: any = rendersRef;
+        
+        const whereConditions: any[] = [];
+        if (filters?.dutySlotId) {
+            whereConditions.push(where('dutySlotId', '==', filters.dutySlotId));
+        }
+        if (filters?.userId) {
+            whereConditions.push(where('userId', '==', filters.userId));
+        }
+        
+        if (whereConditions.length > 0) {
+            q = query(rendersRef, ...whereConditions, orderBy('createdAt', 'desc'));
+        } else {
+            q = query(rendersRef, orderBy('createdAt', 'desc'));
+        }
+        
+        const snap = await getDocs(q);
+        
+        return snap.docs.map((doc) => {
+            const data = doc.data() as any;
+            return {
+                id: doc.id,
+                sanctionId: data.sanctionId,
+                userId: data.userId,
+                dutySlotId: data.dutySlotId,
+                status: data.status || 'available',
+                attendanceDate: data.attendanceDate,
+                hoursCompleted: data.hoursCompleted,
+                notes: data.notes,
+                createdAt: data.createdAt,
+                updatedAt: data.updatedAt,
+            };
+        });
+    } catch (err) {
+        console.error('Error fetching sanction renders:', err);
+        return [];
+    }
+}
+
+/** Create a sanction render */
+export async function createSanctionRenderInFirestore(render: Omit<SanctionRender, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+    try {
+        const rendersRef = collection(db, 'sanctionRenders');
+        const newId = uuidv4();
+        const docRef = doc(rendersRef, newId);
+        
+        await setDoc(docRef, {
+            ...render,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+        
+        return newId;
+    } catch (err) {
+        console.error('Error creating sanction render:', err);
+        throw err;
+    }
+}
+
+/** Update sanction render status */
+export async function updateSanctionRenderStatus(renderId: string, status: SanctionRender['status'], updates?: Partial<SanctionRender>): Promise<void> {
+    try {
+        const renderRef = doc(db, 'sanctionRenders', renderId);
+        await updateDoc(renderRef, {
+            status,
+            ...updates,
+            updatedAt: serverTimestamp(),
+        });
+    } catch (err) {
+        console.error('Error updating sanction render:', err);
+        throw err;
+    }
+}
+
+/** Create a dean notification for all interns */
+export async function createDeanNotificationForAllInterns(notification: Omit<DeanNotification, 'id' | 'createdAt'>): Promise<void> {
+    try {
+        const students = await getAllStudentsFromFirestore();
+        
+        for (const student of students) {
+            const notifRef = doc(collection(db, 'users', student.id, 'notifications'));
+            await setDoc(notifRef, {
+                ...notification,
+                userId: student.id,
+                createdAt: serverTimestamp(),
+            });
+        }
+    } catch (err) {
+        console.error('Error creating dean notification:', err);
+        throw err;
+    }
 }
