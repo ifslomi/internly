@@ -3235,10 +3235,6 @@ export default function ChatPage() {
                                                 >
                                                     <button
                                                         onClick={() => {
-                                                            if (totalReactions > 0) {
-                                                                setReactionDetailsMessageId(msg.id);
-                                                                return;
-                                                            }
                                                             setReactionPickerMessageId((current) => (current === msg.id ? null : msg.id));
                                                         }}
                                                         style={{
@@ -3253,9 +3249,9 @@ export default function ChatPage() {
                                                             gap: 4,
                                                             whiteSpace: 'nowrap',
                                                         }}
-                                                        title={totalReactions > 0 ? 'View reactions' : 'React'}
+                                                        title="React"
                                                     >
-                                                        <Smile size={11} /> {totalReactions > 0 ? 'Reactions' : 'React'}
+                                                        <Smile size={11} /> React
                                                     </button>
                                                     {isMine && msg.text && canEditByTime && (
                                                         <button
@@ -3300,7 +3296,7 @@ export default function ChatPage() {
                                                 </div>
                                             )}
 
-                                            {reactionPickerMessageId === msg.id && !msg.isUnsent && totalReactions === 0 && (
+                                            {reactionPickerMessageId === msg.id && !msg.isUnsent && (
                                                 <div style={{
                                                     position: 'absolute',
                                                     [pickerOnRight ? 'left' : 'right']: '100%',
