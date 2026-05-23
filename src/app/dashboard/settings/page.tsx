@@ -74,8 +74,14 @@ export default function SettingsPage() {
             return;
         }
 
-        if (newPassword.length < 6) {
-            showToast({ kind: 'error', title: 'Password Update Failed', message: 'New password must be at least 6 characters.' });
+        const hasUpperCase = /[A-Z]/.test(newPassword);
+        const hasNumber = /\d/.test(newPassword);
+        if (newPassword.length < 8 || !hasUpperCase || !hasNumber) {
+            showToast({ 
+                kind: 'error', 
+                title: 'Weak Password', 
+                message: 'New password must be at least 8 characters long and contain both an uppercase letter and a number.' 
+            });
             endGlobalLoading();
             return;
         }
@@ -310,7 +316,7 @@ export default function SettingsPage() {
                                             type={showNewPassword ? 'text' : 'password'}
                                             value={newPassword}
                                             onChange={(e) => setNewPassword(e.target.value)}
-                                            placeholder="At least 6 characters"
+                                            placeholder="Min 8 chars, A-Z, 0-9"
                                             style={{ paddingRight: 44 }}
                                             autoComplete="new-password"
                                         />

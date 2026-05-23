@@ -210,28 +210,22 @@ export default function DeanWeeklyReportsPage() {
                 }}>
                     {/* Search */}
                     <div style={{ padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                        <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            padding: '8px 12px',
-                            borderRadius: 'var(--radius-md)',
-                            background: 'rgba(255,255,255,0.05)',
-                            border: '1px solid rgba(255,255,255,0.1)',
-                        }}>
-                            <Search size={16} style={{ color: 'var(--slate-400)' }} />
+                        <div style={{ position: 'relative', width: '100%' }}>
+                            <Search size={16} style={{ 
+                                position: 'absolute', 
+                                left: 12, 
+                                top: '50%', 
+                                transform: 'translateY(-50%)', 
+                                color: 'var(--slate-400)' 
+                            }} />
                             <input
                                 type="text"
+                                className="input"
                                 placeholder="Search students..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 style={{
-                                    flex: 1,
-                                    background: 'transparent',
-                                    border: 'none',
-                                    outline: 'none',
-                                    color: 'white',
-                                    fontSize: 14,
+                                    paddingLeft: 38,
                                 }}
                             />
                         </div>

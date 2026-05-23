@@ -123,8 +123,14 @@ export default function LoginPage() {
             showToast({ kind: 'error', title: 'Sign Up Failed', message: 'Passwords do not match.' });
             return;
         }
-        if (password.length < 6) {
-            showToast({ kind: 'error', title: 'Sign Up Failed', message: 'Password must be at least 6 characters.' });
+        const hasUpperCase = /[A-Z]/.test(password);
+        const hasNumber = /\d/.test(password);
+        if (password.length < 8 || !hasUpperCase || !hasNumber) {
+            showToast({ 
+                kind: 'error', 
+                title: 'Weak Password', 
+                message: 'Password must be at least 8 characters long and contain both an uppercase letter and a number.' 
+            });
             return;
         }
         if (totalHours < 1) {
@@ -383,7 +389,7 @@ export default function LoginPage() {
                                                     id="signup-password"
                                                     className="input"
                                                     type={showPassword ? 'text' : 'password'}
-                                                    placeholder="Min 6 characters"
+                                                    placeholder="Min 8 chars, A-Z, 0-9"
                                                     value={password}
                                                     onChange={(e) => setPassword(e.target.value)}
                                                     required
@@ -532,8 +538,14 @@ export default function LoginPage() {
                                             showToast({ kind: 'error', title: 'UB Mail Sign-up Failed', message: 'Passwords do not match.' });
                                             return;
                                         }
-                                        if (password.length < 6) {
-                                            showToast({ kind: 'error', title: 'UB Mail Sign-up Failed', message: 'Password must be at least 6 characters.' });
+                                        const hasUpperCase = /[A-Z]/.test(password);
+                                        const hasNumber = /\d/.test(password);
+                                        if (password.length < 8 || !hasUpperCase || !hasNumber) {
+                                            showToast({ 
+                                                kind: 'error', 
+                                                title: 'UB Mail Sign-up Failed', 
+                                                message: 'Password must be at least 8 characters long and contain both an uppercase letter and a number.' 
+                                            });
                                             return;
                                         }
                                     }
@@ -630,18 +642,11 @@ export default function LoginPage() {
 
                             <div style={{ height: 14 }} />
 
-                            <p style={{ textAlign: 'center', fontSize: 14, color: 'var(--slate-400)' }}>
-                                {mode === 'login' ? 'Don&apos;t have an account?' : 'Already have an account?'}{' '}
+                            <p style={{ textAlign: 'center', fontSize: 14, color: 'var(--slate-400)', marginTop: 8 }}>
+                                {mode === 'login' ? "Don't have an account?" : "Already have an account?"}{' '}
                                 <button
                                     onClick={() => switchAuthMode(mode === 'login' ? 'signup' : 'login')}
-                                    style={{
-                                        color: 'var(--primary-400)',
-                                        fontWeight: 600,
-                                        background: 'none',
-                                        border: 'none',
-                                        cursor: 'pointer',
-                                        fontSize: 14,
-                                    }}
+                                    className="auth-toggle-btn"
                                 >
                                     {mode === 'login' ? 'Sign Up' : 'Log In'}
                                 </button>
@@ -823,6 +828,25 @@ export default function LoginPage() {
                     .auth-card {
                         min-height: auto !important;
                     }
+                }
+                .auth-toggle-btn {
+                    color: var(--primary-400);
+                    font-weight: 700;
+                    background: none;
+                    border: none;
+                    cursor: pointer;
+                    font-size: 14px;
+                    padding: 0 4px;
+                    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                    text-underline-offset: 4px;
+                }
+                .auth-toggle-btn:hover {
+                    color: var(--primary-300);
+                    text-decoration: underline;
+                    transform: translateY(-1px);
+                }
+                .auth-toggle-btn:active {
+                    transform: translateY(0);
                 }
             `}</style>
         </div>

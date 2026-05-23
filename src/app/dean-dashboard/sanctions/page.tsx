@@ -100,6 +100,19 @@ export default function DeanSanctionsPage() {
         [sanctions]
     );
 
+    const filteredSanctions = useMemo(() => {
+        if (!searchQuery.trim()) return sanctions;
+        const query = searchQuery.toLowerCase();
+        return sanctions.filter((sanction) => {
+            const student = students.find((s) => s.id === sanction.userId);
+            return (
+                student?.name.toLowerCase().includes(query) ||
+                student?.email.toLowerCase().includes(query) ||
+                sanction.reason.toLowerCase().includes(query)
+            );
+        });
+    }, [sanctions, students, searchQuery]);
+
     const handleIssueSanction = async () => {
         if (!sanctionForm.studentId || sanctionForm.days < 1 || !sanctionForm.reason.trim()) {
             alert('Please fill in all required fields');
@@ -301,14 +314,23 @@ export default function DeanSanctionsPage() {
             {activeTab === 'sanctions' ? (
                 <div className="card" style={{ padding: 24 }}>
                     <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', flex: '1 1 250px', minWidth: '200px' }}>
-                            <Search size={16} style={{ color: 'var(--slate-400)' }} />
+                        <div style={{ position: 'relative', width: '100%' }}>
+                            <Search size={16} style={{ 
+                                position: 'absolute', 
+                                left: 12, 
+                                top: '50%', 
+                                transform: 'translateY(-50%)', 
+                                color: 'var(--slate-400)' 
+                            }} />
                             <input
                                 type="text"
+                                className="input"
                                 placeholder="Search students..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'white', fontSize: 14 }}
+                                style={{
+                                    paddingLeft: 38,
+                                }}
                             />
                         </div>
                         <button onClick={() => setShowSanctionModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 'var(--radius-md)', background: 'var(--primary-600)', border: 'none', color: 'white', fontWeight: 600, cursor: 'pointer' }}>
@@ -327,14 +349,14 @@ export default function DeanSanctionsPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {sanctions.length === 0 ? (
+                                {filteredSanctions.length === 0 ? (
                                     <tr>
                                         <td colSpan={4} style={{ textAlign: 'center', padding: '18px 12px', color: 'var(--slate-500)' }}>
-                                            No sanctions issued yet.
+                                            {sanctions.length === 0 ? 'No sanctions issued yet.' : 'No sanctions match your search.'}
                                         </td>
                                     </tr>
                                 ) : (
-                                    sanctions.map((sanction) => (
+                                    filteredSanctions.map((sanction) => (
                                         <tr key={sanction.id}>
                                             <td>{students.find((s) => s.id === sanction.userId)?.name || 'Unknown'}</td>
                                             <td>{sanction.days} {sanction.days === 1 ? 'day' : 'days'}</td>
@@ -565,7 +587,12 @@ export default function DeanSanctionsPage() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                             <div>
                                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Select Student</label>
-                                <select value={sanctionForm.studentId} onChange={(e) => setSanctionForm({ ...sanctionForm, studentId: e.target.value })} style={{ width: '100%', marginTop: 8, padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: 14, cursor: 'pointer' }}>
+                                <select 
+                                    className="input"
+                                    value={sanctionForm.studentId} 
+                                    onChange={(e) => setSanctionForm({ ...sanctionForm, studentId: e.target.value })} 
+                                    style={{ marginTop: 8 }}
+                                >
                                     <option value="">Choose a student...</option>
                                     {filteredStudents.map((student) => (
                                         <option key={student.id} value={student.id}>
@@ -577,17 +604,39 @@ export default function DeanSanctionsPage() {
 
                             <div>
                                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Days of Sanction</label>
-                                <input type="number" min={1} step={1} value={sanctionForm.days} onChange={(e) => setSanctionForm({ ...sanctionForm, days: Number(e.target.value) || 0 })} placeholder="E.g., 3" style={{ width: '100%', marginTop: 8, padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: 14, boxSizing: 'border-box' }} />
+                                <input 
+                                    type="number" 
+                                    className="input"
+                                    min={1} 
+                                    step={1} 
+                                    value={sanctionForm.days} 
+                                    onChange={(e) => setSanctionForm({ ...sanctionForm, days: Number(e.target.value) || 0 })} 
+                                    placeholder="E.g., 3" 
+                                    style={{ marginTop: 8 }} 
+                                />
                             </div>
 
                             <div>
                                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reason</label>
-                                <input type="text" value={sanctionForm.reason} onChange={(e) => setSanctionForm({ ...sanctionForm, reason: e.target.value })} placeholder="E.g., Late arrival" style={{ width: '100%', marginTop: 8, padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: 14, boxSizing: 'border-box' }} />
+                                <input 
+                                    type="text" 
+                                    className="input"
+                                    value={sanctionForm.reason} 
+                                    onChange={(e) => setSanctionForm({ ...sanctionForm, reason: e.target.value })} 
+                                    placeholder="E.g., Late arrival" 
+                                    style={{ marginTop: 8 }} 
+                                />
                             </div>
 
                             <div>
                                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Description</label>
-                                <textarea value={sanctionForm.description} onChange={(e) => setSanctionForm({ ...sanctionForm, description: e.target.value })} placeholder="Additional details..." style={{ width: '100%', marginTop: 8, padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: 14, minHeight: '80px', fontFamily: 'inherit', boxSizing: 'border-box', resize: 'vertical' }} />
+                                <textarea 
+                                    className="input textarea"
+                                    value={sanctionForm.description} 
+                                    onChange={(e) => setSanctionForm({ ...sanctionForm, description: e.target.value })} 
+                                    placeholder="Additional details..." 
+                                    style={{ marginTop: 8 }} 
+                                />
                             </div>
 
                             <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
