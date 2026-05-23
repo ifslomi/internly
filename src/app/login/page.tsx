@@ -89,10 +89,10 @@ export default function LoginPage() {
                 const firebaseErr = err as { code?: string; message?: string };
                 const msg =
                     firebaseErr.code === 'auth/unauthorized-domain'
-                        ? 'This domain is not authorized in Firebase Auth. Add your Vercel domain in Firebase Console > Authentication > Settings > Authorized domains.'
+                        ? 'This domain is not authorized in Firebase Auth. Add your Vercel domain in Firebase Console > Authentication > Settings > Authorized domains. Also disable ad blockers and try Chrome or Safari; Brave shields can block this flow.'
                         : err instanceof Error
                             ? err.message
-                            : 'UB Mail redirect sign-in failed. Please try again.';
+                            : 'UB Mail redirect sign-in failed. Disable ad blockers and try Chrome or Safari. Brave shields can block this flow.';
                 showToast({ kind: 'error', title: 'UB Mail Sign-in Failed', message: msg });
                 setShowUbPopupModal(false);
                 setGoogleLoading(false);
@@ -114,7 +114,7 @@ export default function LoginPage() {
             showToast({
                 kind: 'error',
                 title: 'New Tab Blocked',
-                message: 'Your browser blocked opening a new tab. Allow popups/new tabs for this site, then try UB Mail again.',
+                message: 'Your browser blocked opening a new tab. Allow popups/new tabs, disable ad blocker extensions, and try Chrome or Safari. Brave shields can block this flow.',
             });
             return false;
         }
@@ -648,9 +648,9 @@ export default function LoginPage() {
                                             firebaseErr.code === 'auth/popup-closed-by-user'
                                                 ? 'Popup closed before sign-in completed.'
                                                 : firebaseErr.code === 'auth/popup-blocked'
-                                                    ? 'Popup was blocked by your browser. Allow popups and try again.'
+                                                    ? 'Popup was blocked by your browser. Allow popups, disable ad blocker extensions, and try Chrome or Safari. Brave shields can block this flow.'
                                                 : firebaseErr.code === 'auth/unauthorized-domain'
-                                                    ? 'This domain is not authorized in Firebase Auth. Add your Vercel domain in Firebase Console > Authentication > Settings > Authorized domains.'
+                                                    ? 'This domain is not authorized in Firebase Auth. Add your Vercel domain in Firebase Console > Authentication > Settings > Authorized domains. Disable ad blockers and try Chrome or Safari; Brave shields can block this flow.'
                                                     : err instanceof Error
                                                         ? err.message
                                                         : mode === 'login'
