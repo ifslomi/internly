@@ -2024,34 +2024,41 @@ export default function ChatPage() {
         return timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
 
+    const truncatePreviewText = useCallback((text: string, maxLength = 54) => {
+        const normalized = (text || '').replace(/\s+/g, ' ').trim();
+        if (normalized.length <= maxLength) return normalized;
+        return `${normalized.slice(0, maxLength).trimEnd()}....`;
+    }, []);
+
     const getConversationPreviewMeta = useCallback((conv: Conversation) => {
         const previewType = conv.lastMessageType;
         const previewText = conv.lastMessage || 'Start chatting...';
+        const truncatedPreviewText = truncatePreviewText(previewText);
         const imageCount = conv.lastAttachmentImageCount || 0;
         const fileCount = conv.lastAttachmentFileCount || 0;
 
         if (previewType === 'unsent') {
-            return { kind: 'unsent' as const, text: previewText };
+            return { kind: 'unsent' as const, text: truncatedPreviewText };
         }
         if (previewType === 'attachments') {
-            if (imageCount > 0 && fileCount > 0) return { kind: 'mixed' as const, text: previewText };
-            if (imageCount > 0) return { kind: 'image' as const, text: previewText };
-            if (fileCount > 0) return { kind: 'file' as const, text: previewText };
+            if (imageCount > 0 && fileCount > 0) return { kind: 'mixed' as const, text: truncatedPreviewText };
+            if (imageCount > 0) return { kind: 'image' as const, text: truncatedPreviewText };
+            if (fileCount > 0) return { kind: 'file' as const, text: truncatedPreviewText };
         }
 
         // Backward compatibility for old preview formats.
         if (previewText.startsWith('[File]')) {
-            return { kind: 'file' as const, text: previewText.replace('[File] ', '') };
+            return { kind: 'file' as const, text: truncatePreviewText(previewText.replace('[File] ', '')) };
         }
         if (/image/i.test(previewText)) {
-            return { kind: 'image' as const, text: previewText };
+            return { kind: 'image' as const, text: truncatedPreviewText };
         }
         if (/file/i.test(previewText)) {
-            return { kind: 'file' as const, text: previewText };
+            return { kind: 'file' as const, text: truncatedPreviewText };
         }
 
-        return { kind: 'text' as const, text: previewText };
-    }, []);
+        return { kind: 'text' as const, text: truncatedPreviewText };
+    }, [truncatePreviewText]);
 
     const startEditMessage = (msg: Message) => {
         const messageTimestampMs = msg.timestamp?.toDate?.()?.getTime?.();
@@ -3001,19 +3008,7 @@ export default function ChatPage() {
                                         }}
                                     >
                                         <div style={{ position: 'relative', flexShrink: 0 }}>
-                                            {conv.isGroup ? (
-                                                <div style={{
-                                                    width: 48,
-                                                    height: 48,
-                                                    borderRadius: '50%',
-                                                    background: 'linear-gradient(135deg, #059669, #ec4899)',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                }}>
-                                                    <Users size={20} style={{ color: 'white' }} />
-                                                </div>
-                                            ) : display.avatar ? (
+                                            {display.avatar ? (
                                                 <img src={display.avatar} alt={display.name} style={{
                                                     width: 48,
                                                     height: 48,
@@ -3193,18 +3188,28 @@ export default function ChatPage() {
                                 if (activeConversation.isGroup) {
                                     return (
                                         <>
-                                            <div style={{
-                                                width: 40,
-                                                height: 40,
-                                                borderRadius: '50%',
-                                                background: 'linear-gradient(135deg, #059669, #ec4899)',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                flexShrink: 0,
-                                            }}>
-                                                <Users size={18} style={{ color: 'white' }} />
-                                            </div>
+                                            {display.avatar ? (
+                                                <img src={display.avatar} alt={display.name} style={{
+                                                    width: 40,
+                                                    height: 40,
+                                                    borderRadius: '50%',
+                                                    objectFit: 'cover',
+                                                    flexShrink: 0,
+                                                }} />
+                                            ) : (
+                                                <div style={{
+                                                    width: 40,
+                                                    height: 40,
+                                                    borderRadius: '50%',
+                                                    background: 'linear-gradient(135deg, #059669, #ec4899)',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    flexShrink: 0,
+                                                }}>
+                                                    <Users size={18} style={{ color: 'white' }} />
+                                                </div>
+                                            )}
                                             <div style={{ flex: 1, minWidth: 0 }}>
                                                 <p style={{
                                                     fontSize: 15,
