@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { format, parseISO } from 'date-fns';
-import { Award, Clock, FileText, Target, TrendingUp } from 'lucide-react';
+import { Award, Clock, Target, TrendingUp } from 'lucide-react';
 
 import { useApp } from '@/lib/context';
 import { navigateWithLoader } from '@/lib/route-loading';
@@ -73,7 +73,8 @@ export default function DashboardPage() {
     const safeTotalRequired = toFiniteNumber(stats.totalRequired);
     const safeTotalRendered = toFiniteNumber(stats.totalRendered);
 
-    const displayTotalRendered = Math.max(safeTotalRendered, weeklyReportHoursTotal);
+    // Upload-first workflow: once reports exist, dashboard totals come from submitted reports.
+    const displayTotalRendered = weeklyReports.length > 0 ? weeklyReportHoursTotal : safeTotalRendered;
     const displayRemaining = Math.max(0, safeTotalRequired - displayTotalRendered);
     const displayProgressPercentage = safeTotalRequired > 0
         ? Math.min(100, (displayTotalRendered / safeTotalRequired) * 100)
@@ -114,10 +115,6 @@ export default function DashboardPage() {
                         Here&apos;s your internship progress overview
                     </p>
                 </div>
-                <button className="btn btn-primary" onClick={() => navigateWithLoader(router, '/dashboard/reports')}>
-                    <FileText size={18} />
-                    Weekly Reports
-                </button>
             </div>
 
             <div
