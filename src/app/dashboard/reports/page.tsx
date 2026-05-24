@@ -1,16 +1,13 @@
 'use client';
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/lib/context';
 import { getLogsForWeek } from '@/lib/calculations';
 import { WeeklyReport, ActivityType, DailyLog, ACTIVITY_TYPES } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 import LogWorkModal from '@/components/LogWorkModal';
-import WeeklyReportFilters from '@/components/WeeklyReportFilters';
-import WeeklyReportTable from '@/components/WeeklyReportTable';
 import LogsHistoryFilters from '@/components/LogsHistoryFilters';
 import LogsHistoryTable from '@/components/LogsHistoryTable';
 import { showToast } from '@/lib/toast';
-import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {
     buildWeeklyReportSchedule,
     getWeeklyReportDeadline,
@@ -27,7 +24,7 @@ import {
     Tag,
     User,
     Check,
-    Plus,
+    Pencil,
     Save,
     X,
     Loader2,
@@ -55,7 +52,16 @@ function sanitizeDecimalInput(value: string) {
 }
 
 export default function ReportsPage() {
-    const { user, logs, saveWeeklyReport: ctxSaveReport, getWeeklyReports: ctxGetReports, deleteLog, updateLog } = useApp();
+    const {
+        user,
+        logs,
+        saveWeeklyReport: ctxSaveReport,
+        getWeeklyReports: ctxGetReports,
+        updateWeeklyReport: ctxUpdateReport,
+        deleteWeeklyReport: ctxDeleteReport,
+        deleteLog,
+        updateLog,
+    } = useApp();
     
     // Tab state
     const [activeTab, setActiveTab] = useState<'reports' | 'history'>('reports');
@@ -68,16 +74,12 @@ export default function ReportsPage() {
     const [hoursRendered, setHoursRendered] = useState('');
     const [reportFile, setReportFile] = useState<File | null>(null);
     const [submittingReport, setSubmittingReport] = useState(false);
-    const [showPreview] = useState(true);
     const [savedReports, setSavedReports] = useState<WeeklyReport[]>([]);
-
-    // Preview filters state
-    const [previewSearch, setPreviewSearch] = useState('');
-    const [previewSupervisor, setPreviewSupervisor] = useState('');
-    const [previewActivity, setPreviewActivity] = useState<ActivityType | ''>('');
-    const [previewDateFrom, setPreviewDateFrom] = useState('');
-    const [previewDateTo, setPreviewDateTo] = useState('');
-    const [showPreviewFilters, setShowPreviewFilters] = useState(false);
+    const [reportSearch, setReportSearch] = useState('');
+    const [reportActionId, setReportActionId] = useState<string | null>(null);
+    const [editingUploadedReport, setEditingUploadedReport] = useState<WeeklyReport | null>(null);
+    const [editUploadedHours, setEditUploadedHours] = useState('');
+    const [deleteUploadedReportConfirm, setDeleteUploadedReportConfirm] = useState<WeeklyReport | null>(null);
 
     // History state
     const [searchQuery, setSearchQuery] = useState('');
@@ -196,9 +198,6 @@ export default function ReportsPage() {
     const hasActiveFilters = Boolean(searchQuery || filterSupervisor || filterActivity || filterDateFrom || filterDateTo);
 
     const selectedWeek = weeks[selectedWeekIdx];
-    const weekLogs = selectedWeek
-        ? getLogsForWeek(logs, selectedWeek.start, selectedWeek.end)
-        : [];
 
     const currentSavedReport = selectedWeek
         ? savedReports.find((report) => report.weekNumber === selectedWeek.weekNumber) || null
@@ -262,7 +261,7 @@ export default function ReportsPage() {
                 submittedAt: new Date().toISOString(),
                 status: 'submitted',
                 reflection: '',
-                logs: weekLogs,
+                logs: [],
                 importedPdfUrl: uploadPayload.fileUrl,
                 importedPdfName: uploadPayload.fileName,
                 importedPdfUploadedAt: new Date().toISOString(),
@@ -300,9 +299,133 @@ export default function ReportsPage() {
         }
     };
 
+    const handleEditUploadedReport = async (report: WeeklyReport) => {
+        setEditingUploadedReport(report);
+        setEditUploadedHours(String(report.hoursRendered || ''));
+    };
+
+    const handleDeleteUploadedReport = async (report: WeeklyReport) => {
+        setDeleteUploadedReportConfirm(report);
+    };
+
+    const handleSaveUploadedReportEdit = async () => {
+        if (!user || !editingUploadedReport) return;
+
+        const parsed = Number(sanitizeDecimalInput(editUploadedHours));
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+            showToast({ kind: 'error', title: 'Invalid Hours', message: 'Please enter a valid hours value greater than 0.' });
+            return;
+        }
+
+        setReportActionId(editingUploadedReport.id);
+        try {
+            const updated = await ctxUpdateReport(user.id, editingUploadedReport.id, { hoursRendered: parsed });
+            setSavedReports((prev) => prev.map((entry) => (entry.id === editingUploadedReport.id ? updated : entry)));
+            showToast({ kind: 'success', title: 'Updated', message: `Week ${editingUploadedReport.weekNumber || '-'} submission updated.` });
+            setEditingUploadedReport(null);
+            setEditUploadedHours('');
+        } catch (error) {
+            console.error('Failed to update weekly report:', error);
+            showToast({ kind: 'error', title: 'Update Failed', message: 'Could not update this weekly report.' });
+        } finally {
+            setReportActionId(null);
+        }
+    };
+
+    const confirmDeleteUploadedReport = async () => {
+        if (!user || !deleteUploadedReportConfirm) return;
+
+        setReportActionId(deleteUploadedReportConfirm.id);
+        try {
+            await ctxDeleteReport(user.id, deleteUploadedReportConfirm.id);
+            setSavedReports((prev) => prev.filter((entry) => entry.id !== deleteUploadedReportConfirm.id));
+            showToast({ kind: 'success', title: 'Removed', message: `Week ${deleteUploadedReportConfirm.weekNumber || '-'} submission removed.` });
+            setDeleteUploadedReportConfirm(null);
+        } catch (error) {
+            console.error('Failed to delete weekly report:', error);
+            showToast({ kind: 'error', title: 'Delete Failed', message: 'Could not remove this weekly report.' });
+        } finally {
+            setReportActionId(null);
+        }
+    };
+
     return (
         <div>
             <LogWorkModal open={showLogModal} onClose={() => setShowLogModal(false)} />
+
+            {editingUploadedReport && (
+                <div className="modal-overlay" onClick={() => setEditingUploadedReport(null)}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460, padding: 24 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                            <h3 style={{ fontSize: 18, fontWeight: 700 }}>Edit Uploaded Report</h3>
+                            <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setEditingUploadedReport(null)}>
+                                <X size={16} />
+                            </button>
+                        </div>
+                        <p style={{ fontSize: 13, color: 'var(--slate-400)', marginBottom: 14 }}>
+                            Week {editingUploadedReport.weekNumber || '-'} • {editingUploadedReport.fileName || editingUploadedReport.importedPdfName || 'weekly-report.pdf'}
+                        </p>
+                        <div className="input-group" style={{ marginBottom: 18 }}>
+                            <label className="input-label" htmlFor="edit-uploaded-hours" style={{ marginBottom: 8, display: 'block' }}>
+                                Hours Rendered
+                            </label>
+                            <input
+                                id="edit-uploaded-hours"
+                                className="input"
+                                type="number"
+                                min={0.5}
+                                step={0.5}
+                                inputMode="decimal"
+                                onKeyDown={blockScientificNumberKeys}
+                                value={editUploadedHours}
+                                onChange={(e) => setEditUploadedHours(sanitizeDecimalInput(e.target.value))}
+                                placeholder="Enter updated hours"
+                            />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                            <button className="btn btn-secondary" onClick={() => setEditingUploadedReport(null)}>Cancel</button>
+                            <button
+                                className="btn btn-primary"
+                                onClick={handleSaveUploadedReportEdit}
+                                disabled={reportActionId === editingUploadedReport.id}
+                            >
+                                {reportActionId === editingUploadedReport.id ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Save size={16} />} Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {deleteUploadedReportConfirm && (
+                <div className="modal-overlay" onClick={() => setDeleteUploadedReportConfirm(null)}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460, padding: 28 }}>
+                        <div style={{ textAlign: 'center' }}>
+                            <div style={{
+                                width: 56,
+                                height: 56,
+                                borderRadius: 16,
+                                background: 'rgba(244,63,94,0.12)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                margin: '0 auto 16px',
+                            }}>
+                                <AlertTriangle size={28} style={{ color: 'var(--rose-400)' }} />
+                            </div>
+                            <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Remove Uploaded Report?</h3>
+                            <p style={{ fontSize: 14, color: 'var(--slate-400)', marginBottom: 24 }}>
+                                Week {deleteUploadedReportConfirm.weekNumber || '-'} • {deleteUploadedReportConfirm.fileName || deleteUploadedReportConfirm.importedPdfName || 'weekly-report.pdf'}
+                            </p>
+                            <div style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
+                                <button className="btn btn-secondary" onClick={() => setDeleteUploadedReportConfirm(null)} disabled={reportActionId === deleteUploadedReportConfirm.id}>Cancel</button>
+                                <button className="btn btn-danger" onClick={confirmDeleteUploadedReport} disabled={reportActionId === deleteUploadedReportConfirm.id}>
+                                    {reportActionId === deleteUploadedReportConfirm.id ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Trash2 size={16} />} Remove
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
             {/* Edit Modal */}
             {editingLog && (
                 <div className="modal-overlay" onClick={closeEditModal}>
@@ -505,31 +628,22 @@ export default function ReportsPage() {
                 <ReportsContent 
                     activeTab={activeTab}
                     setActiveTab={setActiveTab}
-                    logs={logs} 
                     weeks={weeks} 
                     selectedWeekIdx={selectedWeekIdx}
                     setSelectedWeekIdx={setSelectedWeekIdx}
-                    showPreview={showPreview}
-                    onOpenLogModal={() => setShowLogModal(true)}
                     selectedWeekReport={currentSavedReport}
+                    savedReports={savedReports}
                     hoursRendered={hoursRendered}
                     setHoursRendered={setHoursRendered}
                     reportFile={reportFile}
                     setReportFile={setReportFile}
                     submittingReport={submittingReport}
                     onSubmitWeeklyReport={submitWeeklyReport}
-                    previewSearch={previewSearch}
-                    setPreviewSearch={setPreviewSearch}
-                    previewSupervisor={previewSupervisor}
-                    setPreviewSupervisor={setPreviewSupervisor}
-                    previewActivity={previewActivity}
-                    setPreviewActivity={setPreviewActivity}
-                    previewDateFrom={previewDateFrom}
-                    setPreviewDateFrom={setPreviewDateFrom}
-                    previewDateTo={previewDateTo}
-                    setPreviewDateTo={setPreviewDateTo}
-                    showPreviewFilters={showPreviewFilters}
-                    setShowPreviewFilters={setShowPreviewFilters}
+                    reportSearch={reportSearch}
+                    setReportSearch={setReportSearch}
+                    reportActionId={reportActionId}
+                    onEditUploadedReport={handleEditUploadedReport}
+                    onDeleteUploadedReport={handleDeleteUploadedReport}
                 />
             ) : (
                 // HISTORY TAB
@@ -566,69 +680,73 @@ export default function ReportsPage() {
 type ReportsContentProps = {
     activeTab: 'reports' | 'history';
     setActiveTab: React.Dispatch<React.SetStateAction<'reports' | 'history'>>;
-    logs: DailyLog[];
     weeks: WeekRange[];
     selectedWeekIdx: number;
     setSelectedWeekIdx: React.Dispatch<React.SetStateAction<number>>;
-    showPreview: boolean;
-    onOpenLogModal: () => void;
     selectedWeekReport: WeeklyReport | null;
+    savedReports: WeeklyReport[];
     hoursRendered: string;
     setHoursRendered: React.Dispatch<React.SetStateAction<string>>;
     reportFile: File | null;
     setReportFile: React.Dispatch<React.SetStateAction<File | null>>;
     submittingReport: boolean;
     onSubmitWeeklyReport: () => void;
-    previewSearch: string;
-    setPreviewSearch: React.Dispatch<React.SetStateAction<string>>;
-    previewSupervisor: string;
-    setPreviewSupervisor: React.Dispatch<React.SetStateAction<string>>;
-    previewActivity: ActivityType | '';
-    setPreviewActivity: React.Dispatch<React.SetStateAction<ActivityType | ''>>;
-    previewDateFrom: string;
-    setPreviewDateFrom: React.Dispatch<React.SetStateAction<string>>;
-    previewDateTo: string;
-    setPreviewDateTo: React.Dispatch<React.SetStateAction<string>>;
-    showPreviewFilters: boolean;
-    setShowPreviewFilters: React.Dispatch<React.SetStateAction<boolean>>;
+    reportSearch: string;
+    setReportSearch: React.Dispatch<React.SetStateAction<string>>;
+    reportActionId: string | null;
+    onEditUploadedReport: (report: WeeklyReport) => void;
+    onDeleteUploadedReport: (report: WeeklyReport) => void;
 };
 
 function ReportsContent({
     activeTab,
     setActiveTab,
-    logs,
     weeks,
     selectedWeekIdx,
     setSelectedWeekIdx,
-    showPreview,
-    onOpenLogModal,
     selectedWeekReport,
+    savedReports,
     hoursRendered,
     setHoursRendered,
     reportFile,
     setReportFile,
     submittingReport,
     onSubmitWeeklyReport,
-    previewSearch,
-    setPreviewSearch,
-    previewSupervisor,
-    setPreviewSupervisor,
-    previewActivity,
-    setPreviewActivity,
-    previewDateFrom,
-    setPreviewDateFrom,
-    previewDateTo,
-    setPreviewDateTo,
-    showPreviewFilters,
-    setShowPreviewFilters,
+    reportSearch,
+    setReportSearch,
+    reportActionId,
+    onEditUploadedReport,
+    onDeleteUploadedReport,
 }: ReportsContentProps) {
     const selectedWeek = weeks[selectedWeekIdx];
-    const weekLogs = useMemo(
-        () => (selectedWeek ? getLogsForWeek(logs, selectedWeek.start, selectedWeek.end) : []),
-        [logs, selectedWeek]
-    );
     const [viewerReport, setViewerReport] = useState<WeeklyReport | null>(null);
-    const viewerContainerRef = useRef<HTMLDivElement | null>(null);
+    const [viewerLoading, setViewerLoading] = useState(false);
+    const [viewerError, setViewerError] = useState<string | null>(null);
+
+    const filteredUploadedReports = useMemo(() => {
+        const normalizedQuery = reportSearch.trim().toLowerCase();
+        const base = [...savedReports].sort((a, b) => b.weekNumber - a.weekNumber);
+
+        if (!normalizedQuery) {
+            return base;
+        }
+
+        return base.filter((report) => {
+            const submittedDateLabel = report.submittedAt
+                ? format(new Date(report.submittedAt), 'MMM d, yyyy h:mm a').toLowerCase()
+                : '';
+            const searchable = [
+                `week ${report.weekNumber}`,
+                report.fileName || report.importedPdfName || '',
+                String(report.hoursRendered),
+                submittedDateLabel,
+            ]
+                .join(' ')
+                .toLowerCase();
+
+            return searchable.includes(normalizedQuery);
+        });
+    }, [savedReports, reportSearch]);
 
     const getReportFileUrl = (report: WeeklyReport | null | undefined) => {
         if (!report) return '';
@@ -640,141 +758,15 @@ function ReportsContent({
         return fileUrl ? `/api/weekly-reports/view-file?url=${encodeURIComponent(fileUrl)}` : '';
     };
 
-    useEffect(() => {
-        if (!viewerReport) return;
-
-        if (!GlobalWorkerOptions.workerSrc) {
-            GlobalWorkerOptions.workerSrc = new URL(
-                'pdfjs-dist/legacy/build/pdf.worker.min.mjs',
-                import.meta.url,
-            ).toString();
-        }
-
-        let cancelled = false;
-
-        const renderPdf = async () => {
-            const viewerSrc = getViewerSrc(viewerReport);
-            const container = viewerContainerRef.current;
-
-            if (!viewerSrc || !container) return;
-
-            container.innerHTML = '';
-            container.dataset.state = 'loading';
-            container.textContent = 'Loading PDF...';
-
-            try {
-                const response = await fetch(viewerSrc);
-                if (!response.ok) {
-                    throw new Error('Unable to load the PDF file.');
-                }
-
-                const pdfData = await response.arrayBuffer();
-                const pdf = await getDocument({ data: pdfData }).promise;
-
-                if (cancelled || !viewerContainerRef.current) return;
-
-                container.innerHTML = '';
-                delete container.dataset.state;
-
-                for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-                    const page = await pdf.getPage(pageNumber);
-                    if (cancelled || !viewerContainerRef.current) return;
-
-                    const viewport = page.getViewport({ scale: 1.4 });
-                    const pageWrap = document.createElement('div');
-                    pageWrap.style.margin = '0 auto 20px';
-                    pageWrap.style.maxWidth = '100%';
-                    pageWrap.style.background = '#111';
-                    pageWrap.style.border = '1px solid rgba(255,255,255,0.08)';
-                    pageWrap.style.borderRadius = '12px';
-                    pageWrap.style.overflow = 'hidden';
-
-                    const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
-                    if (!context) {
-                        continue;
-                    }
-
-                    canvas.width = Math.floor(viewport.width);
-                    canvas.height = Math.floor(viewport.height);
-                    canvas.style.width = '100%';
-                    canvas.style.height = 'auto';
-                    canvas.style.display = 'block';
-                    pageWrap.appendChild(canvas);
-                    container.appendChild(pageWrap);
-
-                    await page.render({ canvasContext: context, viewport } as any).promise;
-                }
-            } catch (error) {
-                if (cancelled || !viewerContainerRef.current) return;
-                container.innerHTML = '';
-                delete container.dataset.state;
-                const message = error instanceof Error ? error.message : 'Unable to render the PDF.';
-                const fallback = document.createElement('div');
-                fallback.style.color = 'var(--rose-300)';
-                fallback.style.padding = '24px';
-                fallback.style.fontSize = '14px';
-                fallback.textContent = message;
-                container.appendChild(fallback);
-            }
-        };
-
-        renderPdf();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [viewerReport]);
-
-    // Preview filters logic
-    const previewSupervisors = useMemo(() => {
-        const set = new Set(weekLogs.map((l) => l.supervisor));
-        return Array.from(set).sort();
-    }, [weekLogs]);
-
-    const previewFilteredLogs = useMemo(() => {
-        return weekLogs.filter((log) => {
-            if (previewSearch) {
-                const q = previewSearch.toLowerCase();
-                const match =
-                    log.taskDescription.toLowerCase().includes(q) ||
-                    log.supervisor.toLowerCase().includes(q) ||
-                    log.activityType.some((a) => a.toLowerCase().includes(q));
-                if (!match) return false;
-            }
-            if (previewSupervisor && log.supervisor !== previewSupervisor) return false;
-            if (previewActivity && !log.activityType.includes(previewActivity)) return false;
-            if (previewDateFrom && log.entryDate < previewDateFrom) return false;
-            if (previewDateTo && log.entryDate > previewDateTo) return false;
-            return true;
-        });
-    }, [weekLogs, previewSearch, previewSupervisor, previewActivity, previewDateFrom, previewDateTo]);
-
-    const previewTotalFilteredHours = useMemo(() => {
-        return previewFilteredLogs.reduce((s, l) => s + l.dailyHours, 0);
-    }, [previewFilteredLogs]);
-
-    const previewHasActiveFilters = Boolean(
-        previewSearch || previewSupervisor || previewActivity || previewDateFrom || previewDateTo
-    );
-
-    const clearPreviewFilters = () => {
-        setPreviewSearch('');
-        setPreviewSupervisor('');
-        setPreviewActivity('');
-        setPreviewDateFrom('');
-        setPreviewDateTo('');
-    };
-
     return (
         <div>
             <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24 }}>
                 <div>
                     <h1 className="page-title" style={{ fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 4 }}>
-                        Weekly Report Generator
+                        Weekly Reports
                     </h1>
                     <p style={{ color: 'var(--slate-400)', fontSize: 14 }}>
-                        Compile your daily logs into professional weekly reports
+                        Upload, track, edit, and remove your submitted weekly report PDFs.
                     </p>
                 </div>
             </div>
@@ -783,41 +775,104 @@ function ReportsContent({
                 <div className="card" style={{ padding: '64px 32px', textAlign: 'center' }}>
                     <FileText size={48} style={{ margin: '0 auto 16px', opacity: 0.2, color: 'var(--slate-400)' }} />
                     <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: 'var(--slate-300)' }}>
-                        No logs to compile
+                        No weekly schedule yet
                     </h3>
                     <p style={{ fontSize: 14, color: 'var(--slate-500)' }}>
-                        Start logging your daily work to generate weekly reports.
+                        Weekly report schedule appears once your internship start date is set.
                     </p>
                 </div>
             ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24 }}>
-                    {showPreview && weekLogs.length > 0 && (
-                        <>
-                            <WeeklyReportFilters
-                                searchQuery={previewSearch}
-                                setSearchQuery={setPreviewSearch}
-                                showFilters={showPreviewFilters}
-                                setShowFilters={setShowPreviewFilters}
-                                hasActiveFilters={previewHasActiveFilters}
-                                clearFilters={clearPreviewFilters}
-                                supervisors={previewSupervisors}
-                                filterSupervisor={previewSupervisor}
-                                setFilterSupervisor={setPreviewSupervisor}
-                                filterActivity={previewActivity}
-                                setFilterActivity={setPreviewActivity}
-                                filterDateFrom={previewDateFrom}
-                                setFilterDateFrom={setPreviewDateFrom}
-                                filterDateTo={previewDateTo}
-                                setFilterDateTo={setPreviewDateTo}
+                    <div className="card" style={{ padding: 20 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+                            <h3 style={{ fontSize: 16, fontWeight: 700 }}>Uploaded Reports</h3>
+                            <input
+                                className="input"
+                                value={reportSearch}
+                                onChange={(e) => setReportSearch(e.target.value)}
+                                placeholder="Search by week, file name, date, or hours"
+                                style={{ maxWidth: 340 }}
                             />
-                            <WeeklyReportTable
-                                weekLogs={weekLogs}
-                                filteredLogs={previewFilteredLogs}
-                                hasActiveFilters={previewHasActiveFilters}
-                                totalFilteredHours={previewTotalFilteredHours}
-                            />
-                        </>
-                    )}
+                        </div>
+
+                        <div style={{ overflowX: 'auto' }}>
+                            <table className="data-table" style={{ tableLayout: 'fixed', width: '100%' }}>
+                                <colgroup>
+                                    <col style={{ width: '12%' }} />
+                                    <col style={{ width: '28%' }} />
+                                    <col style={{ width: '24%' }} />
+                                    <col style={{ width: '12%' }} />
+                                    <col style={{ width: '24%' }} />
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th>Week</th>
+                                        <th>File</th>
+                                        <th>Submitted</th>
+                                        <th>Hours</th>
+                                        <th style={{ textAlign: 'right' }}>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredUploadedReports.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={5} style={{ textAlign: 'center', color: 'var(--slate-500)', padding: '16px 12px' }}>
+                                                No uploaded weekly reports found.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        filteredUploadedReports.map((report) => {
+                                            const isActing = reportActionId === report.id;
+                                            const displayWeek = report.weekNumber && report.weekNumber > 0 ? `Week ${report.weekNumber}` : 'Unassigned Week';
+                                            return (
+                                                <tr key={report.id || `week-${report.weekNumber}`}>
+                                                    <td>
+                                                        <span className="tag" style={{ background: 'rgba(16,185,129,0.14)', color: 'var(--primary-300)' }}>{displayWeek}</span>
+                                                    </td>
+                                                    <td title={report.fileName || report.importedPdfName || 'weekly-report.pdf'} style={{ maxWidth: 300, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        {report.fileName || report.importedPdfName || 'weekly-report.pdf'}
+                                                    </td>
+                                                    <td>{report.submittedAt ? format(new Date(report.submittedAt), 'MMM d, yyyy h:mm a') : '-'}</td>
+                                                    <td><span style={{ color: 'var(--primary-300)', fontWeight: 700 }}>{report.hoursRendered}h</span></td>
+                                                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                                        <div style={{ display: 'inline-flex', gap: 8, justifyContent: 'flex-end' }}>
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-ghost btn-sm"
+                                                                onClick={() => {
+                                                                    setViewerError(null);
+                                                                    setViewerLoading(true);
+                                                                    setViewerReport(report);
+                                                                }}
+                                                            >
+                                                                View
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-secondary btn-sm"
+                                                                disabled={isActing}
+                                                                onClick={() => onEditUploadedReport(report)}
+                                                            >
+                                                                <Pencil size={14} /> Edit
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="btn btn-danger btn-sm"
+                                                                disabled={isActing}
+                                                                onClick={() => onDeleteUploadedReport(report)}
+                                                            >
+                                                                {isActing ? 'Removing...' : 'Remove'}
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
 
                     <div className="card" style={{ padding: 20 }}>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
@@ -1039,8 +1094,63 @@ function ReportsContent({
                                         <X size={16} />
                                     </button>
                                 </div>
-                                <div ref={viewerContainerRef} style={{ height: '80vh', overflowY: 'auto', background: '#0b0b0d', padding: 16 }}>
-                                    <div style={{ color: 'var(--slate-400)', fontSize: 14 }}>Loading PDF...</div>
+                                <div style={{ height: '80vh', overflow: 'hidden', background: '#0b0b0d', position: 'relative' }}>
+                                    {viewerLoading && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            inset: 0,
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: 12,
+                                            background: 'rgba(11,11,13,0.92)',
+                                            zIndex: 2,
+                                        }}>
+                                            <Loader2 size={24} className="spin-smooth" style={{ color: 'var(--primary-300)' }} />
+                                            <p style={{ color: 'var(--slate-300)', fontSize: 14, margin: 0 }}>Loading your PDF preview...</p>
+                                        </div>
+                                    )}
+
+                                    {viewerError && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            inset: 0,
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: 10,
+                                            padding: 24,
+                                            textAlign: 'center',
+                                            background: 'rgba(11,11,13,0.96)',
+                                            zIndex: 3,
+                                        }}>
+                                            <p style={{ color: 'var(--rose-300)', fontSize: 14, margin: 0 }}>{viewerError}</p>
+                                            <a
+                                                href={getViewerSrc(viewerReport)}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="btn btn-secondary btn-sm"
+                                            >
+                                                Open In New Tab
+                                            </a>
+                                        </div>
+                                    )}
+
+                                    <iframe
+                                        title="Weekly Report PDF"
+                                        src={getViewerSrc(viewerReport)}
+                                        style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+                                        onLoad={() => {
+                                            setViewerLoading(false);
+                                            setViewerError(null);
+                                        }}
+                                        onError={() => {
+                                            setViewerLoading(false);
+                                            setViewerError('Preview failed to load in modal. You can open the file in a new tab.');
+                                        }}
+                                    />
                                 </div>
                             </div>
                         </div>

@@ -477,6 +477,58 @@ export async function saveWeeklyReportToFirestore(
     return normalizedReport;
 }
 
+export async function updateWeeklyReportInFirestore(
+    userId: string,
+    reportId: string,
+    updates: Partial<Pick<WeeklyReport, 'hoursRendered'>>
+): Promise<WeeklyReport> {
+    const uid = resolveUid(userId);
+    const reportRef = doc(db, 'users', uid, 'weeklyReports', reportId);
+    const reportSnap = await getDoc(reportRef);
+
+    if (!reportSnap.exists()) {
+        throw new Error('Weekly report not found.');
+    }
+
+    const payload = stripUndefinedDeep({
+        ...updates,
+        _updatedAt: serverTimestamp(),
+    });
+
+    await updateDoc(reportRef, payload);
+
+    const refreshed = await getDoc(reportRef);
+    const data = refreshed.data() || {};
+
+    return {
+        id: refreshed.id,
+        userId: data.userId || uid,
+        weekNumber: data.weekNumber || 0,
+        weekStart: data.weekStart,
+        weekEnd: data.weekEnd,
+        deadline: data.deadline || data.weekEnd || '',
+        hoursRendered: data.hoursRendered || 0,
+        fileUrl: data.fileUrl || data.importedPdfUrl || '',
+        fileName: data.fileName || data.importedPdfName || '',
+        filePublicId: data.filePublicId || data.importedPdfPublicId || undefined,
+        submittedAt: data.submittedAt || data.importedPdfUploadedAt || data.createdAt || '',
+        status: data.status || 'submitted',
+        reflection: data.reflection || '',
+        logs: data.logs || [],
+        importedPdfUrl: data.importedPdfUrl || data.fileUrl || undefined,
+        importedPdfName: data.importedPdfName || data.fileName || undefined,
+        importedPdfUploadedAt: data.importedPdfUploadedAt || data.submittedAt || undefined,
+        importedPdfPublicId: data.importedPdfPublicId || data.filePublicId || undefined,
+        importedPdfResourceType: data.importedPdfResourceType || 'raw',
+        createdAt: data.createdAt || '',
+    } as WeeklyReport;
+}
+
+export async function deleteWeeklyReportFromFirestore(userId: string, reportId: string): Promise<void> {
+    const uid = resolveUid(userId);
+    await deleteDoc(doc(db, 'users', uid, 'weeklyReports', reportId));
+}
+
 // ═══════════════════════════════════════════════════════
 // ─── Migration: localStorage → Firestore ──────────────
 // ═══════════════════════════════════════════════════════

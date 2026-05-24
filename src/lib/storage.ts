@@ -277,6 +277,34 @@ export function cacheWeeklyReport(report: WeeklyReport): void {
     setItem(KEYS.WEEKLY_REPORTS, reports);
 }
 
+export function updateWeeklyReport(
+    userId: string,
+    reportId: string,
+    updates: Partial<Pick<WeeklyReport, 'hoursRendered'>>
+): WeeklyReport {
+    const reports = getItem<WeeklyReport[]>(KEYS.WEEKLY_REPORTS, []);
+    const idx = reports.findIndex((r) => r.userId === userId && r.id === reportId);
+    if (idx === -1) {
+        throw new Error('Weekly report not found.');
+    }
+
+    reports[idx] = {
+        ...reports[idx],
+        ...updates,
+    };
+
+    setItem(KEYS.WEEKLY_REPORTS, reports);
+    return reports[idx];
+}
+
+export function deleteWeeklyReport(userId: string, reportId: string): void {
+    const reports = getItem<WeeklyReport[]>(KEYS.WEEKLY_REPORTS, []);
+    setItem(
+        KEYS.WEEKLY_REPORTS,
+        reports.filter((r) => !(r.userId === userId && r.id === reportId))
+    );
+}
+
 // --- Competencies ---
 export function getCompetencies(userId: string): Competency[] {
     return getItem<Competency[]>(KEYS.COMPETENCIES, []).filter((c) => c.userId === userId);

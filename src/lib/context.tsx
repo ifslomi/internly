@@ -19,6 +19,8 @@ import {
     deleteCompetencyFromFirestore,
     getWeeklyReportsFromFirestore,
     saveWeeklyReportToFirestore,
+    updateWeeklyReportInFirestore,
+    deleteWeeklyReportFromFirestore,
     migrateLocalDataToFirestore,
     migrateFromFlatToSubcollections,
     getAllStudentsFromFirestore,
@@ -58,6 +60,8 @@ interface AppContextType {
     resendCode: () => Promise<void>;
     saveWeeklyReport: (report: Omit<WeeklyReport, 'id' | 'createdAt'>) => Promise<WeeklyReport>;
     getWeeklyReports: (userId: string) => Promise<WeeklyReport[]>;
+    updateWeeklyReport: (userId: string, reportId: string, updates: Partial<Pick<WeeklyReport, 'hoursRendered'>>) => Promise<WeeklyReport>;
+    deleteWeeklyReport: (userId: string, reportId: string) => Promise<void>;
     requiresPasswordCredentialSetup: boolean;
     setupPasswordCredential: (password: string) => Promise<void>;
     // Dean functions
@@ -997,6 +1001,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return storage.getWeeklyReports(userId);
     };
 
+    const handleUpdateWeeklyReport = async (
+        userId: string,
+        reportId: string,
+        updates: Partial<Pick<WeeklyReport, 'hoursRendered'>>
+    ): Promise<WeeklyReport> => {
+        const endGlobalLoading = beginGlobalLoading();
+        try {
+            if (auth.currentUser) {
+                try {
+                    const updated = await updateWeeklyReportInFirestore(userId, reportId, updates);
+                    storage.cacheWeeklyReport(updated);
+                    return updated;
+                } catch (firestoreError) {
+                    console.error('[Context] Firestore weekly report update failed, falling back to localStorage:', firestoreError);
+                    const localUpdated = storage.updateWeeklyReport(userId, reportId, updates);
+                    return localUpdated;
+                }
+            }
+
+            return storage.updateWeeklyReport(userId, reportId, updates);
+        } finally {
+            endGlobalLoading();
+        }
+    };
+
+    const handleDeleteWeeklyReport = async (userId: string, reportId: string): Promise<void> => {
+        const endGlobalLoading = beginGlobalLoading();
+        try {
+            if (auth.currentUser) {
+                try {
+                    await deleteWeeklyReportFromFirestore(userId, reportId);
+                } catch (firestoreError) {
+                    console.error('[Context] Firestore weekly report delete failed, falling back to localStorage:', firestoreError);
+                }
+            }
+
+            storage.deleteWeeklyReport(userId, reportId);
+        } finally {
+            endGlobalLoading();
+        }
+    };
+
     // ─── Dean Functions ─────────────────────────────────
     const handleGetAllStudents = useCallback(async (): Promise<User[]> => {
         try {
@@ -1202,6 +1248,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 resendCode: handleResendCode,
                 saveWeeklyReport: handleSaveWeeklyReport,
                 getWeeklyReports: handleGetWeeklyReports,
+                updateWeeklyReport: handleUpdateWeeklyReport,
+                deleteWeeklyReport: handleDeleteWeeklyReport,
                 requiresPasswordCredentialSetup,
                 setupPasswordCredential: handleSetupPasswordCredential,
                 // Dean functions
