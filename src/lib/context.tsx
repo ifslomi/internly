@@ -16,6 +16,7 @@ import {
     deleteDailyLogFromFirestore,
     getCompetenciesFromFirestore,
     addCompetencyToFirestore,
+    updateCompetencyInFirestore,
     deleteCompetencyFromFirestore,
     getWeeklyReportsFromFirestore,
     saveWeeklyReportToFirestore,
@@ -52,6 +53,10 @@ interface AppContextType {
     updateLog: (id: string, updates: Partial<DailyLog>) => Promise<void>;
     deleteLog: (id: string) => Promise<void>;
     addCompetency: (competency: Omit<Competency, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+    updateCompetency: (
+        id: string,
+        updates: Partial<Pick<Competency, 'date' | 'activity' | 'areaCovered' | 'outcome' | 'evidenceType' | 'evidenceUrl' | 'evidenceLabel'>>
+    ) => Promise<void>;
     deleteCompetency: (id: string) => Promise<void>;
     refreshData: () => Promise<void>;
     signUpWithGoogle: (password: string, role?: string) => Promise<void>;
@@ -959,6 +964,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    const handleUpdateCompetency = async (
+        id: string,
+        updates: Partial<Pick<Competency, 'date' | 'activity' | 'areaCovered' | 'outcome' | 'evidenceType' | 'evidenceUrl' | 'evidenceLabel'>>
+    ) => {
+        const endGlobalLoading = beginGlobalLoading();
+        try {
+            const updated = storage.updateCompetency(id, updates);
+            setCompetencies((prev) => prev.map((c) => (c.id === id ? updated : c)));
+
+            if (auth.currentUser) {
+                try {
+                    await updateCompetencyInFirestore(id, updates);
+                } catch (err) {
+                    console.error('[Context] Failed to update competency in Firestore:', err);
+                }
+            }
+        } finally {
+            endGlobalLoading();
+        }
+    };
+
     // ─── Weekly Reports (Firestore-backed) ──────────────
     const handleSaveWeeklyReport = async (report: Omit<WeeklyReport, 'id' | 'createdAt'>): Promise<WeeklyReport> => {
         const endGlobalLoading = beginGlobalLoading();
@@ -1086,8 +1112,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const studentReports = firestoreReports.length > 0 ? firestoreReports : cachedReports;
 
             const logStats = calculateHourStats(studentLogs, requiredHours);
-            const weeklyReportHours = studentReports.reduce((sum, report) => sum + report.hoursRendered, 0);
-            const totalRendered = Math.max(logStats.totalRendered, weeklyReportHours);
+            const weeklyReportHours = studentReports.reduce((sum, report) => {
+                const reportHours = typeof report.hoursRendered === 'number' ? report.hoursRendered : Number(report.hoursRendered);
+                return sum + (Number.isFinite(reportHours) ? reportHours : 0);
+            }, 0);
+            const totalRendered = studentReports.length > 0 ? weeklyReportHours : logStats.totalRendered;
             const remaining = Math.max(0, requiredHours - totalRendered);
             const progressPercentage = requiredHours > 0 ? Math.min(100, (totalRendered / requiredHours) * 100) : 0;
 
@@ -1240,6 +1269,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 updateLog: handleUpdateLog,
                 deleteLog: handleDeleteLog,
                 addCompetency: handleAddCompetency,
+                updateCompetency: handleUpdateCompetency,
                 deleteCompetency: handleDeleteCompetency,
                 refreshData,
                 signUpWithGoogle: handleSignUpWithGoogle,

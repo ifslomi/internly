@@ -17,6 +17,7 @@ import {
     FileText,
     Calendar,
     Clock,
+    Download,
     Edit3,
     Trash2,
     History,
@@ -719,9 +720,23 @@ function ReportsContent({
     onDeleteUploadedReport,
 }: ReportsContentProps) {
     const selectedWeek = weeks[selectedWeekIdx];
+    const availableWeekOptions = useMemo(
+        () => weeks.map((week, idx) => ({ week, idx })).filter(({ week }) => week.status !== 'submitted'),
+        [weeks]
+    );
+    const hasAvailableWeeks = availableWeekOptions.length > 0;
     const [viewerReport, setViewerReport] = useState<WeeklyReport | null>(null);
     const [viewerLoading, setViewerLoading] = useState(false);
     const [viewerError, setViewerError] = useState<string | null>(null);
+    const [viewerBlobUrl, setViewerBlobUrl] = useState<string>('');
+
+    useEffect(() => {
+        if (!hasAvailableWeeks) return;
+        const isSelectedWeekAvailable = availableWeekOptions.some(({ idx }) => idx === selectedWeekIdx);
+        if (!isSelectedWeekAvailable) {
+            setSelectedWeekIdx(availableWeekOptions[0].idx);
+        }
+    }, [availableWeekOptions, hasAvailableWeeks, selectedWeekIdx, setSelectedWeekIdx]);
 
     const filteredUploadedReports = useMemo(() => {
         const normalizedQuery = reportSearch.trim().toLowerCase();
@@ -757,6 +772,66 @@ function ReportsContent({
         const fileUrl = getReportFileUrl(report);
         return fileUrl ? `/api/weekly-reports/view-file?url=${encodeURIComponent(fileUrl)}` : '';
     };
+
+    const getDownloadSrc = (report: WeeklyReport | null | undefined) => {
+        const fileUrl = getReportFileUrl(report);
+        if (!fileUrl) return '';
+        const fileName = report?.fileName || report?.importedPdfName || 'weekly-report.pdf';
+        return `/api/weekly-reports/view-file?url=${encodeURIComponent(fileUrl)}&download=1&filename=${encodeURIComponent(fileName)}`;
+    };
+
+    useEffect(() => {
+        let active = true;
+        let objectUrl = '';
+
+        const loadPreview = async () => {
+            if (!viewerReport) {
+                setViewerBlobUrl('');
+                setViewerLoading(false);
+                setViewerError(null);
+                return;
+            }
+
+            const viewerSrc = getViewerSrc(viewerReport);
+            if (!viewerSrc) {
+                setViewerBlobUrl('');
+                setViewerLoading(false);
+                setViewerError('No file URL found for this report.');
+                return;
+            }
+
+            setViewerLoading(true);
+            setViewerError(null);
+            setViewerBlobUrl('');
+
+            try {
+                const response = await fetch(viewerSrc, { cache: 'no-store' });
+                if (!response.ok) {
+                    throw new Error('Unable to load the PDF file.');
+                }
+
+                const fileBlob = await response.blob();
+                if (!active) return;
+
+                objectUrl = URL.createObjectURL(fileBlob);
+                setViewerBlobUrl(objectUrl);
+                setViewerLoading(false);
+            } catch (error) {
+                if (!active) return;
+                setViewerLoading(false);
+                setViewerError(error instanceof Error ? error.message : 'Preview failed to load in modal.');
+            }
+        };
+
+        loadPreview();
+
+        return () => {
+            active = false;
+            if (objectUrl) {
+                URL.revokeObjectURL(objectUrl);
+            }
+        };
+    }, [viewerReport]);
 
     return (
         <div>
@@ -795,15 +870,8 @@ function ReportsContent({
                             />
                         </div>
 
-                        <div style={{ overflowX: 'auto' }}>
-                            <table className="data-table" style={{ tableLayout: 'fixed', width: '100%' }}>
-                                <colgroup>
-                                    <col style={{ width: '12%' }} />
-                                    <col style={{ width: '28%' }} />
-                                    <col style={{ width: '24%' }} />
-                                    <col style={{ width: '12%' }} />
-                                    <col style={{ width: '24%' }} />
-                                </colgroup>
+                        <div style={{ overflowX: 'hidden' }}>
+                            <table className="data-table" style={{ width: '100%' }}>
                                 <thead>
                                     <tr>
                                         <th>Week</th>
@@ -834,8 +902,8 @@ function ReportsContent({
                                                     </td>
                                                     <td>{report.submittedAt ? format(new Date(report.submittedAt), 'MMM d, yyyy h:mm a') : '-'}</td>
                                                     <td><span style={{ color: 'var(--primary-300)', fontWeight: 700 }}>{report.hoursRendered}h</span></td>
-                                                    <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                                        <div style={{ display: 'inline-flex', gap: 8, justifyContent: 'flex-end' }}>
+                                                    <td style={{ textAlign: 'right', whiteSpace: 'normal' }}>
+                                                        <div style={{ display: 'flex', gap: 8, rowGap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                                                             <button
                                                                 type="button"
                                                                 className="btn btn-ghost btn-sm"
@@ -847,6 +915,12 @@ function ReportsContent({
                                                             >
                                                                 View
                                                             </button>
+                                                            <a
+                                                                href={getDownloadSrc(report)}
+                                                                className="btn btn-ghost btn-sm"
+                                                            >
+                                                                <Download size={14} /> Download
+                                                            </a>
                                                             <button
                                                                 type="button"
                                                                 className="btn btn-secondary btn-sm"
@@ -883,13 +957,23 @@ function ReportsContent({
                                     value={selectedWeekIdx}
                                     onChange={(e) => setSelectedWeekIdx(Number(e.target.value))}
                                     id="report-selected-week"
+                                    disabled={!hasAvailableWeeks}
                                 >
-                                    {weeks.map((week, idx) => (
-                                        <option key={week.weekNumber} value={idx}>
-                                            Week {week.weekNumber}
-                                        </option>
-                                    ))}
+                                    {hasAvailableWeeks ? (
+                                        availableWeekOptions.map(({ week, idx }) => (
+                                            <option key={week.weekNumber} value={idx}>
+                                                Week {week.weekNumber}
+                                            </option>
+                                        ))
+                                    ) : (
+                                        <option value={-1}>All weeks submitted</option>
+                                    )}
                                 </select>
+                                {!hasAvailableWeeks && (
+                                    <p style={{ marginTop: 8, fontSize: 12, color: 'var(--amber-300)' }}>
+                                        All weeks are already submitted. Delete a report from Uploaded Reports to re-upload.
+                                    </p>
+                                )}
                             </div>
                             <div className="input-group">
                                 <label className="input-label" style={{ marginBottom: 8, display: 'block' }}>Deadline</label>
@@ -914,6 +998,7 @@ function ReportsContent({
                                     value={hoursRendered}
                                     onChange={(e) => setHoursRendered(sanitizeDecimalInput(e.target.value))}
                                     placeholder="Total hours for the week"
+                                    disabled={!hasAvailableWeeks}
                                 />
                             </div>
                             <div className="input-group">
@@ -947,6 +1032,7 @@ function ReportsContent({
                                         accept="application/pdf"
                                         onChange={(e) => setReportFile(e.target.files?.[0] || null)}
                                         style={{ display: 'none' }}
+                                        disabled={!hasAvailableWeeks}
                                     />
                                     <label htmlFor="weekly-report-file" style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                                         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--primary-400)' }}>
@@ -985,7 +1071,7 @@ function ReportsContent({
                                 type="button"
                                 className="btn btn-primary"
                                 onClick={onSubmitWeeklyReport}
-                                disabled={submittingReport || !selectedWeek || selectedWeek.status === 'submitted'}
+                                disabled={submittingReport || !selectedWeek || selectedWeek.status === 'submitted' || !hasAvailableWeeks}
                             >
                                 {submittingReport ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Save size={16} />}
                                 {submittingReport ? 'Submitting...' : 'Submit Weekly Report'}
@@ -1045,7 +1131,11 @@ function ReportsContent({
                                                     {getReportFileUrl(report) ? (
                                                         <button
                                                             type="button"
-                                                            onClick={() => setViewerReport(report)}
+                                                            onClick={() => {
+                                                                setViewerError(null);
+                                                                setViewerLoading(true);
+                                                                setViewerReport(report);
+                                                            }}
                                                             className="btn btn-ghost btn-sm"
                                                             style={{
                                                                 color: 'var(--primary-300)',
@@ -1094,6 +1184,14 @@ function ReportsContent({
                                         <X size={16} />
                                     </button>
                                 </div>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 18px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(10,10,12,0.92)' }}>
+                                    <a
+                                        href={getDownloadSrc(viewerReport)}
+                                        className="btn btn-secondary btn-sm"
+                                    >
+                                        <Download size={14} /> Download Report
+                                    </a>
+                                </div>
                                 <div style={{ height: '80vh', overflow: 'hidden', background: '#0b0b0d', position: 'relative' }}>
                                     {viewerLoading && (
                                         <div style={{
@@ -1128,7 +1226,7 @@ function ReportsContent({
                                         }}>
                                             <p style={{ color: 'var(--rose-300)', fontSize: 14, margin: 0 }}>{viewerError}</p>
                                             <a
-                                                href={getViewerSrc(viewerReport)}
+                                                href={viewerBlobUrl || getViewerSrc(viewerReport)}
                                                 target="_blank"
                                                 rel="noreferrer"
                                                 className="btn btn-secondary btn-sm"
@@ -1140,11 +1238,13 @@ function ReportsContent({
 
                                     <iframe
                                         title="Weekly Report PDF"
-                                        src={getViewerSrc(viewerReport)}
+                                        src={viewerBlobUrl || 'about:blank'}
                                         style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
                                         onLoad={() => {
-                                            setViewerLoading(false);
-                                            setViewerError(null);
+                                            if (viewerBlobUrl) {
+                                                setViewerLoading(false);
+                                                setViewerError(null);
+                                            }
                                         }}
                                         onError={() => {
                                             setViewerLoading(false);

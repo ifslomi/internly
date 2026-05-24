@@ -1,11 +1,10 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, ChevronRight, Download, FileText, Calendar, X, ExternalLink } from 'lucide-react';
 import type { User, WeeklyReport } from '@/lib/types';
 import { useApp } from '@/lib/context';
 import { buildStudentSearchText, compareStudentsBySurnameFirst, formatStudentNameForDean } from '@/lib/student-display';
-import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 export default function DeanWeeklyReportsPage() {
     const { getAllStudents, getWeeklyReports } = useApp();
@@ -17,7 +16,9 @@ export default function DeanWeeklyReportsPage() {
     const [selectedStudentReports, setSelectedStudentReports] = useState<WeeklyReport[]>([]);
     const [reportsLoading, setReportsLoading] = useState(false);
     const [viewerReport, setViewerReport] = useState<WeeklyReport | null>(null);
-    const viewerContainerRef = useRef<HTMLDivElement | null>(null);
+    const [viewerLoading, setViewerLoading] = useState(false);
+    const [viewerError, setViewerError] = useState<string | null>(null);
+    const [viewerBlobUrl, setViewerBlobUrl] = useState<string>('');
 
     const getReportFileUrl = (report: WeeklyReport | null | undefined) => {
         if (!report) return '';
@@ -29,6 +30,13 @@ export default function DeanWeeklyReportsPage() {
         return fileUrl ? `/api/weekly-reports/view-file?url=${encodeURIComponent(fileUrl)}` : '';
     };
 
+    const getDownloadSrc = (report: WeeklyReport | null | undefined) => {
+        const fileUrl = getReportFileUrl(report);
+        if (!fileUrl) return '';
+        const fileName = report?.fileName || report?.importedPdfName || 'weekly-report.pdf';
+        return `/api/weekly-reports/view-file?url=${encodeURIComponent(fileUrl)}&download=1&filename=${encodeURIComponent(fileName)}`;
+    };
+
     const isReportOverdue = (report: WeeklyReport) => {
         if (!report.deadline || !report.submittedAt) return false;
         const submittedAt = new Date(report.submittedAt).getTime();
@@ -37,88 +45,55 @@ export default function DeanWeeklyReportsPage() {
     };
 
     useEffect(() => {
-        if (!viewerReport) return;
+        let active = true;
+        let objectUrl = '';
 
-        if (!GlobalWorkerOptions.workerSrc) {
-            GlobalWorkerOptions.workerSrc = new URL(
-                'pdfjs-dist/legacy/build/pdf.worker.min.mjs',
-                import.meta.url,
-            ).toString();
-        }
+        const loadPreview = async () => {
+            if (!viewerReport) {
+                setViewerBlobUrl('');
+                setViewerLoading(false);
+                setViewerError(null);
+                return;
+            }
 
-        let cancelled = false;
-
-        const renderPdf = async () => {
             const viewerSrc = getViewerSrc(viewerReport);
-            const container = viewerContainerRef.current;
+            if (!viewerSrc) {
+                setViewerBlobUrl('');
+                setViewerLoading(false);
+                setViewerError('No file URL found for this report.');
+                return;
+            }
 
-            if (!viewerSrc || !container) return;
-
-            container.innerHTML = '';
-            container.dataset.state = 'loading';
-            container.textContent = 'Loading PDF...';
+            setViewerLoading(true);
+            setViewerError(null);
+            setViewerBlobUrl('');
 
             try {
-                const response = await fetch(viewerSrc);
+                const response = await fetch(viewerSrc, { cache: 'no-store' });
                 if (!response.ok) {
                     throw new Error('Unable to load the PDF file.');
                 }
 
-                const pdfData = await response.arrayBuffer();
-                const pdf = await getDocument({ data: pdfData }).promise;
+                const fileBlob = await response.blob();
+                if (!active) return;
 
-                if (cancelled || !viewerContainerRef.current) return;
-
-                container.innerHTML = '';
-                delete container.dataset.state;
-
-                for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-                    const page = await pdf.getPage(pageNumber);
-                    if (cancelled || !viewerContainerRef.current) return;
-
-                    const viewport = page.getViewport({ scale: 1.4 });
-                    const pageWrap = document.createElement('div');
-                    pageWrap.style.margin = '0 auto 20px';
-                    pageWrap.style.maxWidth = '100%';
-                    pageWrap.style.background = '#111';
-                    pageWrap.style.border = '1px solid rgba(255,255,255,0.08)';
-                    pageWrap.style.borderRadius = '12px';
-                    pageWrap.style.overflow = 'hidden';
-
-                    const canvas = document.createElement('canvas');
-                    const context = canvas.getContext('2d');
-                    if (!context) {
-                        continue;
-                    }
-
-                    canvas.width = Math.floor(viewport.width);
-                    canvas.height = Math.floor(viewport.height);
-                    canvas.style.width = '100%';
-                    canvas.style.height = 'auto';
-                    canvas.style.display = 'block';
-                    pageWrap.appendChild(canvas);
-                    container.appendChild(pageWrap);
-
-                    await page.render({ canvasContext: context, viewport } as any).promise;
-                }
+                objectUrl = URL.createObjectURL(fileBlob);
+                setViewerBlobUrl(objectUrl);
+                setViewerLoading(false);
             } catch (error) {
-                if (cancelled || !viewerContainerRef.current) return;
-                container.innerHTML = '';
-                delete container.dataset.state;
-                const message = error instanceof Error ? error.message : 'Unable to render the PDF.';
-                const fallback = document.createElement('div');
-                fallback.style.color = 'var(--rose-300)';
-                fallback.style.padding = '24px';
-                fallback.style.fontSize = '14px';
-                fallback.textContent = message;
-                container.appendChild(fallback);
+                if (!active) return;
+                setViewerLoading(false);
+                setViewerError(error instanceof Error ? error.message : 'Unable to render the PDF.');
             }
         };
 
-        renderPdf();
+        loadPreview();
 
         return () => {
-            cancelled = true;
+            active = false;
+            if (objectUrl) {
+                URL.revokeObjectURL(objectUrl);
+            }
         };
     }, [viewerReport]);
 
@@ -374,7 +349,11 @@ export default function DeanWeeklyReportsPage() {
                                             <button
                                                 key={report.id}
                                                 type="button"
-                                                onClick={() => setViewerReport(report)}
+                                                onClick={() => {
+                                                    setViewerError(null);
+                                                    setViewerLoading(true);
+                                                    setViewerReport(report);
+                                                }}
                                                 style={{
                                                     width: '100%',
                                                     padding: '12px',
@@ -442,26 +421,44 @@ export default function DeanWeeklyReportsPage() {
                                                     }}>
                                                         {isReportOverdue(report) ? 'Submitted Late' : 'Submitted On Time'}
                                                     </span>
-                                                    {report.fileUrl && (
-                                                        <span
-                                                            style={{
-                                                                display: 'flex',
-                                                                alignItems: 'center',
-                                                                gap: 4,
-                                                                padding: '4px 8px',
-                                                                borderRadius: 'var(--radius-sm)',
-                                                                background: 'rgba(16,185,129,0.15)',
-                                                                color: 'var(--primary-400)',
-                                                                textDecoration: 'none',
-                                                                fontSize: 12,
-                                                                fontWeight: 600,
-                                                                transition: 'background 150ms',
-                                                            }}
-                                                        >
-                                                            <Download size={12} />
-                                                            View Report
-                                                            <ExternalLink size={12} />
-                                                        </span>
+                                                    {getReportFileUrl(report) && (
+                                                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                                            <span
+                                                                style={{
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    gap: 4,
+                                                                    padding: '4px 8px',
+                                                                    borderRadius: 'var(--radius-sm)',
+                                                                    background: 'rgba(16,185,129,0.15)',
+                                                                    color: 'var(--primary-400)',
+                                                                    textDecoration: 'none',
+                                                                    fontSize: 12,
+                                                                    fontWeight: 600,
+                                                                }}
+                                                            >
+                                                                <ExternalLink size={12} />
+                                                                View Report
+                                                            </span>
+                                                            <a
+                                                                href={getDownloadSrc(report)}
+                                                                style={{
+                                                                    display: 'flex',
+                                                                    alignItems: 'center',
+                                                                    gap: 4,
+                                                                    padding: '4px 8px',
+                                                                    borderRadius: 'var(--radius-sm)',
+                                                                    background: 'rgba(59,130,246,0.18)',
+                                                                    color: '#93c5fd',
+                                                                    textDecoration: 'none',
+                                                                    fontSize: 12,
+                                                                    fontWeight: 600,
+                                                                }}
+                                                            >
+                                                                <Download size={12} />
+                                                                Download
+                                                            </a>
+                                                        </div>
                                                     )}
                                                 </div>
                                             </button>
@@ -524,8 +521,81 @@ export default function DeanWeeklyReportsPage() {
                                 <X size={16} />
                             </button>
                         </div>
-                        <div ref={viewerContainerRef} style={{ height: '80vh', overflowY: 'auto', background: '#0b0b0d', padding: 16 }}>
-                            <div style={{ color: 'var(--slate-400)', fontSize: 14 }}>Loading PDF...</div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 18px', borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(10,10,12,0.92)' }}>
+                            <a
+                                href={getDownloadSrc(viewerReport)}
+                                className="btn btn-secondary btn-sm"
+                            >
+                                <Download size={14} /> Download Report
+                            </a>
+                        </div>
+                        <div style={{ height: '80vh', overflow: 'hidden', background: '#0b0b0d', position: 'relative' }}>
+                            {viewerLoading && (
+                                <div style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 12,
+                                    background: 'rgba(11,11,13,0.92)',
+                                    zIndex: 2,
+                                }}>
+                                    <div style={{
+                                        width: 24,
+                                        height: 24,
+                                        border: '3px solid rgba(16,185,129,0.22)',
+                                        borderTopColor: 'var(--primary-500)',
+                                        borderRadius: '50%',
+                                        animation: 'spin 0.8s linear infinite',
+                                    }} />
+                                    <p style={{ color: 'var(--slate-300)', fontSize: 14, margin: 0 }}>Loading PDF preview...</p>
+                                </div>
+                            )}
+
+                            {viewerError && (
+                                <div style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: 10,
+                                    padding: 24,
+                                    textAlign: 'center',
+                                    background: 'rgba(11,11,13,0.96)',
+                                    zIndex: 3,
+                                }}>
+                                    <p style={{ color: 'var(--rose-300)', fontSize: 14, margin: 0 }}>{viewerError}</p>
+                                    <a
+                                        href={viewerBlobUrl || getViewerSrc(viewerReport)}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="btn btn-secondary btn-sm"
+                                    >
+                                        Open In New Tab
+                                    </a>
+                                </div>
+                            )}
+
+                            <iframe
+                                title="Weekly Report PDF"
+                                src={viewerBlobUrl || 'about:blank'}
+                                style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
+                                onLoad={() => {
+                                    if (viewerBlobUrl) {
+                                        setViewerLoading(false);
+                                        setViewerError(null);
+                                    }
+                                }}
+                                onError={() => {
+                                    setViewerLoading(false);
+                                    setViewerError('Preview failed to load in modal. You can open the file in a new tab.');
+                                }}
+                            />
+                            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
                         </div>
                     </div>
                 </div>

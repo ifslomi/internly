@@ -379,6 +379,20 @@ export async function addCompetencyToFirestore(
     return newCompetency;
 }
 
+/** Update a competency in Firestore */
+export async function updateCompetencyInFirestore(
+    id: string,
+    updates: Partial<Pick<Competency, 'date' | 'activity' | 'areaCovered' | 'outcome' | 'evidenceType' | 'evidenceUrl' | 'evidenceLabel'>>,
+    userId?: string
+): Promise<void> {
+    const uid = resolveUid(userId);
+    await updateDoc(doc(db, 'users', uid, 'competencies', id), {
+        ...updates,
+        updatedAt: new Date().toISOString(),
+        _updatedAt: serverTimestamp(),
+    });
+}
+
 /** Delete a competency from Firestore */
 export async function deleteCompetencyFromFirestore(id: string, userId?: string): Promise<void> {
     const uid = resolveUid(userId);

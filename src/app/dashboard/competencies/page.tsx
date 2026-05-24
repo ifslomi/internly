@@ -1,7 +1,7 @@
 "use client";
 import React, { useRef, useState, useMemo } from 'react';
 import { useApp } from '@/lib/context';
-import { Award, Plus, Calendar, Trash2, AlertTriangle, X, Save, Link as LinkIcon, Image as ImageIcon, Video, FileText, ExternalLink, Eye, Loader2 } from 'lucide-react';
+import { Award, Plus, Calendar, Trash2, AlertTriangle, X, Save, Link as LinkIcon, Image as ImageIcon, Video, FileText, ExternalLink, Eye, Loader2, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { showToast } from '@/lib/toast';
 import { uploadEvidenceFile } from '@/lib/intern';
@@ -55,6 +55,17 @@ const splitAreaCovered = (areaCovered: string): string[] =>
     .map((item) => item.trim())
     .filter(Boolean);
 
+const extractAreaCodes = (areaCovered: string): string[] => {
+  const byCode = splitAreaCovered(areaCovered)
+    .map((item) => {
+      const match = item.match(/[ABC]\.\d+/);
+      return match ? match[0] : '';
+    })
+    .filter(Boolean);
+
+  return [...new Set(byCode)];
+};
+
 const parseAreaItem = (item: string) => {
   const match = item.match(/^([ABC]\.\d+)\s+(.*)$/);
   if (!match) {
@@ -65,8 +76,9 @@ const parseAreaItem = (item: string) => {
 };
 
 export default function CompetenciesPage() {
-  const { user, competencies, addCompetency, deleteCompetency } = useApp();
+  const { user, competencies, addCompetency, updateCompetency, deleteCompetency } = useApp();
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showEvidenceModal, setShowEvidenceModal] = useState(false);
   const evidenceFileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedEvidence, setSelectedEvidence] = useState<{
@@ -80,6 +92,8 @@ export default function CompetenciesPage() {
   const [uploadingEvidence, setUploadingEvidence] = useState(false);
   const [savingEntry, setSavingEntry] = useState(false);
   const [deletingCompetencyId, setDeletingCompetencyId] = useState<string | null>(null);
+  const [editingCompetencyId, setEditingCompetencyId] = useState<string | null>(null);
+  const [selectedCompetencyDetails, setSelectedCompetencyDetails] = useState<typeof competencies[number] | null>(null);
 
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -92,7 +106,46 @@ export default function CompetenciesPage() {
     evidenceFile: null as File | null,
   });
 
-  const handleAddCompetency = async () => {
+  const resetFormState = () => {
+    setFormData({
+      date: new Date().toISOString().split('T')[0],
+      activity: '',
+      areaCovered: [],
+      outcome: '',
+      evidenceType: '',
+      evidenceUrl: '',
+      evidenceLabel: '',
+      evidenceFile: null,
+    });
+    setSelectedAreaSection('A');
+    setEditingCompetencyId(null);
+  };
+
+  const openEditModal = (comp: typeof competencies[number]) => {
+    setEditingCompetencyId(comp.id);
+    setFormData({
+      date: comp.date,
+      activity: comp.activity,
+      areaCovered: splitAreaCovered(comp.areaCovered),
+      outcome: comp.outcome,
+      evidenceType: comp.evidenceType,
+      evidenceUrl: comp.evidenceUrl,
+      evidenceLabel: comp.evidenceLabel,
+      evidenceFile: null,
+    });
+    const areaKeys = getAreaKeys(comp.areaCovered);
+    if (areaKeys[0] === 'A' || areaKeys[0] === 'B' || areaKeys[0] === 'C') {
+      setSelectedAreaSection(areaKeys[0]);
+    }
+    setShowAddModal(true);
+  };
+
+  const openDetailsModal = (comp: typeof competencies[number]) => {
+    setSelectedCompetencyDetails(comp);
+    setShowDetailsModal(true);
+  };
+
+  const handleSaveCompetency = async () => {
     if (!user || savingEntry) return;
     if (!formData.activity || formData.areaCovered.length === 0 || !formData.outcome) {
       showToast({ kind: 'warning', title: 'Incomplete Form', message: 'Please complete activity, area covered, and outcome.' });
@@ -104,23 +157,25 @@ export default function CompetenciesPage() {
     let evidenceLabel = formData.evidenceLabel;
 
     if (formData.evidenceType && formData.evidenceType !== 'link') {
-      if (!formData.evidenceFile) {
+      if (!formData.evidenceFile && !formData.evidenceUrl) {
         showToast({ kind: 'warning', title: 'Missing Evidence', message: 'Please choose a file for your selected evidence type.' });
         setSavingEntry(false);
         return;
       }
 
-      setUploadingEvidence(true);
-      try {
-        evidenceUrl = await uploadEvidenceFile(formData.evidenceFile, `competencies/${user.id}`);
-        evidenceLabel = formData.evidenceFile.name;
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Failed to upload evidence file.';
-        showToast({ kind: 'error', title: 'Upload Failed', message });
-        setSavingEntry(false);
-        return;
-      } finally {
-        setUploadingEvidence(false);
+      if (formData.evidenceFile) {
+        setUploadingEvidence(true);
+        try {
+          evidenceUrl = await uploadEvidenceFile(formData.evidenceFile, `competencies/${user.id}`);
+          evidenceLabel = formData.evidenceFile.name;
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : 'Failed to upload evidence file.';
+          showToast({ kind: 'error', title: 'Upload Failed', message });
+          setSavingEntry(false);
+          return;
+        } finally {
+          setUploadingEvidence(false);
+        }
       }
     }
 
@@ -130,7 +185,7 @@ export default function CompetenciesPage() {
       return;
     }
 
-    const newCompetency = {
+    const competencyPayload = {
       userId: user.id,
       date: formData.date,
       activity: formData.activity,
@@ -142,22 +197,25 @@ export default function CompetenciesPage() {
     };
 
     try {
-      await addCompetency(newCompetency);
-      showToast({ kind: 'success', title: 'Competency Added', message: 'Your competency entry was saved.' });
-      setFormData({
-        date: new Date().toISOString().split('T')[0],
-        activity: '',
-        areaCovered: [],
-        outcome: '',
-        evidenceType: '',
-        evidenceUrl: '',
-        evidenceLabel: '',
-        evidenceFile: null,
-      });
-      setSelectedAreaSection('A');
+      if (editingCompetencyId) {
+        await updateCompetency(editingCompetencyId, {
+          date: competencyPayload.date,
+          activity: competencyPayload.activity,
+          areaCovered: competencyPayload.areaCovered,
+          outcome: competencyPayload.outcome,
+          evidenceType: competencyPayload.evidenceType,
+          evidenceUrl: competencyPayload.evidenceUrl,
+          evidenceLabel: competencyPayload.evidenceLabel,
+        });
+        showToast({ kind: 'success', title: 'Competency Updated', message: 'Your competency entry was updated.' });
+      } else {
+        await addCompetency(competencyPayload);
+        showToast({ kind: 'success', title: 'Competency Added', message: 'Your competency entry was saved.' });
+      }
+      resetFormState();
       setShowAddModal(false);
     } catch {
-      showToast({ kind: 'error', title: 'Save Failed', message: 'Could not add competency. Please try again.' });
+      showToast({ kind: 'error', title: 'Save Failed', message: 'Could not save competency. Please try again.' });
     } finally {
       setSavingEntry(false);
     }
@@ -200,9 +258,9 @@ export default function CompetenciesPage() {
 
   return (
     <div>
-      {/* Add Modal */}
+      {/* Add/Edit Modal */}
       {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
+        <div className="modal-overlay" onClick={() => { setShowAddModal(false); resetFormState(); }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600, padding: 0 }}>
             <div style={{
               display: 'flex',
@@ -224,9 +282,9 @@ export default function CompetenciesPage() {
                 }}>
                   <Award size={18} />
                 </div>
-                <h3 style={{ fontSize: 16, fontWeight: 700 }}>Add Competency</h3>
+                <h3 style={{ fontSize: 16, fontWeight: 700 }}>{editingCompetencyId ? 'Edit Competency' : 'Add Competency'}</h3>
               </div>
-              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setShowAddModal(false)}>
+              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => { setShowAddModal(false); resetFormState(); }}>
                 <X size={18} />
               </button>
             </div>
@@ -524,24 +582,95 @@ export default function CompetenciesPage() {
               padding: '16px 24px',
               borderTop: '1px solid rgba(255,255,255,0.06)',
             }}>
-              <button className="btn btn-secondary" onClick={() => setShowAddModal(false)}>
+              <button className="btn btn-secondary" onClick={() => { setShowAddModal(false); resetFormState(); }}>
                 Cancel
               </button>
               <button
                 className="btn btn-primary"
-                onClick={handleAddCompetency}
+                onClick={handleSaveCompetency}
                 disabled={
                   savingEntry ||
                   !formData.activity ||
                   formData.areaCovered.length === 0 ||
                   !formData.outcome ||
                   (formData.evidenceType === 'link' && !formData.evidenceUrl) ||
-                  (!!formData.evidenceType && formData.evidenceType !== 'link' && !formData.evidenceFile)
+                  (!!formData.evidenceType && formData.evidenceType !== 'link' && !formData.evidenceFile && !formData.evidenceUrl)
                 }
               >
-                {savingEntry ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Save size={16} />} {uploadingEvidence ? 'Uploading evidence...' : savingEntry ? 'Saving entry...' : 'Add Entry'}
+                {savingEntry ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Save size={16} />} {uploadingEvidence ? 'Uploading evidence...' : savingEntry ? 'Saving entry...' : editingCompetencyId ? 'Save Changes' : 'Add Entry'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Competency Details Modal */}
+      {showDetailsModal && selectedCompetencyDetails && (
+        <div className="modal-overlay" onClick={() => setShowDetailsModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 760, width: 'calc(100% - 40px)', padding: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ minWidth: 0 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Competency Details</h3>
+                <p style={{ fontSize: 12, color: 'var(--slate-400)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {selectedCompetencyDetails.activity}
+                </p>
+              </div>
+              <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setShowDetailsModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ padding: 18, display: 'grid', gap: 14, gridTemplateColumns: 'minmax(220px, 0.95fr) minmax(0, 1.35fr)' }}>
+              <div style={{ display: 'grid', gap: 12, paddingRight: 8, borderRight: '1px solid rgba(255,255,255,0.08)' }}>
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate-500)', margin: 0, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Activity</p>
+                  <p style={{ margin: 0, fontSize: 14, color: 'var(--slate-200)', overflowWrap: 'anywhere' }}>{selectedCompetencyDetails.activity}</p>
+                </div>
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate-500)', margin: 0, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</p>
+                  <p style={{ margin: 0, fontSize: 14, color: 'var(--slate-200)' }}>{format(new Date(selectedCompetencyDetails.date), 'MMMM dd, yyyy')}</p>
+                </div>
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate-500)', margin: 0, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Area Covered</p>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {splitAreaCovered(selectedCompetencyDetails.areaCovered).map((item, idx) => {
+                      const parsed = parseAreaItem(item);
+                      return (
+                        <div key={`${parsed.code}-${idx}`} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              borderRadius: 999,
+                              padding: '2px 8px',
+                              border: '1px solid rgba(16,185,129,0.45)',
+                              background: 'rgba(16,185,129,0.14)',
+                              color: 'var(--primary-300)',
+                              flexShrink: 0,
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            {parsed.code}
+                          </span>
+                          {parsed.text ? (
+                            <span style={{ fontSize: 12, color: 'var(--slate-300)', lineHeight: 1.45, overflowWrap: 'anywhere' }}>
+                              {parsed.text}
+                            </span>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate-500)', margin: 0, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Outcome</p>
+                <p style={{ margin: 0, fontSize: 14, color: 'var(--slate-200)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word', lineHeight: 1.6 }}>
+                  {selectedCompetencyDetails.outcome || 'No outcome provided.'}
+                </p>
+              </div>
+            </div>
+
           </div>
         </div>
       )}
@@ -671,7 +800,7 @@ export default function CompetenciesPage() {
         </div>
         <button
           className="btn btn-primary"
-          onClick={() => setShowAddModal(true)}
+          onClick={() => { resetFormState(); setShowAddModal(true); }}
         >
           <Plus size={16} /> Add Competency
         </button>
@@ -709,20 +838,19 @@ export default function CompetenciesPage() {
           <p style={{ fontSize: 14, color: 'var(--slate-500)' }}>
             Start adding competency entries to track your learning and development.
           </p>
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)} style={{ marginTop: 16 }}>
+          <button className="btn btn-primary" onClick={() => { resetFormState(); setShowAddModal(true); }} style={{ marginTop: 16 }}>
             <Plus size={16} /> Add Competency
           </button>
         </div>
       ) : (
         <div className="card ui-anim-in" style={{ overflow: 'hidden' }}>
           <div className="table-scroll">
-            <table className="data-table">
+            <table className="data-table" style={{ tableLayout: 'fixed', width: '100%' }}>
               <thead>
                 <tr>
                   <th>Date</th>
                   <th>Activity</th>
                   <th>Area Covered</th>
-                  <th>Outcome</th>
                   <th>Evidence</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
@@ -738,18 +866,15 @@ export default function CompetenciesPage() {
                     </td>
                     <td>{comp.activity}</td>
                     <td>
-                      {splitAreaCovered(comp.areaCovered).join(', ')}
-                    </td>
-                    <td style={{ maxWidth: 280 }}>
                       <p style={{
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
+                        margin: 0,
                         fontSize: 13,
+                        lineHeight: 1.5,
+                        whiteSpace: 'normal',
+                        overflowWrap: 'anywhere',
+                        wordBreak: 'break-word',
                       }}>
-                        {comp.outcome}
+                        {extractAreaCodes(comp.areaCovered).join(', ') || '—'}
                       </p>
                     </td>
                     <td>
@@ -780,7 +905,15 @@ export default function CompetenciesPage() {
                       )}
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                      <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                        <button
+                          className="btn btn-ghost btn-icon btn-sm"
+                          disabled={!!deletingCompetencyId}
+                          onClick={() => openEditModal(comp)}
+                          title="Edit"
+                        >
+                          <Pencil size={15} />
+                        </button>
                         <button
                           className="btn btn-ghost btn-icon btn-sm"
                           disabled={!!deletingCompetencyId}
@@ -789,6 +922,13 @@ export default function CompetenciesPage() {
                           style={{ color: 'var(--rose-400)' }}
                         >
                           <Trash2 size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => openDetailsModal(comp)}
+                        >
+                          <Eye size={14} /> View
                         </button>
                       </div>
                     </td>

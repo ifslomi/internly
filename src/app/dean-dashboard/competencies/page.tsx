@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, ChevronRight, Award, Calendar, Filter, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, ChevronRight, Award, Calendar, Filter, Eye, X, ExternalLink } from 'lucide-react';
 import type { User, Competency } from '@/lib/types';
 import { useApp } from '@/lib/context';
 import { buildStudentSearchText, compareStudentsBySurnameFirst, formatStudentNameForDean } from '@/lib/student-display';
@@ -18,9 +18,24 @@ const getAreaKeys = (areaCovered: string): string[] => {
     return fallback ? [fallback[1]] : [];
 };
 
-const truncate = (value: string, max = 140) => {
-    if (value.length <= max) return value;
-    return `${value.slice(0, max).trim()}...`;
+const extractAreaCodes = (areaCovered: string): string[] => {
+    const codes = (areaCovered.match(/[ABC]\.\d+/g) || []).map((item) => item.trim());
+    return [...new Set(codes)];
+};
+
+const splitAreaCovered = (areaCovered: string): string[] =>
+    areaCovered
+        .split('|')
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+const parseAreaItem = (item: string) => {
+    const match = item.match(/^([ABC]\.\d+)\s+(.*)$/);
+    if (!match) {
+        return { code: item, text: '' };
+    }
+
+    return { code: match[1], text: match[2] };
 };
 
 export default function DeanCompetenciesPage() {
@@ -35,7 +50,8 @@ export default function DeanCompetenciesPage() {
     const [competencyQuery, setCompetencyQuery] = useState('');
     const [competencyAreaFilter, setCompetencyAreaFilter] = useState<'all' | 'A' | 'B' | 'C'>('all');
     const [visibleCompetencies, setVisibleCompetencies] = useState(COMPETENCIES_PAGE_SIZE);
-    const [expandedCompetencyId, setExpandedCompetencyId] = useState<string | null>(null);
+    const [showDetailsModal, setShowDetailsModal] = useState(false);
+    const [selectedCompetency, setSelectedCompetency] = useState<Competency | null>(null);
 
     useEffect(() => {
         const loadStudents = async () => {
@@ -68,7 +84,6 @@ export default function DeanCompetenciesPage() {
         setCompetencyQuery('');
         setCompetencyAreaFilter('all');
         setVisibleCompetencies(COMPETENCIES_PAGE_SIZE);
-        setExpandedCompetencyId(null);
         try {
             const competencies = await getStudentCompetencies(student.id);
             setSelectedStudentCompetencies(competencies);
@@ -396,8 +411,7 @@ export default function DeanCompetenciesPage() {
                                 ) : (
                                     <div style={{ padding: '12px' }}>
                                         {visibleCompetenciesList.map((competency) => {
-                                            const isExpanded = expandedCompetencyId === competency.id;
-                                            const areaKeys = getAreaKeys(competency.areaCovered);
+                                            const areaCodes = extractAreaCodes(competency.areaCovered);
                                             return (
                                             <div
                                                 key={competency.id}
@@ -436,26 +450,6 @@ export default function DeanCompetenciesPage() {
                                                             }}>
                                                                 {competency.activity}
                                                             </h4>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setExpandedCompetencyId((prev) => (prev === competency.id ? null : competency.id))}
-                                                                style={{
-                                                                    border: '1px solid rgba(255,255,255,0.14)',
-                                                                    background: 'rgba(255,255,255,0.03)',
-                                                                    color: 'var(--slate-300)',
-                                                                    borderRadius: 8,
-                                                                    padding: '4px 8px',
-                                                                    fontSize: 12,
-                                                                    fontWeight: 700,
-                                                                    cursor: 'pointer',
-                                                                    display: 'inline-flex',
-                                                                    alignItems: 'center',
-                                                                    gap: 4,
-                                                                    flexShrink: 0,
-                                                                }}
-                                                            >
-                                                                {isExpanded ? <>Hide <ChevronUp size={12} /></> : <>View <ChevronDown size={12} /></>}
-                                                            </button>
                                                         </div>
 
                                                         <div style={{
@@ -472,11 +466,11 @@ export default function DeanCompetenciesPage() {
                                                                 <Calendar size={12} />
                                                                 <span>{new Date(competency.date).toLocaleDateString()}</span>
                                                             </div>
-                                                            {areaKeys.length > 0 && (
+                                                            {areaCodes.length > 0 && (
                                                                 <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                                                                    {areaKeys.map((key) => (
+                                                                    {areaCodes.map((code) => (
                                                                         <span
-                                                                            key={`${competency.id}-${key}`}
+                                                                            key={`${competency.id}-${code}`}
                                                                             style={{
                                                                                 fontSize: 11,
                                                                                 fontWeight: 700,
@@ -487,112 +481,41 @@ export default function DeanCompetenciesPage() {
                                                                                 color: 'var(--primary-300)',
                                                                             }}
                                                                         >
-                                                                            {key}
+                                                                            {code}
                                                                         </span>
                                                                     ))}
                                                                 </div>
                                                             )}
                                                         </div>
-
-                                                        {!isExpanded && (
-                                                            <p style={{ margin: 0, color: 'var(--slate-300)', fontSize: 13, lineHeight: 1.5 }}>
-                                                                {truncate(competency.outcome || competency.areaCovered || 'No details provided.')}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {isExpanded && (
-                                                    <div style={{
-                                                        display: 'flex',
-                                                        flexDirection: 'column',
-                                                        gap: 8,
-                                                    }}>
-                                                    {competency.areaCovered && (
-                                                        <div>
-                                                            <p style={{
-                                                                fontSize: 11,
-                                                                fontWeight: 600,
-                                                                color: 'var(--slate-400)',
-                                                                margin: 0,
-                                                                marginBottom: 2,
-                                                                textTransform: 'uppercase',
-                                                                letterSpacing: '0.05em',
-                                                            }}>Area Covered</p>
-                                                            <p style={{
-                                                                fontSize: 13,
-                                                                color: 'var(--slate-300)',
-                                                                margin: 0,
-                                                            }}>
-                                                                {competency.areaCovered}
-                                                            </p>
-                                                        </div>
-                                                    )}
-
-                                                    {competency.outcome && (
-                                                        <div>
-                                                            <p style={{
-                                                                fontSize: 11,
-                                                                fontWeight: 600,
-                                                                color: 'var(--slate-400)',
-                                                                margin: 0,
-                                                                marginBottom: 2,
-                                                                textTransform: 'uppercase',
-                                                                letterSpacing: '0.05em',
-                                                            }}>Outcome</p>
-                                                            <p style={{
-                                                                fontSize: 13,
-                                                                color: 'var(--slate-300)',
-                                                                margin: 0,
-                                                            }}>
-                                                                {competency.outcome}
-                                                            </p>
-                                                        </div>
-                                                    )}
-
-                                                    {competency.evidenceUrl && (
-                                                        <div>
-                                                            <p style={{
-                                                                fontSize: 11,
-                                                                fontWeight: 600,
-                                                                color: 'var(--slate-400)',
-                                                                margin: 0,
-                                                                marginBottom: 6,
-                                                                textTransform: 'uppercase',
-                                                                letterSpacing: '0.05em',
-                                                            }}>Evidence</p>
-                                                            <a
-                                                                href={competency.evidenceUrl}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
+                                                        <p style={{ margin: 0, color: 'var(--slate-400)', fontSize: 12 }}>
+                                                            Outcome is hidden in list view for layout consistency.
+                                                        </p>
+                                                        <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setSelectedCompetency(competency);
+                                                                    setShowDetailsModal(true);
+                                                                }}
                                                                 style={{
-                                                                    display: 'inline-block',
-                                                                    padding: '4px 8px',
-                                                                    borderRadius: 'var(--radius-sm)',
-                                                                    background: 'rgba(16,185,129,0.15)',
-                                                                    color: 'var(--primary-400)',
-                                                                    textDecoration: 'none',
+                                                                    border: '1px solid rgba(16,185,129,0.45)',
+                                                                    background: 'rgba(16,185,129,0.14)',
+                                                                    color: 'var(--primary-300)',
+                                                                    borderRadius: 8,
+                                                                    padding: '5px 10px',
                                                                     fontSize: 12,
-                                                                    fontWeight: 600,
-                                                                    transition: 'background 150ms',
-                                                                }}
-                                                                onMouseEnter={(e) => {
-                                                                    e.currentTarget.style.background = 'rgba(16,185,129,0.25)';
-                                                                }}
-                                                                onMouseLeave={(e) => {
-                                                                    e.currentTarget.style.background = 'rgba(16,185,129,0.15)';
+                                                                    fontWeight: 700,
+                                                                    cursor: 'pointer',
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: 6,
                                                                 }}
                                                             >
-                                                                {competency.evidenceType === 'link' && 'View Link'}
-                                                                {competency.evidenceType === 'image' && 'View Image'}
-                                                                {competency.evidenceType === 'video' && 'View Video'}
-                                                                {competency.evidenceType === 'document' && 'View Document'}
-                                                                {!competency.evidenceType && 'View Evidence'}
-                                                            </a>
+                                                                <Eye size={12} /> View
+                                                            </button>
                                                         </div>
-                                                    )}
                                                     </div>
-                                                )}
+                                                </div>
                                             </div>
                                             );
                                         })}
@@ -634,6 +557,84 @@ export default function DeanCompetenciesPage() {
                     )}
                 </div>
             </div>
+
+            {showDetailsModal && selectedCompetency && (
+                <div className="modal-overlay" onClick={() => setShowDetailsModal(false)}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 780, width: 'calc(100% - 40px)', padding: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                            <div style={{ minWidth: 0 }}>
+                                <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, marginBottom: 4 }}>Competency Details</h3>
+                                <p style={{ margin: 0, fontSize: 12, color: 'var(--slate-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {selectedCompetency.activity}
+                                </p>
+                            </div>
+                            <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setShowDetailsModal(false)}>
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div style={{ padding: 18, display: 'grid', gap: 14, gridTemplateColumns: 'minmax(220px, 0.95fr) minmax(0, 1.35fr)' }}>
+                            <div style={{ display: 'grid', gap: 12, paddingRight: 8, borderRight: '1px solid rgba(255,255,255,0.08)' }}>
+                                <div>
+                                    <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate-500)', margin: 0, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Activity</p>
+                                    <p style={{ margin: 0, fontSize: 14, color: 'var(--slate-200)', overflowWrap: 'anywhere' }}>{selectedCompetency.activity}</p>
+                                </div>
+                                <div>
+                                    <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate-500)', margin: 0, marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</p>
+                                    <p style={{ margin: 0, fontSize: 14, color: 'var(--slate-200)' }}>{new Date(selectedCompetency.date).toLocaleDateString()}</p>
+                                </div>
+                                <div>
+                                    <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate-500)', margin: 0, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Area Covered</p>
+                                    <div style={{ display: 'grid', gap: 6 }}>
+                                        {splitAreaCovered(selectedCompetency.areaCovered).map((item, idx) => {
+                                            const parsed = parseAreaItem(item);
+                                            return (
+                                                <div key={`${parsed.code}-${idx}`} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                                                    <span
+                                                        style={{
+                                                            fontSize: 11,
+                                                            fontWeight: 700,
+                                                            borderRadius: 999,
+                                                            padding: '2px 8px',
+                                                            border: '1px solid rgba(16,185,129,0.45)',
+                                                            background: 'rgba(16,185,129,0.14)',
+                                                            color: 'var(--primary-300)',
+                                                            flexShrink: 0,
+                                                            lineHeight: 1.4,
+                                                        }}
+                                                    >
+                                                        {parsed.code}
+                                                    </span>
+                                                    {parsed.text ? (
+                                                        <span style={{ fontSize: 12, color: 'var(--slate-300)', lineHeight: 1.45, overflowWrap: 'anywhere' }}>
+                                                            {parsed.text}
+                                                        </span>
+                                                    ) : null}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate-500)', margin: 0, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Outcome</p>
+                                <p style={{ margin: 0, fontSize: 14, color: 'var(--slate-200)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', wordBreak: 'break-word', lineHeight: 1.6 }}>
+                                    {selectedCompetency.outcome || 'No outcome provided.'}
+                                </p>
+                            </div>
+                            {selectedCompetency.evidenceUrl && (
+                                <div>
+                                    <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate-500)', margin: 0, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Evidence</p>
+                                    <a href={selectedCompetency.evidenceUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">
+                                        <ExternalLink size={14} /> Open Evidence
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

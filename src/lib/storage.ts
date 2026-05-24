@@ -324,6 +324,26 @@ export function addCompetency(competency: Omit<Competency, 'id' | 'createdAt' | 
     return newCompetency;
 }
 
+export function updateCompetency(
+    id: string,
+    updates: Partial<Pick<Competency, 'date' | 'activity' | 'areaCovered' | 'outcome' | 'evidenceType' | 'evidenceUrl' | 'evidenceLabel'>>
+): Competency {
+    const competencies = getItem<Competency[]>(KEYS.COMPETENCIES, []);
+    const idx = competencies.findIndex((c) => c.id === id);
+    if (idx === -1) {
+        throw new Error('Competency not found.');
+    }
+
+    competencies[idx] = {
+        ...competencies[idx],
+        ...updates,
+        updatedAt: new Date().toISOString(),
+    };
+
+    setItem(KEYS.COMPETENCIES, competencies);
+    return competencies[idx];
+}
+
 export function deleteCompetency(id: string): void {
     const competencies = getItem<Competency[]>(KEYS.COMPETENCIES, []);
     setItem(

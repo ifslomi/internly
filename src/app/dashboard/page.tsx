@@ -219,7 +219,7 @@ export default function DashboardPage() {
                 </div>
 
                 {latestWeeklyReport ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 16 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
                         <div className="stat-tile stat-tile-indigo" style={{ padding: 20 }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                                 <span className="badge badge-primary">Latest Week {latestWeeklyReport.weekNumber}</span>
@@ -264,8 +264,8 @@ export default function DashboardPage() {
                 )}
 
                 {sortedWeeklyReports.length > 0 && (
-                    <div style={{ marginTop: 20, overflowX: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <div style={{ marginTop: 20, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', minWidth: 560 }}>
                             <thead>
                                 <tr style={{ textAlign: 'left', color: 'var(--slate-400)', fontSize: 12 }}>
                                     <th style={{ padding: '10px 12px' }}>Week</th>
@@ -277,12 +277,12 @@ export default function DashboardPage() {
                             <tbody>
                                 {sortedWeeklyReports.map((report) => (
                                     <tr key={report.id} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                                        <td style={{ padding: '12px', fontSize: 13, color: 'white', fontWeight: 600 }}>Week {report.weekNumber}</td>
+                                        <td style={{ padding: '12px', fontSize: 13, color: 'white', fontWeight: 600, whiteSpace: 'nowrap' }}>Week {report.weekNumber}</td>
                                         <td style={{ padding: '12px', fontSize: 13, color: 'var(--slate-300)' }}>{report.hoursRendered} hrs</td>
-                                        <td style={{ padding: '12px', fontSize: 13, color: 'var(--slate-300)' }}>
+                                        <td style={{ padding: '12px', fontSize: 13, color: 'var(--slate-300)', whiteSpace: 'nowrap' }}>
                                             {formatDateSafe(report.deadline)}
                                         </td>
-                                        <td style={{ padding: '12px', fontSize: 13, color: 'var(--slate-300)' }}>
+                                        <td style={{ padding: '12px', fontSize: 13, color: 'var(--slate-300)', whiteSpace: 'nowrap' }}>
                                             {formatDateSafe(report.submittedAt)}
                                         </td>
                                     </tr>
