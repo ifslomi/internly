@@ -86,6 +86,8 @@ export default function CompetenciesPage() {
     url: string;
     label: string;
   } | null>(null);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [evidenceLoadError, setEvidenceLoadError] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [activeAreaTab, setActiveAreaTab] = useState<'all' | 'A' | 'B' | 'C'>('all');
   const [selectedAreaSection, setSelectedAreaSection] = useState<'A' | 'B' | 'C'>('A');
@@ -237,6 +239,15 @@ export default function CompetenciesPage() {
 
   const openEvidenceModal = (comp: typeof competencies[number]) => {
     if (!comp.evidenceUrl) return;
+
+    if (comp.evidenceType === 'link') {
+      window.open(comp.evidenceUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    setShowDetailsModal(false);
+    setEvidenceLoading(true);
+    setEvidenceLoadError(null);
     setSelectedEvidence({
       type: comp.evidenceType,
       url: comp.evidenceUrl,
@@ -669,6 +680,18 @@ export default function CompetenciesPage() {
                   {selectedCompetencyDetails.outcome || 'No outcome provided.'}
                 </p>
               </div>
+              {selectedCompetencyDetails.evidenceUrl && (
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate-500)', margin: 0, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Evidence</p>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => openEvidenceModal(selectedCompetencyDetails)}
+                  >
+                    <Eye size={14} /> {selectedCompetencyDetails.evidenceType === 'link' ? 'Open Link' : 'View Evidence'}
+                  </button>
+                </div>
+              )}
             </div>
 
           </div>
@@ -696,10 +719,27 @@ export default function CompetenciesPage() {
             </div>
 
             <div style={{ padding: 16 }}>
+              {evidenceLoading && (
+                <div style={{ minHeight: '45vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--slate-400)', gap: 8 }}>
+                  <Loader2 size={18} className="spin-smooth" /> Loading evidence...
+                </div>
+              )}
+
+              {evidenceLoadError && (
+                <div style={{ minHeight: '45vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--rose-300)', textAlign: 'center', padding: 16 }}>
+                  {evidenceLoadError}
+                </div>
+              )}
+
               {selectedEvidence.type === 'image' && (
                 <img
                   src={selectedEvidence.url}
                   alt={selectedEvidence.label}
+                  onLoad={() => setEvidenceLoading(false)}
+                  onError={() => {
+                    setEvidenceLoading(false);
+                    setEvidenceLoadError('Failed to load image evidence.');
+                  }}
                   style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 12, background: 'rgba(0,0,0,0.35)' }}
                 />
               )}
@@ -707,6 +747,11 @@ export default function CompetenciesPage() {
               {selectedEvidence.type === 'video' && (
                 <video
                   controls
+                  onLoadedData={() => setEvidenceLoading(false)}
+                  onError={() => {
+                    setEvidenceLoading(false);
+                    setEvidenceLoadError('Failed to load video evidence.');
+                  }}
                   style={{ width: '100%', maxHeight: '70vh', borderRadius: 12, background: 'rgba(0,0,0,0.35)' }}
                   src={selectedEvidence.url}
                 />
@@ -716,6 +761,11 @@ export default function CompetenciesPage() {
                 <iframe
                   src={selectedEvidence.url}
                   title={selectedEvidence.label}
+                  onLoad={() => setEvidenceLoading(false)}
+                  onError={() => {
+                    setEvidenceLoading(false);
+                    setEvidenceLoadError('Failed to load document evidence.');
+                  }}
                   style={{ width: '100%', height: '70vh', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, background: 'rgba(255,255,255,0.02)' }}
                 />
               )}
@@ -898,7 +948,7 @@ export default function CompetenciesPage() {
                           <Eye size={14} />
                           {comp.evidenceType && comp.evidenceType !== 'link'
                             ? comp.evidenceLabel || 'View evidence'
-                            : 'View link'}
+                            : 'Open link'}
                         </button>
                       ) : (
                         <span style={{ fontSize: 13, color: 'var(--slate-500)' }}>—</span>

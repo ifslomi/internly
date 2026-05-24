@@ -1,6 +1,56 @@
 import { db } from './firebase';
 import { doc, setDoc, collection, addDoc, Timestamp } from 'firebase/firestore';
 
+const MAX_UPLOAD_IMAGE_DIMENSION = 1920;
+const UPLOAD_IMAGE_QUALITY = 0.78;
+
+const isCompressibleImage = (file: File) =>
+  file.type.startsWith('image/') && file.type !== 'image/gif' && file.type !== 'image/svg+xml';
+
+const loadImageFromFile = (file: File): Promise<HTMLImageElement> =>
+  new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Could not read image file for compression.'));
+    };
+    img.src = objectUrl;
+  });
+
+async function compressImageForUpload(file: File): Promise<File> {
+  if (!isCompressibleImage(file)) return file;
+
+  const image = await loadImageFromFile(file);
+  const ratio = Math.min(1, MAX_UPLOAD_IMAGE_DIMENSION / Math.max(image.width, image.height));
+  const width = Math.max(1, Math.round(image.width * ratio));
+  const height = Math.max(1, Math.round(image.height * ratio));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return file;
+
+  ctx.drawImage(image, 0, 0, width, height);
+
+  const preferredOutput = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, preferredOutput, preferredOutput === 'image/jpeg' ? UPLOAD_IMAGE_QUALITY : undefined);
+  });
+
+  if (!blob) return file;
+  if (blob.size >= file.size) return file;
+
+  const extension = preferredOutput === 'image/png' ? '.png' : '.jpg';
+  const baseName = file.name.replace(/\.[^/.]+$/, '');
+  return new File([blob], `${baseName}${extension}`, { type: preferredOutput, lastModified: Date.now() });
+}
+
 export async function createOrUpdateInternProfile(internId: string, data: Record<string, unknown>) {
   const refDoc = doc(db, 'interns', internId);
   await setDoc(refDoc, { ...data, updatedAt: Timestamp.now() }, { merge: true });
@@ -26,8 +76,9 @@ export async function uploadProfileImage(file: File, path = 'profiles') {
     );
   }
 
+  const optimizedFile = await compressImageForUpload(file);
   const formData = new FormData();
-  formData.append('file', file, file.name || `profile_${Date.now()}.jpg`);
+  formData.append('file', optimizedFile, optimizedFile.name || `profile_${Date.now()}.jpg`);
   formData.append('upload_preset', uploadPreset);
   formData.append('folder', path);
 
@@ -64,8 +115,9 @@ export async function uploadEvidenceFileWithMeta(file: File, path = 'competencie
     );
   }
 
+  const optimizedFile = await compressImageForUpload(file);
   const formData = new FormData();
-  formData.append('file', file, file.name || `evidence_${Date.now()}`);
+  formData.append('file', optimizedFile, optimizedFile.name || `evidence_${Date.now()}`);
   formData.append('upload_preset', uploadPreset);
   formData.append('folder', path);
 

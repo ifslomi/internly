@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useLayoutEffect } from 'react';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useApp } from '@/lib/context';
@@ -1210,7 +1210,7 @@ export default function ChatPage() {
 
     // Auto-scroll only when a new message is added or conversation changes.
     // This prevents jump-to-bottom on edits/reactions that only modify existing docs.
-    useEffect(() => {
+    useLayoutEffect(() => {
         const conversationChanged = previousConversationIdRef.current !== activeConversationId;
         const currentCount = messages.length;
         const hadNewMessage = currentCount > previousMessageCountRef.current;

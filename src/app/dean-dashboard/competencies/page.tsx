@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, ChevronRight, Award, Calendar, Filter, Eye, X, ExternalLink } from 'lucide-react';
+import { Search, ChevronRight, Award, Calendar, Filter, Eye, X, ExternalLink, Loader2 } from 'lucide-react';
 import type { User, Competency } from '@/lib/types';
 import { useApp } from '@/lib/context';
 import { buildStudentSearchText, compareStudentsBySurnameFirst, formatStudentNameForDean } from '@/lib/student-display';
@@ -21,6 +21,13 @@ const getAreaKeys = (areaCovered: string): string[] => {
 const extractAreaCodes = (areaCovered: string): string[] => {
     const codes = (areaCovered.match(/[ABC]\.\d+/g) || []).map((item) => item.trim());
     return [...new Set(codes)];
+};
+
+const truncateOutcome = (value: string, max = 120) => {
+    const text = value.trim();
+    if (!text) return 'No outcome provided.';
+    if (text.length <= max) return text;
+    return `${text.slice(0, max).trim()}...`;
 };
 
 const splitAreaCovered = (areaCovered: string): string[] =>
@@ -52,6 +59,14 @@ export default function DeanCompetenciesPage() {
     const [visibleCompetencies, setVisibleCompetencies] = useState(COMPETENCIES_PAGE_SIZE);
     const [showDetailsModal, setShowDetailsModal] = useState(false);
     const [selectedCompetency, setSelectedCompetency] = useState<Competency | null>(null);
+    const [showEvidenceModal, setShowEvidenceModal] = useState(false);
+    const [selectedEvidence, setSelectedEvidence] = useState<{
+        type: '' | 'link' | 'image' | 'video' | 'document';
+        url: string;
+        label: string;
+    } | null>(null);
+    const [evidenceLoading, setEvidenceLoading] = useState(false);
+    const [evidenceLoadError, setEvidenceLoadError] = useState<string | null>(null);
 
     useEffect(() => {
         const loadStudents = async () => {
@@ -119,6 +134,25 @@ export default function DeanCompetenciesPage() {
     );
 
     const canLoadMore = visibleCompetencies < filteredCompetencies.length;
+
+    const openEvidenceModal = (competency: Competency) => {
+        if (!competency.evidenceUrl) return;
+
+        if (competency.evidenceType === 'link') {
+            window.open(competency.evidenceUrl, '_blank', 'noopener,noreferrer');
+            return;
+        }
+
+        setShowDetailsModal(false);
+        setEvidenceLoading(true);
+        setEvidenceLoadError(null);
+        setSelectedEvidence({
+            type: competency.evidenceType,
+            url: competency.evidenceUrl,
+            label: competency.evidenceLabel || 'Evidence',
+        });
+        setShowEvidenceModal(true);
+    };
 
     if (loading) {
         return (
@@ -487,8 +521,8 @@ export default function DeanCompetenciesPage() {
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        <p style={{ margin: 0, color: 'var(--slate-400)', fontSize: 12 }}>
-                                                            Outcome is hidden in list view for layout consistency.
+                                                        <p style={{ margin: 0, color: 'var(--slate-300)', fontSize: 12, lineHeight: 1.5, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                                                            {truncateOutcome(competency.outcome)}
                                                         </p>
                                                         <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
                                                             <button
@@ -625,13 +659,94 @@ export default function DeanCompetenciesPage() {
                             {selectedCompetency.evidenceUrl && (
                                 <div>
                                     <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--slate-500)', margin: 0, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Evidence</p>
-                                    <a href={selectedCompetency.evidenceUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm">
-                                        <ExternalLink size={14} /> Open Evidence
-                                    </a>
+                                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => openEvidenceModal(selectedCompetency)}>
+                                        <Eye size={14} /> {selectedCompetency.evidenceType === 'link' ? 'Open Link' : 'View Evidence'}
+                                    </button>
                                 </div>
                             )}
                         </div>
 
+                    </div>
+                </div>
+            )}
+
+            {showEvidenceModal && selectedEvidence && (
+                <div className="modal-overlay" onClick={() => setShowEvidenceModal(false)}>
+                    <div
+                        className="modal-content"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ maxWidth: 920, width: 'calc(100% - 40px)', padding: 0, overflow: 'hidden' }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                            <div style={{ minWidth: 0 }}>
+                                <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 2 }}>Evidence Preview</h3>
+                                <p style={{ fontSize: 12, color: 'var(--slate-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {selectedEvidence.label}
+                                </p>
+                            </div>
+                            <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setShowEvidenceModal(false)}>
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div style={{ padding: 16 }}>
+                            {evidenceLoading && (
+                                <div style={{ minHeight: '45vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--slate-400)', gap: 8 }}>
+                                    <Loader2 size={18} className="spin-smooth" /> Loading evidence...
+                                </div>
+                            )}
+
+                            {evidenceLoadError && (
+                                <div style={{ minHeight: '45vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--rose-300)', textAlign: 'center', padding: 16 }}>
+                                    {evidenceLoadError}
+                                </div>
+                            )}
+
+                            {selectedEvidence.type === 'image' && (
+                                <img
+                                    src={selectedEvidence.url}
+                                    alt={selectedEvidence.label}
+                                    onLoad={() => setEvidenceLoading(false)}
+                                    onError={() => {
+                                        setEvidenceLoading(false);
+                                        setEvidenceLoadError('Failed to load image evidence.');
+                                    }}
+                                    style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 12, background: 'rgba(0,0,0,0.35)' }}
+                                />
+                            )}
+
+                            {selectedEvidence.type === 'video' && (
+                                <video
+                                    controls
+                                    onLoadedData={() => setEvidenceLoading(false)}
+                                    onError={() => {
+                                        setEvidenceLoading(false);
+                                        setEvidenceLoadError('Failed to load video evidence.');
+                                    }}
+                                    style={{ width: '100%', maxHeight: '70vh', borderRadius: 12, background: 'rgba(0,0,0,0.35)' }}
+                                    src={selectedEvidence.url}
+                                />
+                            )}
+
+                            {selectedEvidence.type === 'document' && (
+                                <iframe
+                                    src={selectedEvidence.url}
+                                    title={selectedEvidence.label}
+                                    onLoad={() => setEvidenceLoading(false)}
+                                    onError={() => {
+                                        setEvidenceLoading(false);
+                                        setEvidenceLoadError('Failed to load document evidence.');
+                                    }}
+                                    style={{ width: '100%', height: '70vh', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, background: 'rgba(255,255,255,0.02)' }}
+                                />
+                            )}
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '12px 16px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+                            <a href={selectedEvidence.url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary">
+                                <ExternalLink size={16} /> Open in new tab
+                            </a>
+                        </div>
                     </div>
                 </div>
             )}
