@@ -14,6 +14,28 @@ export default function SanctionsPage() {
   const [enrolling, setEnrolling] = useState<string | null>(null);
   const [confirmEnrollSlotId, setConfirmEnrollSlotId] = useState<string | null>(null);
   const [feedbackModal, setFeedbackModal] = useState<{ title: string; message: string; tone: 'success' | 'error' | 'warning' } | null>(null);
+  const todayDateKey = useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  const normalizeDateKey = (value: string) => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const isPastDutySlot = (slot: { date?: string }) => {
+    const dateKey = normalizeDateKey(slot.date || '');
+    return !!dateKey && dateKey < todayDateKey;
+  };
   const tiles = [
     { label: 'Days of Sanctions', value: useMemo(() => sanctions.reduce((sum, sanction) => sum + sanction.days, 0).toString(), [sanctions]), icon: AlertTriangle, tone: 'rose' },
     { label: 'Available Slots', value: '--', icon: Clock3, tone: 'amber' },
@@ -51,6 +73,16 @@ export default function SanctionsPage() {
       return;
     }
 
+    const slot = dutySlots.find((entry) => entry.id === slotId);
+    if (slot && isPastDutySlot(slot)) {
+      setFeedbackModal({
+        title: 'Duty Slot Closed',
+        message: 'Past duty slots can no longer be enrolled in.',
+        tone: 'warning',
+      });
+      return;
+    }
+
     setEnrolling(slotId);
     try {
       const renderId = await createSanctionRender({
@@ -83,6 +115,12 @@ export default function SanctionsPage() {
         setFeedbackModal({
           title: 'Already Enrolled',
           message: 'You are already enrolled in this duty slot.',
+          tone: 'warning',
+        });
+      } else if (code === 'sanction/past-duty-slot') {
+        setFeedbackModal({
+          title: 'Duty Slot Closed',
+          message: 'Past duty slots can no longer be enrolled in.',
           tone: 'warning',
         });
       } else {
@@ -308,7 +346,10 @@ export default function SanctionsPage() {
                       </td>
                     </tr>
                   ) : (
-                    dutySlots.map((slot) => (
+                    dutySlots.map((slot) => {
+                      const isPastSlot = isPastDutySlot(slot);
+                      const alreadyEnrolled = myRenders.some((render) => render.dutySlotId === slot.id && render.status === 'availed');
+                      return (
                       <tr key={slot.id}>
                         <td>{slot.title}</td>
                         <td>{new Date(slot.date).toLocaleDateString()}</td>
@@ -316,8 +357,10 @@ export default function SanctionsPage() {
                         <td>{slot.location || '-'}</td>
                         <td>{slot.capacity}</td>
                         <td>
-                          {myRenders.some((render) => render.dutySlotId === slot.id && render.status === 'availed') ? (
+                          {alreadyEnrolled ? (
                             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary-400)' }}>Already Enrolled</span>
+                          ) : isPastSlot ? (
+                            <span style={{ fontSize: 12, fontWeight: 700, color: '#f87171' }}>Closed</span>
                           ) : (
                           <button
                             onClick={() => setConfirmEnrollSlotId(slot.id)}
@@ -339,7 +382,8 @@ export default function SanctionsPage() {
                           )}
                         </td>
                       </tr>
-                    ))
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -351,29 +395,12 @@ export default function SanctionsPage() {
       {confirmEnrollSlotId && (
         <div
           onClick={() => setConfirmEnrollSlotId(null)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.55)',
-            backdropFilter: 'blur(6px)',
-            WebkitBackdropFilter: 'blur(6px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 24,
-            zIndex: 1000,
-          }}
+          className="modal-overlay"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{
-              width: '100%',
-              maxWidth: 420,
-              borderRadius: 14,
-              border: '1px solid rgba(255,255,255,0.1)',
-              background: 'var(--slate-900)',
-              padding: 18,
-            }}
+            className="modal-content"
+            style={{ maxWidth: 420, padding: 18, borderRadius: 14 }}
           >
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'white' }}>Confirm Enrollment</h3>
             <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--slate-400)', lineHeight: 1.6 }}>
@@ -424,29 +451,12 @@ export default function SanctionsPage() {
       {feedbackModal && (
         <div
           onClick={() => setFeedbackModal(null)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.55)',
-            backdropFilter: 'blur(6px)',
-            WebkitBackdropFilter: 'blur(6px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 24,
-            zIndex: 1000,
-          }}
+          className="modal-overlay"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{
-              width: '100%',
-              maxWidth: 440,
-              borderRadius: 14,
-              border: '1px solid rgba(255,255,255,0.1)',
-              background: 'var(--slate-900)',
-              padding: 18,
-            }}
+            className="modal-content"
+            style={{ maxWidth: 440, padding: 18, borderRadius: 14 }}
           >
             <h3
               style={{

@@ -4,20 +4,24 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Search, Plus, Calendar, Users, CheckCircle, X, Pencil } from 'lucide-react';
 import type { User, Sanction, DutySlot, SanctionRender } from '@/lib/types';
 import { useApp } from '@/lib/context';
+import { buildStudentSearchText, compareStudentsBySurnameFirst, formatStudentNameForDean, normalizeClassNumber } from '@/lib/student-display';
 
 export default function DeanSanctionsPage() {
     const { user, getAllStudents, getSanctionsForStudent, saveSanction, updateSanctionDays, updateSanction, getDutySlots, createDutySlot, getSanctionRenders } = useApp();
+    const STUDENT_PICKER_LIMIT = 120;
     const [activeTab, setActiveTab] = useState<'sanctions' | 'duty-slots' | 'renders'>('sanctions');
     const [students, setStudents] = useState<User[]>([]);
-    const [filteredStudents, setFilteredStudents] = useState<User[]>([]);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [sanctionsSearchQuery, setSanctionsSearchQuery] = useState('');
+    const [dutySlotsSearchQuery, setDutySlotsSearchQuery] = useState('');
+    const [rendersSearchQuery, setRendersSearchQuery] = useState('');
+    const [sanctionStudentQuery, setSanctionStudentQuery] = useState('');
+    const [selectedSanctionStudentIds, setSelectedSanctionStudentIds] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [savingSanction, setSavingSanction] = useState(false);
 
     const [sanctions, setSanctions] = useState<Sanction[]>([]);
     const [showSanctionModal, setShowSanctionModal] = useState(false);
     const [sanctionForm, setSanctionForm] = useState({
-        studentId: '',
         days: 1,
         reason: '',
         description: '',
@@ -65,6 +69,13 @@ export default function DeanSanctionsPage() {
             event.preventDefault();
         }
     };
+    const todayDateKey = useMemo(() => {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }, []);
 
     useEffect(() => {
         const loadData = async () => {
@@ -75,7 +86,7 @@ export default function DeanSanctionsPage() {
                     getSanctionRenders(),
                 ]);
 
-                setStudents(interns);
+                setStudents([...interns].sort(compareStudentsBySurnameFirst));
                 setDutySlots(dutySlotsData);
                 setSanctionRenders(rendersData);
 
@@ -105,34 +116,98 @@ export default function DeanSanctionsPage() {
         loadData();
     }, [getAllStudents, getDutySlots, getSanctionsForStudent, getSanctionRenders]);
 
-    useEffect(() => {
-        if (searchQuery.trim() === '') {
-            setFilteredStudents(students);
-            return;
+    const studentsById = useMemo(() => {
+        const map = new Map<string, User>();
+        for (const student of students) {
+            map.set(student.id, student);
         }
+        return map;
+    }, [students]);
 
-        const query = searchQuery.toLowerCase();
-        setFilteredStudents(
-            students.filter(
-                (student) =>
-                    student.name.toLowerCase().includes(query) ||
-                    student.email.toLowerCase().includes(query)
-            )
-        );
-    }, [searchQuery, students]);
+    const sanctionDropdownStudents = useMemo(() => {
+        return [...students].sort((a, b) => {
+            const aClass = normalizeClassNumber(a.classNumber);
+            const bClass = normalizeClassNumber(b.classNumber);
+
+            if (aClass && bClass) {
+                const classDiff = Number(aClass) - Number(bClass);
+                if (classDiff !== 0) return classDiff;
+            } else if (aClass) {
+                return -1;
+            } else if (bClass) {
+                return 1;
+            }
+
+            return compareStudentsBySurnameFirst(a, b);
+        });
+    }, [students]);
+
+    const sanctionStudentMatches = useMemo(() => {
+        const query = sanctionStudentQuery.trim().toLowerCase();
+        if (!query) return sanctionDropdownStudents;
+        return sanctionDropdownStudents
+            .filter((student) => buildStudentSearchText(student).includes(query));
+    }, [sanctionDropdownStudents, sanctionStudentQuery]);
+
+    const filteredSanctionStudentOptions = useMemo(() => {
+        return sanctionStudentMatches.slice(0, STUDENT_PICKER_LIMIT);
+    }, [sanctionStudentMatches, STUDENT_PICKER_LIMIT]);
+
+    const visibleSanctionStudentIds = useMemo(() => {
+        return filteredSanctionStudentOptions.map((student) => student.id);
+    }, [filteredSanctionStudentOptions]);
+
+    const allVisibleStudentsSelected = useMemo(() => {
+        if (visibleSanctionStudentIds.length === 0) return false;
+        return visibleSanctionStudentIds.every((id) => selectedSanctionStudentIds.includes(id));
+    }, [visibleSanctionStudentIds, selectedSanctionStudentIds]);
+
+    const getStudentDisplayName = (studentId: string) => {
+        const student = studentsById.get(studentId);
+        if (!student) return 'Unknown';
+        return formatStudentNameForDean(student);
+    };
 
     const filteredSanctions = useMemo(() => {
-        if (!searchQuery.trim()) return sanctions;
-        const query = searchQuery.toLowerCase();
+        if (!sanctionsSearchQuery.trim()) return sanctions;
+        const query = sanctionsSearchQuery.toLowerCase();
         return sanctions.filter((sanction) => {
-            const student = students.find((s) => s.id === sanction.userId);
+            const student = studentsById.get(sanction.userId);
             return (
-                student?.name.toLowerCase().includes(query) ||
-                student?.email.toLowerCase().includes(query) ||
+                (student ? buildStudentSearchText(student).includes(query) : false) ||
                 sanction.reason.toLowerCase().includes(query)
             );
         });
-    }, [sanctions, students, searchQuery]);
+    }, [sanctions, studentsById, sanctionsSearchQuery]);
+
+    const filteredRenderSanctions = useMemo(() => {
+        if (!rendersSearchQuery.trim()) return sanctions;
+        const query = rendersSearchQuery.toLowerCase();
+        return sanctions.filter((sanction) => {
+            const student = studentsById.get(sanction.userId);
+            return (
+                (student ? buildStudentSearchText(student).includes(query) : false) ||
+                sanction.reason.toLowerCase().includes(query)
+            );
+        });
+    }, [sanctions, studentsById, rendersSearchQuery]);
+
+    const filteredDutySlots = useMemo(() => {
+        if (!dutySlotsSearchQuery.trim()) return dutySlots;
+        const query = dutySlotsSearchQuery.toLowerCase();
+        return dutySlots.filter((slot) => {
+            const title = (slot.title || '').toLowerCase();
+            const description = (slot.description || '').toLowerCase();
+            const location = (slot.location || '').toLowerCase();
+            const date = (slot.date || '').toLowerCase();
+            return (
+                title.includes(query) ||
+                description.includes(query) ||
+                location.includes(query) ||
+                date.includes(query)
+            );
+        });
+    }, [dutySlots, dutySlotsSearchQuery]);
 
     const availedRenders = useMemo(() => {
         const seen = new Set<string>();
@@ -145,11 +220,30 @@ export default function DeanSanctionsPage() {
         });
     }, [sanctionRenders]);
 
+    const filteredAvailedRenders = useMemo(() => {
+        if (!dutySlotsSearchQuery.trim()) return availedRenders;
+        const query = dutySlotsSearchQuery.toLowerCase();
+        return availedRenders.filter((render) => {
+            const student = studentsById.get(render.userId);
+            const slot = dutySlots.find((entry) => entry.id === render.dutySlotId);
+            const studentText = student ? buildStudentSearchText(student) : '';
+            const slotTitle = (slot?.title || '').toLowerCase();
+            const slotDate = (slot?.date || '').toLowerCase();
+
+            return (
+                studentText.includes(query) ||
+                slotTitle.includes(query) ||
+                slotDate.includes(query) ||
+                render.status.toLowerCase().includes(query)
+            );
+        });
+    }, [availedRenders, dutySlotsSearchQuery, studentsById, dutySlots]);
+
     const handleIssueSanction = async () => {
-        if (!sanctionForm.studentId || sanctionForm.days < 1 || !sanctionForm.reason.trim()) {
+        if (selectedSanctionStudentIds.length === 0 || sanctionForm.days < 1 || !sanctionForm.reason.trim()) {
             setFeedbackModal({
                 title: 'Missing Required Fields',
-                message: 'Please fill in all required fields.',
+                message: 'Please select at least one student and complete all required fields.',
                 tone: 'warning',
             });
             return;
@@ -167,35 +261,62 @@ export default function DeanSanctionsPage() {
         setSavingSanction(true);
         try {
             const issuedAt = new Date().toISOString();
-            const savedId = await saveSanction({
-                userId: sanctionForm.studentId,
-                userEmail: filteredStudents.find((student) => student.id === sanctionForm.studentId)?.email || '',
-                deanId: user.id,
-                days: sanctionForm.days,
-                reason: sanctionForm.reason.trim(),
-                description: sanctionForm.description.trim(),
-                issuedDate: issuedAt,
-                status: 'active',
-            });
+            const createdSanctions: Sanction[] = [];
+            let failedCount = 0;
 
-            setSanctions((prev) => [
-                {
-                    id: savedId,
-                    userId: sanctionForm.studentId,
-                    deanId: user.id,
-                    days: sanctionForm.days,
-                    reason: sanctionForm.reason.trim(),
-                    description: sanctionForm.description.trim(),
-                    issuedDate: issuedAt,
-                    status: 'active',
-                    createdAt: issuedAt,
-                    updatedAt: issuedAt,
-                },
-                ...prev,
-            ]);
+            for (const studentId of selectedSanctionStudentIds) {
+                try {
+                    const savedId = await saveSanction({
+                        userId: studentId,
+                        userEmail: studentsById.get(studentId)?.email || '',
+                        deanId: user.id,
+                        days: sanctionForm.days,
+                        reason: sanctionForm.reason.trim(),
+                        description: sanctionForm.description.trim(),
+                        issuedDate: issuedAt,
+                        status: 'active',
+                    });
+
+                    createdSanctions.push({
+                        id: savedId,
+                        userId: studentId,
+                        deanId: user.id,
+                        days: sanctionForm.days,
+                        reason: sanctionForm.reason.trim(),
+                        description: sanctionForm.description.trim(),
+                        issuedDate: issuedAt,
+                        status: 'active',
+                        createdAt: issuedAt,
+                        updatedAt: issuedAt,
+                    });
+                } catch (err) {
+                    failedCount += 1;
+                    console.error('Failed to save sanction for student:', studentId, err);
+                }
+            }
+
+            if (createdSanctions.length > 0) {
+                setSanctions((prev) => [...createdSanctions, ...prev]);
+            }
+
+            if (failedCount > 0 && createdSanctions.length > 0) {
+                setFeedbackModal({
+                    title: 'Partially Completed',
+                    message: `Issued ${createdSanctions.length} sanction(s); ${failedCount} failed.`,
+                    tone: 'warning',
+                });
+            } else if (failedCount > 0) {
+                setFeedbackModal({
+                    title: 'Failed to Save Sanctions',
+                    message: 'No sanctions were issued. Please try again.',
+                    tone: 'error',
+                });
+            }
 
             setShowSanctionModal(false);
-            setSanctionForm({ studentId: '', days: 1, reason: '', description: '' });
+            setSanctionForm({ days: 1, reason: '', description: '' });
+            setSanctionStudentQuery('');
+            setSelectedSanctionStudentIds([]);
         } catch (err) {
             console.error('Failed to save sanction:', err);
             setFeedbackModal({
@@ -256,6 +377,15 @@ export default function DeanSanctionsPage() {
             return;
         }
 
+        if (dutySlotForm.date < todayDateKey) {
+            setFeedbackModal({
+                title: 'Invalid Date',
+                message: 'Past dates are not allowed for duty slots.',
+                tone: 'warning',
+            });
+            return;
+        }
+
         const newSlot: DutySlot = {
             id: crypto.randomUUID(),
             deanId: user?.id || '',
@@ -295,6 +425,15 @@ export default function DeanSanctionsPage() {
             });
         } catch (err) {
             console.error('Failed to save duty slot:', err);
+            const code = (err as { code?: string } | null)?.code || '';
+            if (code === 'sanction/past-duty-slot') {
+                setFeedbackModal({
+                    title: 'Invalid Date',
+                    message: 'Past dates are not allowed for duty slots.',
+                    tone: 'warning',
+                });
+                return;
+            }
             setFeedbackModal({
                 title: 'Failed to Save Duty Slot',
                 message: 'Please try again.',
@@ -312,6 +451,31 @@ export default function DeanSanctionsPage() {
             status: sanction.status,
         });
         setShowEditSanctionModal(true);
+    };
+
+    const resetSanctionModal = () => {
+        setShowSanctionModal(false);
+        setSanctionStudentQuery('');
+        setSelectedSanctionStudentIds([]);
+        setSanctionForm({ days: 1, reason: '', description: '' });
+    };
+
+    const toggleSanctionStudentSelection = (studentId: string) => {
+        setSelectedSanctionStudentIds((prev) =>
+            prev.includes(studentId)
+                ? prev.filter((id) => id !== studentId)
+                : [...prev, studentId]
+        );
+    };
+
+    const toggleSelectAllVisibleSanctionStudents = () => {
+        setSelectedSanctionStudentIds((prev) => {
+            if (allVisibleStudentsSelected) {
+                return prev.filter((id) => !visibleSanctionStudentIds.includes(id));
+            }
+            const merged = new Set([...prev, ...visibleSanctionStudentIds]);
+            return Array.from(merged);
+        });
     };
 
     const handleSaveEditedSanction = async () => {
@@ -406,23 +570,24 @@ export default function DeanSanctionsPage() {
             {activeTab === 'sanctions' ? (
                 <div className="card" style={{ padding: 24 }}>
                     <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                        <div style={{ position: 'relative', width: '100%' }}>
-                            <Search size={16} style={{ 
-                                position: 'absolute', 
-                                left: 12, 
-                                top: '50%', 
-                                transform: 'translateY(-50%)', 
-                                color: 'var(--slate-400)' 
-                            }} />
+                        <div style={{ position: 'relative', width: '100%', maxWidth: 340 }}>
+                            <Search
+                                size={16}
+                                style={{
+                                    position: 'absolute',
+                                    left: 12,
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    color: 'var(--slate-400)'
+                                }}
+                            />
                             <input
                                 type="text"
                                 className="input"
-                                placeholder="Search students..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                style={{
-                                    paddingLeft: 38,
-                                }}
+                                placeholder="Search sanctioned students..."
+                                value={sanctionsSearchQuery}
+                                onChange={(e) => setSanctionsSearchQuery(e.target.value)}
+                                style={{ paddingLeft: 38 }}
                             />
                         </div>
                         <button onClick={() => setShowSanctionModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 'var(--radius-md)', background: 'var(--primary-600)', border: 'none', color: 'white', fontWeight: 600, cursor: 'pointer' }}>
@@ -451,7 +616,7 @@ export default function DeanSanctionsPage() {
                                 ) : (
                                     filteredSanctions.map((sanction) => (
                                         <tr key={sanction.id}>
-                                            <td>{students.find((s) => s.id === sanction.userId)?.name || 'Unknown'}</td>
+                                            <td>{getStudentDisplayName(sanction.userId)}</td>
                                             <td>{sanction.days} {sanction.days === 1 ? 'day' : 'days'}</td>
                                             <td>{sanction.reason}</td>
                                             <td style={{ textTransform: 'capitalize' }}>{sanction.status}</td>
@@ -484,9 +649,31 @@ export default function DeanSanctionsPage() {
                 </div>
             ) : activeTab === 'duty-slots' ? (
                 <div className="card" style={{ padding: 24 }}>
-                    <button onClick={() => setShowDutySlotModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', marginBottom: 24, borderRadius: 'var(--radius-md)', background: 'var(--primary-600)', border: 'none', color: 'white', fontWeight: 600, cursor: 'pointer' }}>
-                        <Plus size={16} /> Schedule Duty Slot
-                    </button>
+                    <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                        <div style={{ position: 'relative', width: '100%', maxWidth: 340 }}>
+                            <Search
+                                size={16}
+                                style={{
+                                    position: 'absolute',
+                                    left: 12,
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    color: 'var(--slate-400)'
+                                }}
+                            />
+                            <input
+                                type="text"
+                                className="input"
+                                placeholder="Search schedule and enrollments..."
+                                value={dutySlotsSearchQuery}
+                                onChange={(e) => setDutySlotsSearchQuery(e.target.value)}
+                                style={{ paddingLeft: 38 }}
+                            />
+                        </div>
+                        <button onClick={() => setShowDutySlotModal(true)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', borderRadius: 'var(--radius-md)', background: 'var(--primary-600)', border: 'none', color: 'white', fontWeight: 600, cursor: 'pointer' }}>
+                            <Plus size={16} /> Schedule Duty Slot
+                        </button>
+                    </div>
 
                     <div style={{ marginBottom: 16, color: 'var(--slate-400)', fontSize: 13 }}>
                         Total scheduled slots: {dutySlots.length}
@@ -506,14 +693,14 @@ export default function DeanSanctionsPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {dutySlots.length === 0 ? (
+                                {filteredDutySlots.length === 0 ? (
                                     <tr>
                                         <td colSpan={7} style={{ textAlign: 'center', padding: '18px 12px', color: 'var(--slate-500)' }}>
-                                            No duty slots scheduled.
+                                            {dutySlots.length === 0 ? 'No duty slots scheduled.' : 'No duty slots match your search.'}
                                         </td>
                                     </tr>
                                 ) : (
-                                    dutySlots.map((slot) => {
+                                    filteredDutySlots.map((slot) => {
                                         const enrolledCount = availedRenders.filter((r) => r.dutySlotId === slot.id).length;
                                         const availableCount = Math.max(0, slot.capacity - enrolledCount);
                                         return (
@@ -544,8 +731,10 @@ export default function DeanSanctionsPage() {
                     <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                         <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Students Enrolled in Slots</h3>
 
-                        {availedRenders.length === 0 ? (
-                            <p style={{ color: 'var(--slate-400)', fontSize: 13 }}>No interns have enrolled in duty slots yet.</p>
+                        {filteredAvailedRenders.length === 0 ? (
+                            <p style={{ color: 'var(--slate-400)', fontSize: 13 }}>
+                                {availedRenders.length === 0 ? 'No interns have enrolled in duty slots yet.' : 'No enrolled students match your search.'}
+                            </p>
                         ) : (
                             <div className="table-scroll">
                                 <table className="data-table">
@@ -558,12 +747,12 @@ export default function DeanSanctionsPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {availedRenders.map((render) => {
+                                        {filteredAvailedRenders.map((render) => {
                                                 const student = students.find((s) => s.id === render.userId);
                                                 const slot = dutySlots.find((s) => s.id === render.dutySlotId);
                                                 return (
                                                     <tr key={render.id}>
-                                                        <td>{student?.name || 'Unknown'}</td>
+                                                        <td>{student ? formatStudentNameForDean(student) : 'Unknown'}</td>
                                                         <td>{slot?.title || 'Unknown'}</td>
                                                         <td>{slot ? new Date(slot.date).toLocaleDateString() : '-'}</td>
                                                         <td>
@@ -585,6 +774,26 @@ export default function DeanSanctionsPage() {
                     <div style={{ marginBottom: 20 }}>
                         <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>All Sanctioned Students</h3>
                         <p style={{ fontSize: 13, color: 'var(--slate-400)', marginBottom: 20 }}>View and manage all students with sanctions. Reduce their sanction days as they complete duty slots.</p>
+                        <div style={{ position: 'relative', width: '100%', maxWidth: 340 }}>
+                            <Search
+                                size={16}
+                                style={{
+                                    position: 'absolute',
+                                    left: 12,
+                                    top: '50%',
+                                    transform: 'translateY(-50%)',
+                                    color: 'var(--slate-400)'
+                                }}
+                            />
+                            <input
+                                type="text"
+                                className="input"
+                                placeholder="Search sanctions in renders..."
+                                value={rendersSearchQuery}
+                                onChange={(e) => setRendersSearchQuery(e.target.value)}
+                                style={{ paddingLeft: 38 }}
+                            />
+                        </div>
                     </div>
 
                     <div className="table-scroll">
@@ -600,16 +809,16 @@ export default function DeanSanctionsPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {sanctions.length === 0 ? (
+                                {filteredRenderSanctions.length === 0 ? (
                                     <tr>
                                         <td colSpan={6} style={{ textAlign: 'center', padding: '18px 12px', color: 'var(--slate-500)' }}>
-                                            No sanctions issued yet.
+                                            {sanctions.length === 0 ? 'No sanctions issued yet.' : 'No sanctions match your search.'}
                                         </td>
                                     </tr>
                                 ) : (
-                                    sanctions.map((sanction) => (
+                                    filteredRenderSanctions.map((sanction) => (
                                         <tr key={sanction.id}>
-                                            <td>{students.find((s) => s.id === sanction.userId)?.name || 'Unknown'}</td>
+                                            <td>{getStudentDisplayName(sanction.userId)}</td>
                                             <td>{sanction.days}</td>
                                             <td>{sanction.reason}</td>
                                             <td style={{ textTransform: 'capitalize' }}>{sanction.status}</td>
@@ -644,7 +853,11 @@ export default function DeanSanctionsPage() {
                     {editingSanctionId && (
                         <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                             <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 16 }}>
-                                Reduce Sanction Days for {students.find((s) => s.id === sanctions.find((s) => s.id === editingSanctionId)?.userId)?.name}
+                                Reduce Sanction Days for {(() => {
+                                    const sanction = sanctions.find((item) => item.id === editingSanctionId);
+                                    if (!sanction) return 'Unknown';
+                                    return getStudentDisplayName(sanction.userId);
+                                })()}
                             </h3>
 
                             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', marginBottom: 20 }}>
@@ -688,11 +901,14 @@ export default function DeanSanctionsPage() {
             )}
 
             {showSanctionModal && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-                    <div style={{ background: 'var(--slate-900)', borderRadius: 'var(--radius-lg)', border: '1px solid rgba(255,255,255,0.1)', padding: '24px', maxWidth: 500, width: '90%' }}>
+                <div className="modal-overlay">
+                    <div className="modal-content" style={{ maxWidth: 860, padding: 24 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Issue Sanction</h2>
-                            <button onClick={() => setShowSanctionModal(false)} style={{ background: 'transparent', border: 'none', color: 'var(--slate-400)', cursor: 'pointer', padding: 0 }}>
+                            <button
+                                onClick={resetSanctionModal}
+                                style={{ background: 'transparent', border: 'none', color: 'var(--slate-400)', cursor: 'pointer', padding: 0 }}
+                            >
                                 <X size={20} />
                             </button>
                         </div>
@@ -700,19 +916,87 @@ export default function DeanSanctionsPage() {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                             <div>
                                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Select Student</label>
-                                <select 
-                                    className="input"
-                                    value={sanctionForm.studentId} 
-                                    onChange={(e) => setSanctionForm({ ...sanctionForm, studentId: e.target.value })} 
-                                    style={{ marginTop: 8 }}
-                                >
-                                    <option value="">Choose a student...</option>
-                                    {filteredStudents.map((student) => (
-                                        <option key={student.id} value={student.id}>
-                                            {student.name}
-                                        </option>
-                                    ))}
-                                </select>
+                                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    <input
+                                        type="text"
+                                        className="input"
+                                        value={sanctionStudentQuery}
+                                        onChange={(e) => setSanctionStudentQuery(e.target.value)}
+                                        placeholder="Search by class #, name, email, course..."
+                                    />
+                                    <label style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 8,
+                                        fontSize: 12,
+                                        color: 'var(--slate-300)',
+                                        userSelect: 'none',
+                                        cursor: filteredSanctionStudentOptions.length === 0 ? 'not-allowed' : 'pointer',
+                                        opacity: filteredSanctionStudentOptions.length === 0 ? 0.6 : 1,
+                                    }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={allVisibleStudentsSelected}
+                                            onChange={toggleSelectAllVisibleSanctionStudents}
+                                            disabled={filteredSanctionStudentOptions.length === 0}
+                                            style={{ accentColor: 'var(--primary-500)' }}
+                                        />
+                                        Select all visible students
+                                    </label>
+                                    <div style={{
+                                        maxHeight: 220,
+                                        overflowY: 'auto',
+                                        borderRadius: 'var(--radius-md)',
+                                        border: '1px solid rgba(255,255,255,0.1)',
+                                        background: 'rgba(255,255,255,0.03)',
+                                    }}>
+                                        {filteredSanctionStudentOptions.length === 0 ? (
+                                            <p style={{ margin: 0, padding: '10px 12px', fontSize: 13, color: 'var(--slate-400)' }}>
+                                                No students match your search.
+                                            </p>
+                                        ) : (
+                                            filteredSanctionStudentOptions.map((student) => {
+                                                const isSelected = selectedSanctionStudentIds.includes(student.id);
+                                                return (
+                                                    <label
+                                                        key={student.id}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '10px 12px',
+                                                            borderBottom: '1px solid rgba(255,255,255,0.06)',
+                                                            background: isSelected ? 'rgba(16,185,129,0.18)' : 'transparent',
+                                                            color: isSelected ? 'white' : 'var(--slate-200)',
+                                                            cursor: 'pointer',
+                                                            fontSize: 13,
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: 10,
+                                                        }}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={() => toggleSanctionStudentSelection(student.id)}
+                                                            style={{ accentColor: 'var(--primary-500)' }}
+                                                        />
+                                                        <div style={{ minWidth: 0 }}>
+                                                            <p style={{ margin: 0, color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                {formatStudentNameForDean(student)}
+                                                            </p>
+                                                            <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--slate-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                                {student.email}
+                                                            </p>
+                                                        </div>
+                                                    </label>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                    <p style={{ margin: 0, fontSize: 12, color: 'var(--slate-500)' }}>
+                                        {selectedSanctionStudentIds.length} selected. Showing {filteredSanctionStudentOptions.length} of {sanctionStudentMatches.length} matched students.
+                                        {!sanctionStudentQuery.trim() && sanctionStudentMatches.length > STUDENT_PICKER_LIMIT ? ' Type to narrow the list for large batches.' : ''}
+                                    </p>
+                                </div>
                             </div>
 
                             <div>
@@ -755,11 +1039,11 @@ export default function DeanSanctionsPage() {
                             </div>
 
                             <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
-                                <button onClick={() => setShowSanctionModal(false)} style={{ flex: 1, padding: '8px 16px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>
+                                <button onClick={resetSanctionModal} style={{ flex: 1, padding: '8px 16px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontWeight: 600, cursor: 'pointer' }}>
                                     Cancel
                                 </button>
                                 <button onClick={handleIssueSanction} disabled={savingSanction} style={{ flex: 1, padding: '8px 16px', borderRadius: 'var(--radius-md)', background: 'var(--primary-600)', border: 'none', color: 'white', fontWeight: 600, cursor: 'pointer', opacity: savingSanction ? 0.7 : 1 }}>
-                                    {savingSanction ? 'Saving...' : 'Issue Sanction'}
+                                    {savingSanction ? 'Saving...' : `Issue Sanction${selectedSanctionStudentIds.length > 1 ? 's' : ''}`}
                                 </button>
                             </div>
                         </div>
@@ -768,8 +1052,8 @@ export default function DeanSanctionsPage() {
             )}
 
             {showDutySlotModal && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-                    <div style={{ background: 'var(--slate-900)', borderRadius: 'var(--radius-lg)', border: '1px solid rgba(255,255,255,0.1)', padding: '24px', maxWidth: 500, width: '90%' }}>
+                <div className="modal-overlay">
+                    <div className="modal-content" style={{ maxWidth: 640, padding: 24 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Schedule Duty Slot</h2>
                             <button onClick={() => setShowDutySlotModal(false)} style={{ background: 'transparent', border: 'none', color: 'var(--slate-400)', cursor: 'pointer', padding: 0 }}>
@@ -785,7 +1069,7 @@ export default function DeanSanctionsPage() {
 
                             <div>
                                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--slate-400)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date</label>
-                                <input type="date" value={dutySlotForm.date} onChange={(e) => setDutySlotForm({ ...dutySlotForm, date: e.target.value })} style={{ width: '100%', marginTop: 8, padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: 14, boxSizing: 'border-box' }} />
+                                <input type="date" min={todayDateKey} value={dutySlotForm.date} onChange={(e) => setDutySlotForm({ ...dutySlotForm, date: e.target.value })} style={{ width: '100%', marginTop: 8, padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: 14, boxSizing: 'border-box' }} />
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -823,8 +1107,8 @@ export default function DeanSanctionsPage() {
             )}
 
             {showEditSanctionModal && (
-                <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-                    <div style={{ background: 'var(--slate-900)', borderRadius: 'var(--radius-lg)', border: '1px solid rgba(255,255,255,0.1)', padding: '24px', maxWidth: 500, width: '90%' }}>
+                <div className="modal-overlay">
+                    <div className="modal-content" style={{ maxWidth: 640, padding: 24 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Edit Sanction</h2>
                             <button
@@ -907,31 +1191,11 @@ export default function DeanSanctionsPage() {
             )}
 
             {feedbackModal && (
-                <div
-                    onClick={() => setFeedbackModal(null)}
-                    style={{
-                        position: 'fixed',
-                        inset: 0,
-                        background: 'rgba(0,0,0,0.55)',
-                        backdropFilter: 'blur(6px)',
-                        WebkitBackdropFilter: 'blur(6px)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: 24,
-                        zIndex: 1000,
-                    }}
-                >
+                <div className="modal-overlay" onClick={() => setFeedbackModal(null)}>
                     <div
+                        className="modal-content"
                         onClick={(e) => e.stopPropagation()}
-                        style={{
-                            width: '100%',
-                            maxWidth: 440,
-                            borderRadius: 14,
-                            border: '1px solid rgba(255,255,255,0.1)',
-                            background: 'var(--slate-900)',
-                            padding: 18,
-                        }}
+                        style={{ maxWidth: 440, padding: 18, borderRadius: 14 }}
                     >
                         <h3
                             style={{

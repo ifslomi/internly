@@ -1,7 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '@/lib/context';
-import { Save, User, GraduationCap, Building2, Mail, Phone, MapPin, ShieldCheck, Clock3, CalendarDays, Loader2 } from 'lucide-react';
+import { Save, User, GraduationCap, Building2, Mail, Phone, MapPin, ShieldCheck, Clock3, CalendarDays, Loader2, Hash } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { uploadProfileImage } from '@/lib/intern';
 
@@ -48,6 +48,7 @@ export default function AccountProfilePanel({
 }: AccountProfilePanelProps) {
   const { user, updateUser } = useApp();
   const [fullName, setFullName] = useState('');
+  const [classNumber, setClassNumber] = useState('');
   const [address, setAddress] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [guardianEmail, setGuardianEmail] = useState('');
@@ -66,6 +67,7 @@ export default function AccountProfilePanel({
       const normalizedDepartment = normalizeDepartment(user.department);
       const normalizedProgram = normalizeProgramForDepartment(normalizedDepartment, user.course);
       setFullName(user.fullName || user.name || '');
+      setClassNumber(digitsOnly(user.classNumber || ''));
       setAddress(user.address || '');
       setPhoneNumber(user.phoneNumber || user.contact || '');
       setGuardianEmail(user.guardianEmail || user.guardian?.email || '');
@@ -108,6 +110,7 @@ export default function AccountProfilePanel({
       await updateUser({
         name: fullName,
         fullName,
+        classNumber: digitsOnly(classNumber),
         address,
         phoneNumber,
         contact: phoneNumber,
@@ -276,6 +279,20 @@ export default function AccountProfilePanel({
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <Hash size={16} /> Class Number
+                  </label>
+                  <input
+                    className="input"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={classNumber}
+                    onChange={(e) => setClassNumber(digitsOnly(e.target.value))}
+                    placeholder="e.g. 28"
+                  />
+                </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                     <Clock3 size={16} /> Required OJT Hours
@@ -376,6 +393,20 @@ export default function AccountProfilePanel({
                       ))}
                     </select>
                   </div>
+                  <div>
+                    <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <Hash size={16} /> Class Number
+                    </label>
+                    <input
+                      className="input"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={classNumber}
+                      onChange={(e) => setClassNumber(digitsOnly(e.target.value))}
+                      placeholder="e.g. 28"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -458,6 +489,13 @@ export default function AccountProfilePanel({
                 <div>
                   <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Department</p>
                   <p style={{ fontSize: 14, color: 'white' }}>{department || '—'}</p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <Hash size={18} style={{ color: 'var(--slate-500)', marginTop: 2, flexShrink: 0 }} />
+                <div>
+                  <p style={{ fontSize: 12, color: 'var(--slate-500)' }}>Class Number</p>
+                  <p style={{ fontSize: 14, color: 'white' }}>{classNumber || '—'}</p>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>

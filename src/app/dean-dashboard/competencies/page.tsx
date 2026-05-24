@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Search, ChevronRight, Award, Calendar, Filter, ChevronDown, ChevronUp } from 'lucide-react';
 import type { User, Competency } from '@/lib/types';
 import { useApp } from '@/lib/context';
+import { buildStudentSearchText, compareStudentsBySurnameFirst, formatStudentNameForDean } from '@/lib/student-display';
 
 const COMPETENCIES_PAGE_SIZE = 8;
 
@@ -40,7 +41,7 @@ export default function DeanCompetenciesPage() {
         const loadStudents = async () => {
             try {
                 const interns = await getAllStudents();
-                setStudents(interns);
+                setStudents([...interns].sort(compareStudentsBySurnameFirst));
             } catch (err) {
                 console.error('Failed to load students:', err);
             } finally {
@@ -56,12 +57,7 @@ export default function DeanCompetenciesPage() {
         } else {
             const query = searchQuery.toLowerCase();
             setFilteredStudents(
-                students.filter(
-                    (student) =>
-                        student.name.toLowerCase().includes(query) ||
-                        student.email.toLowerCase().includes(query) ||
-                        student.course?.toLowerCase().includes(query)
-                )
+                students.filter((student) => buildStudentSearchText(student).includes(query))
             );
         }
     }, [searchQuery, students]);
@@ -235,7 +231,7 @@ export default function DeanCompetenciesPage() {
                                             textOverflow: 'ellipsis',
                                             whiteSpace: 'nowrap',
                                         }}>
-                                            {student.name}
+                                            {formatStudentNameForDean(student)}
                                         </p>
                                         <p style={{
                                             fontSize: 12,
@@ -278,7 +274,7 @@ export default function DeanCompetenciesPage() {
                                     margin: 0,
                                     marginBottom: 4,
                                 }}>
-                                    {selectedStudent.name}
+                                    {formatStudentNameForDean(selectedStudent)}
                                 </h3>
                                 <p style={{
                                     fontSize: 12,

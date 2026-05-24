@@ -4,10 +4,12 @@ import React, { useEffect, useState } from 'react';
 import { Search, TrendingUp, Clock, CheckCircle } from 'lucide-react';
 import { useApp } from '@/lib/context';
 import type { User } from '@/lib/types';
+import { compareStudentsBySurnameFirst, formatNameSurnameFirst, formatStudentNameForDean, normalizeClassNumber } from '@/lib/student-display';
 
 interface StudentHours {
     id: string;
     name: string;
+    classNumber?: string;
     email: string;
     course: string;
     totalRequired: number;
@@ -29,11 +31,12 @@ export default function DeanOJTHoursPage() {
             try {
                 const interns = await getAllStudents();
                 const studentHours = await Promise.all(
-                    interns.map(async (intern: User) => {
+                    [...interns].sort(compareStudentsBySurnameFirst).map(async (intern: User) => {
                         const stats = await getStudentHourStats(intern.id, intern.totalRequiredHours, intern.email);
                         return {
                             id: intern.id,
                             name: intern.name,
+                            classNumber: intern.classNumber,
                             email: intern.email,
                             course: intern.course || 'N/A',
                             totalRequired: stats.totalRequired,
@@ -59,10 +62,17 @@ export default function DeanOJTHoursPage() {
         if (searchQuery.trim() !== '') {
             const query = searchQuery.toLowerCase();
             filtered = students.filter(
-                (student) =>
-                    student.name.toLowerCase().includes(query) ||
-                    student.email.toLowerCase().includes(query) ||
-                    student.course.toLowerCase().includes(query)
+                (student) => {
+                    const classNumber = normalizeClassNumber(student.classNumber);
+                    const surnameFirst = formatNameSurnameFirst(student.name);
+                    return (
+                        student.name.toLowerCase().includes(query) ||
+                        surnameFirst.toLowerCase().includes(query) ||
+                        student.email.toLowerCase().includes(query) ||
+                        student.course.toLowerCase().includes(query) ||
+                        classNumber.includes(query)
+                    );
+                }
             );
         }
 
@@ -75,7 +85,7 @@ export default function DeanOJTHoursPage() {
                     return a.remaining - b.remaining;
                 case 'name':
                 default:
-                    return a.name.localeCompare(b.name);
+                    return compareStudentsBySurnameFirst(a, b);
             }
         });
 
@@ -266,7 +276,7 @@ export default function DeanOJTHoursPage() {
                                             fontWeight: 600,
                                         }}>
                                             <div>
-                                                <p style={{ margin: 0, marginBottom: 4 }}>{student.name}</p>
+                                                <p style={{ margin: 0, marginBottom: 4 }}>{formatStudentNameForDean(student)}</p>
                                                 <p style={{ margin: 0, fontSize: 12, color: 'var(--slate-400)' }}>{student.course}</p>
                                             </div>
                                         </td>

@@ -924,6 +924,15 @@ export async function addGroupMember(
     if (data.createdBy !== effectiveUid) {
         throw new Error('Only the group creator can add members');
     }
+    const actorEmail = (
+        data.participantDetails?.[effectiveUid]?.email ||
+        auth.currentUser?.email ||
+        ''
+    ).trim().toLowerCase();
+    const memberEmail = (member.email || '').trim().toLowerCase();
+    if (member.uid === effectiveUid || (actorEmail && memberEmail && actorEmail === memberEmail)) {
+        throw new Error('You cannot add yourself to this group');
+    }
     if (data.participants?.includes(member.uid)) {
         throw new Error('User is already in this group');
     }
@@ -964,16 +973,96 @@ export async function setNickname(
     const effectiveUid = auth.currentUser?.uid;
     if (!effectiveUid) throw new Error('Not authenticated');
 
-    if (nickname.trim()) {
-        await updateDoc(doc(db, 'conversations', conversationId), {
-            [`nicknames.${targetUid}`]: nickname.trim(),
+    const convRef = doc(db, 'conversations', conversationId);
+    const convSnap = await getDoc(convRef);
+    if (!convSnap.exists()) throw new Error('Conversation not found');
+
+    const data = convSnap.data();
+    const participantName = (uid: string) => data.participantDetails?.[uid]?.name || 'A member';
+
+    const trimmedNickname = nickname.trim();
+    const previousNickname = (data.nicknames?.[targetUid] || '').trim();
+    if (trimmedNickname === previousNickname) return;
+
+    if (trimmedNickname) {
+        await updateDoc(convRef, {
+            [`nicknames.${targetUid}`]: trimmedNickname,
         });
     } else {
         // Remove nickname by setting to empty string (Firestore doesn't support deleting nested fields easily)
-        await updateDoc(doc(db, 'conversations', conversationId), {
+        await updateDoc(convRef, {
             [`nicknames.${targetUid}`]: '',
         });
     }
+
+    const actorName = participantName(effectiveUid);
+    const targetName = participantName(targetUid);
+    const systemText = trimmedNickname
+        ? `${actorName} changed ${targetName}'s nickname to "${trimmedNickname}"`
+        : `${actorName} removed ${targetName}'s nickname`;
+
+    await addDoc(collection(db, 'conversations', conversationId, 'messages'), {
+        senderId: 'system',
+        text: systemText,
+        imageUrl: null,
+        timestamp: serverTimestamp(),
+        read: true,
+        status: 'seen',
+        readBy: {},
+    });
+
+    await updateDoc(convRef, {
+        lastMessage: systemText,
+        lastMessageTime: serverTimestamp(),
+        lastMessageSenderId: null,
+    });
+}
+
+export async function renameGroupConversation(
+    conversationId: string,
+    nextGroupName: string,
+): Promise<void> {
+    const effectiveUid = auth.currentUser?.uid;
+    if (!effectiveUid) throw new Error('Not authenticated');
+
+    const convRef = doc(db, 'conversations', conversationId);
+    const convSnap = await getDoc(convRef);
+    if (!convSnap.exists()) throw new Error('Conversation not found');
+
+    const data = convSnap.data();
+    if (!data.isGroup) throw new Error('Can only rename group chats');
+    if (data.createdBy !== effectiveUid) {
+        throw new Error('Only the group creator can rename this group');
+    }
+
+    const trimmedName = nextGroupName.trim();
+    if (!trimmedName) throw new Error('Group name cannot be empty');
+
+    const currentGroupName = (data.groupName || '').trim();
+    if (trimmedName === currentGroupName) return;
+
+    await updateDoc(convRef, {
+        groupName: trimmedName,
+    });
+
+    const actorName = data.participantDetails?.[effectiveUid]?.name || 'Group admin';
+    const systemText = `${actorName} renamed the group to "${trimmedName}"`;
+
+    await addDoc(collection(db, 'conversations', conversationId, 'messages'), {
+        senderId: 'system',
+        text: systemText,
+        imageUrl: null,
+        timestamp: serverTimestamp(),
+        read: true,
+        status: 'seen',
+        readBy: {},
+    });
+
+    await updateDoc(convRef, {
+        lastMessage: systemText,
+        lastMessageTime: serverTimestamp(),
+        lastMessageSenderId: null,
+    });
 }
 
 // ─── File Upload (Cloudinary - free) ────────────────────

@@ -32,6 +32,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { User, DailyLog, WeeklyReport, Notification, Supervisor, Competency } from './types';
+import { compareStudentsBySurnameFirst } from './student-display';
 import { v4 as uuidv4 } from 'uuid';
 
 // ─── Helper: resolve current UID ────────────────────────
@@ -50,6 +51,45 @@ function isPermissionDeniedError(err: unknown): boolean {
     );
 }
 
+function stripUndefinedDeep<T>(value: T): T {
+    if (Array.isArray(value)) {
+        return value.map((item) => stripUndefinedDeep(item)) as T;
+    }
+
+    if (value && typeof value === 'object') {
+        const entries = Object.entries(value as Record<string, unknown>)
+            .filter(([, nestedValue]) => nestedValue !== undefined)
+            .map(([key, nestedValue]) => [key, stripUndefinedDeep(nestedValue)]);
+        return Object.fromEntries(entries) as T;
+    }
+
+    return value;
+}
+
+function getCurrentLocalDateKey(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function normalizeDateKey(value: string): string {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return value;
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+        return '';
+    }
+
+    const year = parsed.getFullYear();
+    const month = String(parsed.getMonth() + 1).padStart(2, '0');
+    const day = String(parsed.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 // ═══════════════════════════════════════════════════════
 // ─── User Profile ─────────────────────────────────────
 // Path: users/{userId}
@@ -64,6 +104,7 @@ export async function saveUserToFirestore(user: User): Promise<void> {
         id: uid,
         name: user.name,
         fullName: user.fullName || null,
+        classNumber: user.classNumber || null,
         email: user.email,
         address: user.address || null,
         phoneNumber: user.phoneNumber || user.contact || null,
@@ -100,6 +141,7 @@ export async function getUserFromFirestore(uid: string): Promise<User | null> {
         name: data.name || '',
         role: data.role || 'intern',
         fullName: data.fullName || undefined,
+        classNumber: data.classNumber || undefined,
         email: data.email || '',
         password: '', // Never store passwords in Firestore
         address: data.address || undefined,
@@ -147,6 +189,7 @@ export async function findUserByEmailInFirestore(email: string): Promise<User | 
         name: data.name || '',
         role: data.role || 'intern',
         fullName: data.fullName || undefined,
+        classNumber: data.classNumber || undefined,
         email: data.email || '',
         password: '',
         address: data.address || undefined,
@@ -413,7 +456,7 @@ export async function saveWeeklyReportToFirestore(
     }
 
     const createdAt = report.submittedAt || new Date().toISOString();
-    const normalizedReport = {
+    const normalizedReport = stripUndefinedDeep({
         ...report,
         userId: uid,
         id,
@@ -427,7 +470,7 @@ export async function saveWeeklyReportToFirestore(
         importedPdfResourceType: report.importedPdfResourceType || 'raw',
         _createdAt: serverTimestamp(),
         _updatedAt: serverTimestamp(),
-    };
+    });
 
     await setDoc(reportRef, normalizedReport);
 
@@ -757,6 +800,7 @@ export async function getAllStudentsFromFirestore(): Promise<User[]> {
                 id: doc.id,
                 name: data.name || '',
                 fullName: data.fullName,
+                classNumber: data.classNumber,
                 email: data.email || '',
                 password: '',
                 role: data.role || 'intern',
@@ -782,6 +826,8 @@ export async function getAllStudentsFromFirestore(): Promise<User[]> {
                 profileImage: data.profileImage,
             };
         });
+
+        interns.sort(compareStudentsBySurnameFirst);
 
         console.log('[Firestore] Returning', interns.length, 'interns after filtering');
         return interns;
@@ -927,12 +973,19 @@ export async function getDutySlotsFromFirestore(): Promise<DutySlot[]> {
 /** Create a new duty slot */
 export async function createDutySlotInFirestore(dutySlot: Omit<DutySlot, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     try {
+        const dutySlotDateKey = normalizeDateKey(dutySlot.date || '');
+        const todayDateKey = getCurrentLocalDateKey();
+        if (!dutySlotDateKey || dutySlotDateKey < todayDateKey) {
+            throw { code: 'sanction/past-duty-slot', message: 'Past dates are not allowed for duty slots.' };
+        }
+
         const slotsRef = collection(db, 'dutySlots');
         const newId = uuidv4();
         const docRef = doc(slotsRef, newId);
         
         await setDoc(docRef, {
             ...dutySlot,
+            date: dutySlotDateKey,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         });
@@ -990,6 +1043,19 @@ export async function getSanctionRendersFromFirestore(filters?: { dutySlotId?: s
 /** Create a sanction render */
 export async function createSanctionRenderInFirestore(render: Omit<SanctionRender, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     try {
+        const dutySlotRef = doc(db, 'dutySlots', render.dutySlotId);
+        const dutySlotSnapshot = await getDoc(dutySlotRef);
+        if (!dutySlotSnapshot.exists()) {
+            throw { code: 'sanction/duty-slot-not-found', message: 'Duty slot not found.' };
+        }
+
+        const dutySlotData = dutySlotSnapshot.data() as { date?: string };
+        const dutySlotDateKey = normalizeDateKey(dutySlotData?.date || '');
+        const todayDateKey = getCurrentLocalDateKey();
+        if (!dutySlotDateKey || dutySlotDateKey < todayDateKey) {
+            throw { code: 'sanction/past-duty-slot', message: 'Past duty slots are closed.' };
+        }
+
         const rendersRef = collection(db, 'sanctionRenders');
         const existingRenderQuery = query(
             rendersRef,

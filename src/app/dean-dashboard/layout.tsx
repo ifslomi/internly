@@ -75,7 +75,7 @@ export default function DeanDashboardLayout({ children }: { children: React.Reac
     };
 
     return (
-        <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'radial-gradient(circle at top, rgba(16,185,129,0.05), transparent 32%), var(--slate-950)' }}>
+        <div className="dashboard-shell" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'radial-gradient(circle at top, rgba(16,185,129,0.05), transparent 32%), var(--slate-950)' }}>
             {/* Mobile overlay */}
             {sidebarOpen && (
                 <div
@@ -332,10 +332,9 @@ export default function DeanDashboardLayout({ children }: { children: React.Reac
                 <style>{`@media (max-width: 1024px) { #mobile-header { display: flex !important; } }`}</style>
 
                 {/* Content area */}
-                <div style={{
+                <div className="dean-main-content" style={{
                     flex: 1,
                     overflow: 'auto',
-                    padding: '24px',
                 }}>
                     {children}
                 </div>
@@ -343,23 +342,8 @@ export default function DeanDashboardLayout({ children }: { children: React.Reac
 
             {/* Logout confirm modal */}
             {showLogoutConfirm && (
-                <div style={{
-                    position: 'fixed',
-                    inset: 0,
-                    background: 'rgba(0,0,0,0.5)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    zIndex: 1000,
-                }}>
-                    <div style={{
-                        background: 'var(--slate-900)',
-                        borderRadius: 'var(--radius-lg)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        padding: '24px',
-                        maxWidth: 400,
-                        width: '90%',
-                    }}>
+                <div className="modal-overlay">
+                    <div className="modal-content" style={{ maxWidth: 400, padding: 24 }}>
                         <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>Confirm Logout</h2>
                         <p style={{ color: 'var(--slate-400)', marginBottom: 24 }}>Are you sure you want to log out?</p>
                         <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>

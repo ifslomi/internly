@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Search, ChevronRight, Mail, Phone, Building2 } from 'lucide-react';
 import type { User } from '@/lib/types';
 import { useApp } from '@/lib/context';
+import { buildStudentSearchText, compareStudentsBySurnameFirst, formatStudentNameForDean } from '@/lib/student-display';
 
 export default function DeanOJTProfilesPage() {
     const { getAllStudents } = useApp();
@@ -19,7 +20,7 @@ export default function DeanOJTProfilesPage() {
                 console.log('[OJT-Profiles] Loading students...');
                 const interns = await getAllStudents();
                 console.log('[OJT-Profiles] Loaded interns:', interns);
-                setStudents(interns);
+                setStudents([...interns].sort(compareStudentsBySurnameFirst));
             } catch (err) {
                 console.error('[OJT-Profiles] Failed to load students:', err);
             } finally {
@@ -35,12 +36,7 @@ export default function DeanOJTProfilesPage() {
         } else {
             const query = searchQuery.toLowerCase();
             setFilteredStudents(
-                students.filter(
-                    (student) =>
-                        student.name.toLowerCase().includes(query) ||
-                        student.email.toLowerCase().includes(query) ||
-                        student.course?.toLowerCase().includes(query)
-                )
+                students.filter((student) => buildStudentSearchText(student).includes(query))
             );
         }
     }, [searchQuery, students]);
@@ -165,7 +161,7 @@ export default function DeanOJTProfilesPage() {
                                             textOverflow: 'ellipsis',
                                             whiteSpace: 'nowrap',
                                         }}>
-                                            {student.name}
+                                            {formatStudentNameForDean(student)}
                                         </p>
                                         <p style={{
                                             fontSize: 12,
@@ -233,7 +229,7 @@ export default function DeanOJTProfilesPage() {
                                 )}
                                 <div style={{ flex: 1 }}>
                                     <h2 style={{ fontSize: 20, fontWeight: 700, color: 'white', margin: 0, marginBottom: 4 }}>
-                                        {selectedStudent.name}
+                                        {formatStudentNameForDean(selectedStudent)}
                                     </h2>
                                     <p style={{ fontSize: 13, color: 'var(--slate-400)', margin: 0 }}>
                                         {selectedStudent.email}

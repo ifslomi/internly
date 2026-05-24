@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Search, ChevronRight, Download, FileText, Calendar, X, ExternalLink } from 'lucide-react';
 import type { User, WeeklyReport } from '@/lib/types';
 import { useApp } from '@/lib/context';
+import { buildStudentSearchText, compareStudentsBySurnameFirst, formatStudentNameForDean } from '@/lib/student-display';
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 export default function DeanWeeklyReportsPage() {
@@ -125,7 +126,7 @@ export default function DeanWeeklyReportsPage() {
         const loadStudents = async () => {
             try {
                 const interns = await getAllStudents();
-                setStudents(interns);
+                setStudents([...interns].sort(compareStudentsBySurnameFirst));
             } catch (err) {
                 console.error('Failed to load students:', err);
             } finally {
@@ -141,12 +142,7 @@ export default function DeanWeeklyReportsPage() {
         } else {
             const query = searchQuery.toLowerCase();
             setFilteredStudents(
-                students.filter(
-                    (student) =>
-                        student.name.toLowerCase().includes(query) ||
-                        student.email.toLowerCase().includes(query) ||
-                        student.course?.toLowerCase().includes(query)
-                )
+                students.filter((student) => buildStudentSearchText(student).includes(query))
             );
         }
     }, [searchQuery, students]);
@@ -286,7 +282,7 @@ export default function DeanWeeklyReportsPage() {
                                             textOverflow: 'ellipsis',
                                             whiteSpace: 'nowrap',
                                         }}>
-                                            {student.name}
+                                            {formatStudentNameForDean(student)}
                                         </p>
                                         <p style={{
                                             fontSize: 12,
@@ -329,7 +325,7 @@ export default function DeanWeeklyReportsPage() {
                                     margin: 0,
                                     marginBottom: 4,
                                 }}>
-                                    {selectedStudent.name}
+                                    {formatStudentNameForDean(selectedStudent)}
                                 </h3>
                                 <p style={{
                                     fontSize: 12,

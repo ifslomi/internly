@@ -2,7 +2,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '@/lib/context';
 import { getLogsForWeek } from '@/lib/calculations';
-import { generateSimpleWeeklyReportPDF, generateUBWeeklyReportPDF } from '@/lib/pdf';
 import { WeeklyReport, ActivityType, DailyLog, ACTIVITY_TYPES } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 import LogWorkModal from '@/components/LogWorkModal';
@@ -19,7 +18,6 @@ import {
 } from '@/lib/weekly-reports';
 import {
     FileText,
-    Download,
     Calendar,
     Clock,
     Edit3,
@@ -32,8 +30,6 @@ import {
     Plus,
     Save,
     X,
-    Eye,
-    ExternalLink,
     Loader2,
 } from 'lucide-react';
 
@@ -69,15 +65,10 @@ export default function ReportsPage() {
     
     // Reports state
     const [selectedWeekIdx, setSelectedWeekIdx] = useState(0);
-    const [reflection, setReflection] = useState('');
     const [hoursRendered, setHoursRendered] = useState('');
     const [reportFile, setReportFile] = useState<File | null>(null);
     const [submittingReport, setSubmittingReport] = useState(false);
     const [showPreview] = useState(true);
-    const [generating, setGenerating] = useState(false);
-    const [showExportOptions, setShowExportOptions] = useState(false);
-    const [paperViewOpen, setPaperViewOpen] = useState(false);
-    const [paperWeekIdx, setPaperWeekIdx] = useState(0);
     const [savedReports, setSavedReports] = useState<WeeklyReport[]>([]);
 
     // Preview filters state
@@ -113,16 +104,12 @@ export default function ReportsPage() {
     useEffect(() => {
         if (weeks.length === 0) {
             setSelectedWeekIdx(0);
-            setPaperWeekIdx(0);
             return;
         }
         if (selectedWeekIdx >= weeks.length) {
             setSelectedWeekIdx(0);
         }
-        if (paperWeekIdx >= weeks.length) {
-            setPaperWeekIdx(0);
-        }
-    }, [weeks, selectedWeekIdx, paperWeekIdx]);
+    }, [weeks, selectedWeekIdx]);
 
     // Load saved reports from Firestore
     useEffect(() => {
@@ -217,14 +204,6 @@ export default function ReportsPage() {
         ? savedReports.find((report) => report.weekNumber === selectedWeek.weekNumber) || null
         : null;
 
-    React.useEffect(() => {
-        if (currentSavedReport) {
-            setReflection(currentSavedReport.reflection);
-        } else {
-            setReflection('');
-        }
-    }, [selectedWeekIdx, currentSavedReport]);
-
     if (!user) return null;
 
     const submitWeeklyReport = async () => {
@@ -282,7 +261,7 @@ export default function ReportsPage() {
                 filePublicId: uploadPayload.filePublicId,
                 submittedAt: new Date().toISOString(),
                 status: 'submitted',
-                reflection,
+                reflection: '',
                 logs: weekLogs,
                 importedPdfUrl: uploadPayload.fileUrl,
                 importedPdfName: uploadPayload.fileName,
@@ -321,66 +300,9 @@ export default function ReportsPage() {
         }
     };
 
-    const handleExportPaperPDF = async () => {
-        if (!selectedWeek) return;
-        setGenerating(true);
-        try {
-            await generateUBWeeklyReportPDF({
-                logs: weekLogs,
-                weekLabel: selectedWeek.label,
-                reflection,
-                user: {
-                    name: user.fullName || user.name,
-                    companyName: user.companyName || user.company?.name,
-                    course: user.course,
-                    department: user.department,
-                },
-                totalRequiredHours: user.totalRequiredHours,
-            });
-            showToast({ kind: 'success', title: 'Exported', message: 'Paper-view weekly report PDF generated.' });
-        } catch (err) {
-            console.error('PDF generation failed:', err);
-            showToast({ kind: 'error', title: 'Export Failed', message: 'Could not generate PDF. Please try again.' });
-        }
-        setGenerating(false);
-    };
-
-    const handleExportSimplePDF = async () => {
-        if (!selectedWeek) return;
-        setGenerating(true);
-        try {
-            await generateSimpleWeeklyReportPDF({
-                logs: weekLogs,
-                weekLabel: selectedWeek.label,
-                reflection,
-                userName: user.fullName || user.name,
-            });
-            showToast({ kind: 'success', title: 'Exported', message: 'Simple weekly report PDF generated.' });
-        } catch (err) {
-            console.error('Simple PDF generation failed:', err);
-            showToast({ kind: 'error', title: 'Export Failed', message: 'Could not generate simple PDF. Please try again.' });
-        }
-        setGenerating(false);
-    };
-
     return (
         <div>
             <LogWorkModal open={showLogModal} onClose={() => setShowLogModal(false)} />
-
-            {paperViewOpen && (
-                <PaperViewModal
-                    open={paperViewOpen}
-                    onClose={() => setPaperViewOpen(false)}
-                    weeks={weeks}
-                    selectedWeekIdx={paperWeekIdx}
-                    setSelectedWeekIdx={setPaperWeekIdx}
-                    logs={logs}
-                    savedReports={savedReports}
-                    currentSelectedWeekIdx={selectedWeekIdx}
-                    currentReflection={reflection}
-                    user={user}
-                />
-            )}
             {/* Edit Modal */}
             {editingLog && (
                 <div className="modal-overlay" onClick={closeEditModal}>
@@ -577,44 +499,6 @@ export default function ReportsPage() {
                 </div>
             )}
 
-            {showExportOptions && (
-                <div className="modal-overlay" onClick={() => setShowExportOptions(false)}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460, padding: 28 }}>
-                        <div style={{ textAlign: 'center' }}>
-                            <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Choose Export Format</h3>
-                            <p style={{ fontSize: 14, color: 'var(--slate-400)', marginBottom: 24 }}>
-                                Export as full paper-view format or as a simple summary table.
-                            </p>
-                        </div>
-                        <div style={{ display: 'grid', gap: 12 }}>
-                            <button
-                                className="btn btn-primary"
-                                disabled={generating}
-                                onClick={async () => {
-                                    await handleExportPaperPDF();
-                                    setShowExportOptions(false);
-                                }}
-                            >
-                                {generating ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Download size={16} />} {generating ? 'Generating...' : 'Export Paper View PDF'}
-                            </button>
-                            <button
-                                className="btn btn-secondary"
-                                disabled={generating}
-                                onClick={async () => {
-                                    await handleExportSimplePDF();
-                                    setShowExportOptions(false);
-                                }}
-                            >
-                                {generating ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Download size={16} />} {generating ? 'Generating...' : 'Export Simple PDF'}
-                            </button>
-                            <button className="btn btn-ghost" disabled={generating} onClick={() => setShowExportOptions(false)}>
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* Content */}
             {activeTab === 'reports' ? (
                 // REPORTS TAB
@@ -626,20 +510,8 @@ export default function ReportsPage() {
                     selectedWeekIdx={selectedWeekIdx}
                     setSelectedWeekIdx={setSelectedWeekIdx}
                     showPreview={showPreview}
-                    generating={generating}
-                    onExportPDF={() => setShowExportOptions(true)}
-                    onOpenPaperView={() => {
-                        if (!selectedWeek) {
-                            showToast({ kind: 'error', title: 'No Week Selected', message: 'Add or select a week before opening Paper View.' });
-                            return;
-                        }
-                        setPaperWeekIdx(selectedWeekIdx);
-                        setPaperViewOpen(true);
-                    }}
                     onOpenLogModal={() => setShowLogModal(true)}
                     selectedWeekReport={currentSavedReport}
-                    reflection={reflection}
-                    setReflection={setReflection}
                     hoursRendered={hoursRendered}
                     setHoursRendered={setHoursRendered}
                     reportFile={reportFile}
@@ -699,13 +571,8 @@ type ReportsContentProps = {
     selectedWeekIdx: number;
     setSelectedWeekIdx: React.Dispatch<React.SetStateAction<number>>;
     showPreview: boolean;
-    generating: boolean;
-    onExportPDF: () => void;
-    onOpenPaperView: () => void;
     onOpenLogModal: () => void;
     selectedWeekReport: WeeklyReport | null;
-    reflection: string;
-    setReflection: React.Dispatch<React.SetStateAction<string>>;
     hoursRendered: string;
     setHoursRendered: React.Dispatch<React.SetStateAction<string>>;
     reportFile: File | null;
@@ -734,13 +601,8 @@ function ReportsContent({
     selectedWeekIdx,
     setSelectedWeekIdx,
     showPreview,
-    generating,
-    onExportPDF,
-    onOpenPaperView,
     onOpenLogModal,
     selectedWeekReport,
-    reflection,
-    setReflection,
     hoursRendered,
     setHoursRendered,
     reportFile,
@@ -915,34 +777,6 @@ function ReportsContent({
                         Compile your daily logs into professional weekly reports
                     </p>
                 </div>
-                <div id="report-top-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={onOpenPaperView}
-                        id="report-open-paper-view"
-                    >
-                        <Eye size={16} /> Open Paper View
-                    </button>
-                    <button
-                        type="button"
-                        className="btn btn-primary btn-sm"
-                        onClick={onExportPDF}
-                        disabled={generating}
-                        id="report-export-pdf"
-                    >
-                        {generating ? (
-                            <>
-                                <Loader2 size={16} className="spin-smooth btn-loading-icon" />
-                                Generating...
-                            </>
-                        ) : (
-                            <>
-                                <Download size={16} /> Export PDF
-                            </>
-                        )}
-                    </button>
-                </div>
             </div>
 
             {weeks.length === 0 ? (
@@ -1096,7 +930,7 @@ function ReportsContent({
                                 type="button"
                                 className="btn btn-primary"
                                 onClick={onSubmitWeeklyReport}
-                                disabled={submittingReport || generating || !selectedWeek || selectedWeek.status === 'submitted'}
+                                disabled={submittingReport || !selectedWeek || selectedWeek.status === 'submitted'}
                             >
                                 {submittingReport ? <Loader2 size={16} className="spin-smooth btn-loading-icon" /> : <Save size={16} />}
                                 {submittingReport ? 'Submitting...' : 'Submit Weekly Report'}
@@ -1177,19 +1011,6 @@ function ReportsContent({
                                 </tbody>
                             </table>
                         </div>
-                    </div>
-
-                    <div className="card" style={{ padding: 20 }}>
-                        <label className="input-label" style={{ marginBottom: 8, display: 'block' }}>
-                            Weekly Reflection
-                        </label>
-                        <textarea
-                            className="input textarea"
-                            value={reflection}
-                            onChange={(e) => setReflection(e.target.value)}
-                            placeholder="Write your weekly learning, challenges, and key takeaways."
-                            style={{ minHeight: 130, lineHeight: 1.65 }}
-                        />
                     </div>
 
                     {viewerReport && getViewerSrc(viewerReport) && (
