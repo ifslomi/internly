@@ -25,6 +25,8 @@ import {
     kickGroupMember,
     addGroupMember,
     renameGroupConversation,
+    leaveGroupConversation,
+    transferGroupOwnership,
     editChatMessage,
     unsendChatMessage,
     setMessageReaction,
@@ -55,6 +57,8 @@ import {
     Minimize2,
     UserMinus,
     Shield,
+    Crown,
+    LogOut,
     FolderOpen,
     Link2,
     FileText,
@@ -74,7 +78,7 @@ import { beginGlobalLoading } from '@/lib/global-loading';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const Cropper = dynamic(() => import('react-easy-crop').then(mod => mod.default), { ssr: false }) as React.ComponentType<any>;
 
-// ─── Crop helper ────────────────────────────────────────
+// G��G��G�� Crop helper G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��
 
 async function getCroppedImg(imageSrc: string, pixelCrop: Area, rotation = 0): Promise<Blob> {
     const image = await createImage(imageSrc);
@@ -129,7 +133,7 @@ function rotateSize(width: number, height: number, rotation: number) {
     };
 }
 
-// ─── Image Editor Modal ─────────────────────────────────
+// G��G��G�� Image Editor Modal G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��
 
 function ImageEditorModal({
     imageSrc,
@@ -246,7 +250,7 @@ function ImageEditorModal({
                             style={{ flex: 1, accentColor: 'var(--primary-500)' }}
                         />
                         <span style={{ color: 'var(--slate-400)', fontSize: 12, minWidth: 36, textAlign: 'right' }}>
-                            {rotation}°
+                            {rotation}-�
                         </span>
                     </div>
 
@@ -287,7 +291,7 @@ function ImageEditorModal({
                         background: 'var(--primary-500)', color: 'white', cursor: saving ? 'not-allowed' : 'pointer',
                         fontSize: 13, fontWeight: 600, opacity: saving ? 0.7 : 1,
                     }}>
-                        {saving ? 'Applying…' : 'Apply Crop'}
+                        {saving ? 'ApplyingGǪ' : 'Apply Crop'}
                     </button>
                 </div>
             </div>
@@ -295,7 +299,7 @@ function ImageEditorModal({
     );
 }
 
-// ─── Profile Modal ──────────────────────────────────────
+// G��G��G�� Profile Modal G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��
 
 function ProfileModal({ chatUser, onClose }: { chatUser: ChatUser | null; onClose: () => void }) {
     if (!chatUser) return null;
@@ -600,7 +604,7 @@ function ProfileModal({ chatUser, onClose }: { chatUser: ChatUser | null; onClos
     );
 }
 
-// ─── Image Preview Modal ────────────────────────────────
+// G��G��G�� Image Preview Modal G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��G��
 
 function ImagePreviewModal({
     images,
@@ -817,6 +821,7 @@ function ImagePreviewModal({
 // ─── Main Chat Page ─────────────────────────────────────
 
 export default function ChatPage() {
+    const SIDEBAR_OPEN_STORAGE_KEY = 'internly.chat.sidebarOpen';
     const { user } = useApp();
     const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
     const [authLoading, setAuthLoading] = useState(true);
@@ -867,11 +872,9 @@ export default function ChatPage() {
     const [groupSearchVisibleCount, setGroupSearchVisibleCount] = useState(80);
     const [creatingGroup, setCreatingGroup] = useState(false);
     // Nickname state
-    const [showNicknameModal, setShowNicknameModal] = useState(false);
     const [nicknameTarget, setNicknameTarget] = useState<string>('');
     const [nicknameValue, setNicknameValue] = useState('');
     const [savingNickname, setSavingNickname] = useState(false);
-    const [showMembersModal, setShowMembersModal] = useState(false);
     const [kickingUid, setKickingUid] = useState<string | null>(null);
     const [showAddMembersPanel, setShowAddMembersPanel] = useState(false);
     const [showRenameGroupPanel, setShowRenameGroupPanel] = useState(false);
@@ -881,11 +884,36 @@ export default function ChatPage() {
     const [addMemberResults, setAddMemberResults] = useState<ChatUser[]>([]);
     const [loadingAddMemberResults, setLoadingAddMemberResults] = useState(false);
     const [addingMemberUid, setAddingMemberUid] = useState<string | null>(null);
+    const [leavingGroup, setLeavingGroup] = useState(false);
+    const [transferOwnerUid, setTransferOwnerUid] = useState<string | null>(null);
+    const [transferringOwnerUid, setTransferringOwnerUid] = useState<string | null>(null);
     const [showMediaGallery, setShowMediaGallery] = useState(false);
-    const [mediaTab, setMediaTab] = useState<'images' | 'files' | 'links'>('images');
+    const [mediaTab, setMediaTab] = useState<'images' | 'files' | 'links' | 'nicknames' | 'group'>('images');
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [showChatMenu, setShowChatMenu] = useState(false);
+    const [memberActionsMenuUid, setMemberActionsMenuUid] = useState<string | null>(null);
     const chatMenuRef = React.useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        try {
+            const persisted = window.localStorage.getItem(SIDEBAR_OPEN_STORAGE_KEY);
+            if (persisted === '1') {
+                setShowMediaGallery(true);
+            } else if (persisted === '0') {
+                setShowMediaGallery(false);
+            }
+        } catch {
+            // Ignore storage errors and keep default state.
+        }
+    }, []);
+
+    useEffect(() => {
+        try {
+            window.localStorage.setItem(SIDEBAR_OPEN_STORAGE_KEY, showMediaGallery ? '1' : '0');
+        } catch {
+            // Ignore storage errors.
+        }
+    }, [showMediaGallery]);
 
     // ESC key to exit fullscreen
     useEffect(() => {
@@ -977,8 +1005,8 @@ export default function ChatPage() {
         };
     }, [currentUserId]);
 
-    const closeMembersModal = useCallback(() => {
-        setShowMembersModal(false);
+    const closeSidePanel = useCallback(() => {
+        setShowMediaGallery(false);
         setKickingUid(null);
         setShowAddMembersPanel(false);
         setShowRenameGroupPanel(false);
@@ -987,12 +1015,18 @@ export default function ChatPage() {
         setAddMemberSearchQuery('');
         setAddMemberResults([]);
         setAddingMemberUid(null);
+        setLeavingGroup(false);
+        setTransferOwnerUid(null);
+        setTransferringOwnerUid(null);
+        setMemberActionsMenuUid(null);
+        setNicknameTarget('');
+        setNicknameValue('');
     }, []);
 
     useEffect(() => {
-        if (!showMembersModal || !activeConversation?.isGroup) return;
+        if (!showMediaGallery || mediaTab !== 'group' || !activeConversation?.isGroup) return;
         setGroupRenameValue(activeConversation.groupName || '');
-    }, [showMembersModal, activeConversation?.id, activeConversation?.isGroup, activeConversation?.groupName]);
+    }, [showMediaGallery, mediaTab, activeConversation?.id, activeConversation?.isGroup, activeConversation?.groupName]);
 
     // Get the other user from a conversation (for 1:1 chats)
     const getOtherUser = useCallback((conv: Conversation) => {
@@ -1110,7 +1144,7 @@ export default function ChatPage() {
     }, [user, firebaseUser, currentUserId, showUserSearch, showGroupCreate, searchQuery, groupSearchQuery]);
 
     useEffect(() => {
-        if (!showMembersModal || !showAddMembersPanel || !activeConversation?.isGroup) return;
+        if (!showMediaGallery || mediaTab !== 'group' || !showAddMembersPanel || !activeConversation?.isGroup) return;
         if (currentUserId !== activeConversation.createdBy) return;
 
         let cancelled = false;
@@ -1154,7 +1188,8 @@ export default function ChatPage() {
             clearTimeout(timer);
         };
     }, [
-        showMembersModal,
+        showMediaGallery,
+        mediaTab,
         showAddMembersPanel,
         activeConversation?.id,
         activeConversation?.isGroup,
@@ -1383,11 +1418,17 @@ export default function ChatPage() {
         return files.reverse(); // newest first
     }, [messages, activeConversation]);
 
-    // Close media gallery & chat menu when switching conversations
+    // Keep sidebar state across chats; only close transient chat menu.
     useEffect(() => {
-        setShowMediaGallery(false);
         setShowChatMenu(false);
+        setMemberActionsMenuUid(null);
     }, [activeConversationId]);
+
+    useEffect(() => {
+        if (mediaTab === 'group' && activeConversation && !activeConversation.isGroup) {
+            setMediaTab('images');
+        }
+    }, [mediaTab, activeConversation?.id, activeConversation?.isGroup]);
 
     // Focus input when conversation opens & clear pending image
     useEffect(() => {
@@ -1503,7 +1544,7 @@ export default function ChatPage() {
         }
     };
 
-    const openNicknameModal = (targetUid: string) => {
+    const openNicknamesPanel = (targetUid: string) => {
         if (!activeConversation) return;
 
         const resolvedTargetUid = targetUid || (activeConversation.isGroup ? '' : getSoloConversationTargetUid(activeConversation));
@@ -1514,7 +1555,8 @@ export default function ChatPage() {
 
         setNicknameTarget(resolvedTargetUid);
         setNicknameValue(activeConversation.nicknames?.[resolvedTargetUid] || '');
-        setShowNicknameModal(true);
+        setShowMediaGallery(true);
+        setMediaTab('nicknames');
     };
 
     const handleSaveNickname = async () => {
@@ -1527,7 +1569,10 @@ export default function ChatPage() {
         setSavingNickname(true);
         try {
             await setNickname(activeConversationId, targetUid, nicknameValue);
-            setShowNicknameModal(false);
+            if (activeConversation.isGroup) {
+                setNicknameTarget('');
+                setNicknameValue('');
+            }
         } catch (err) {
             console.error('Failed to set nickname:', err);
             setChatError('Failed to set nickname.');
@@ -1555,6 +1600,44 @@ export default function ChatPage() {
             setChatError(message);
         } finally {
             setRenamingGroup(false);
+            endGlobalLoading();
+        }
+    };
+
+    const handleLeaveActiveGroup = async () => {
+        if (!activeConversationId || !activeConversation?.isGroup) return;
+
+        const endGlobalLoading = beginGlobalLoading();
+        setLeavingGroup(true);
+        try {
+            await leaveGroupConversation(activeConversationId);
+            if (activeConversationId === activeConversation?.id) {
+                setActiveConversationId(null);
+                setMessages([]);
+            }
+            closeSidePanel();
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Failed to leave group.';
+            setChatError(message);
+        } finally {
+            setLeavingGroup(false);
+            endGlobalLoading();
+        }
+    };
+
+    const handleTransferGroupOwner = async (targetUid: string) => {
+        if (!activeConversationId || !activeConversation?.isGroup) return;
+
+        const endGlobalLoading = beginGlobalLoading();
+        setTransferringOwnerUid(targetUid);
+        try {
+            await transferGroupOwnership(activeConversationId, targetUid);
+            setTransferOwnerUid(null);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Failed to transfer group ownership.';
+            setChatError(message);
+        } finally {
+            setTransferringOwnerUid(null);
             endGlobalLoading();
         }
     };
@@ -3151,18 +3234,17 @@ export default function ChatPage() {
                                     </>
                                 );
                             })()}
-                            {/* Chat menu dropdown */}
-                            <div ref={chatMenuRef} style={{ position: 'relative', flexShrink: 0 }}>
+                            <div style={{ position: 'relative', flexShrink: 0 }}>
                                 <button
-                                    onClick={() => setShowChatMenu(m => !m)}
-                                    title="Chat options"
+                                    onClick={() => setShowMediaGallery((open) => !open)}
+                                    title={showMediaGallery ? 'Close sidebar' : 'Open sidebar'}
                                     style={{
                                         width: 34,
                                         height: 34,
                                         borderRadius: 8,
-                                        background: showChatMenu ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.04)',
-                                        border: `1px solid ${showChatMenu ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.08)'}`,
-                                        color: showChatMenu ? 'var(--primary-400)' : 'var(--slate-400)',
+                                        background: showMediaGallery ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.04)',
+                                        border: `1px solid ${showMediaGallery ? 'rgba(16,185,129,0.3)' : 'rgba(255,255,255,0.08)'}`,
+                                        color: showMediaGallery ? 'var(--primary-400)' : 'var(--slate-400)',
                                         cursor: 'pointer',
                                         display: 'flex',
                                         alignItems: 'center',
@@ -3171,126 +3253,11 @@ export default function ChatPage() {
                                         transition: 'all 150ms',
                                         marginLeft: 4,
                                     }}
-                                    onMouseEnter={(e) => { if (!showChatMenu) { e.currentTarget.style.color = 'var(--primary-400)'; e.currentTarget.style.borderColor = 'rgba(16,185,129,0.3)'; } }}
-                                    onMouseLeave={(e) => { if (!showChatMenu) { e.currentTarget.style.color = 'var(--slate-400)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; } }}
+                                    onMouseEnter={(e) => { if (!showMediaGallery) { e.currentTarget.style.color = 'var(--primary-400)'; e.currentTarget.style.borderColor = 'rgba(16,185,129,0.3)'; } }}
+                                    onMouseLeave={(e) => { if (!showMediaGallery) { e.currentTarget.style.color = 'var(--slate-400)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; } }}
                                 >
                                     <MoreVertical size={16} />
                                 </button>
-                                {showChatMenu && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: 'calc(100% + 6px)',
-                                        right: 0,
-                                        background: 'var(--slate-800, #27272a)',
-                                        border: '1px solid rgba(255,255,255,0.1)',
-                                        borderRadius: 12,
-                                        padding: '6px 0',
-                                        minWidth: 180,
-                                        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-                                        zIndex: 100,
-                                    }}>
-                                        {/* Nicknames */}
-                                        <button
-                                            onClick={() => {
-                                                setShowChatMenu(false);
-                                                if (activeConversation?.isGroup) {
-                                                    openNicknameModal('');
-                                                } else {
-                                                    const otherId = activeConversation?.participants.find(p => p !== currentUserId) || '';
-                                                    openNicknameModal(otherId);
-                                                }
-                                            }}
-                                            style={{
-                                                width: '100%',
-                                                padding: '10px 16px',
-                                                background: 'none',
-                                                border: 'none',
-                                                color: 'var(--slate-300)',
-                                                fontSize: 13,
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 10,
-                                                transition: 'background 150ms',
-                                            }}
-                                            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-                                            onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
-                                        >
-                                            <Pencil size={15} style={{ opacity: 0.7 }} />
-                                            Nicknames
-                                        </button>
-                                        {/* Members (group only) */}
-                                        {activeConversation?.isGroup && (
-                                            <button
-                                                onClick={() => { setShowChatMenu(false); setShowMembersModal(true); }}
-                                                style={{
-                                                    width: '100%',
-                                                    padding: '10px 16px',
-                                                    background: 'none',
-                                                    border: 'none',
-                                                    color: 'var(--slate-300)',
-                                                    fontSize: 13,
-                                                    cursor: 'pointer',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    gap: 10,
-                                                    transition: 'background 150ms',
-                                                }}
-                                                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-                                                onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
-                                            >
-                                                <Users size={15} style={{ opacity: 0.7 }} />
-                                                Members
-                                            </button>
-                                        )}
-                                        {/* Media gallery */}
-                                        <button
-                                            onClick={() => { setShowChatMenu(false); setShowMediaGallery(g => !g); setMediaTab('images'); }}
-                                            style={{
-                                                width: '100%',
-                                                padding: '10px 16px',
-                                                background: 'none',
-                                                border: 'none',
-                                                color: showMediaGallery ? 'var(--primary-400)' : 'var(--slate-300)',
-                                                fontSize: 13,
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 10,
-                                                transition: 'background 150ms',
-                                            }}
-                                            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-                                            onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
-                                        >
-                                            <Grid3X3 size={15} style={{ opacity: 0.7 }} />
-                                            Media
-                                        </button>
-                                        {/* Divider */}
-                                        <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '4px 0' }} />
-                                        {/* Fullscreen */}
-                                        <button
-                                            onClick={() => { setShowChatMenu(false); setIsFullscreen(f => !f); }}
-                                            style={{
-                                                width: '100%',
-                                                padding: '10px 16px',
-                                                background: 'none',
-                                                border: 'none',
-                                                color: 'var(--slate-300)',
-                                                fontSize: 13,
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 10,
-                                                transition: 'background 150ms',
-                                            }}
-                                            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
-                                            onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
-                                        >
-                                            {isFullscreen ? <Minimize2 size={15} style={{ opacity: 0.7 }} /> : <Maximize2 size={15} style={{ opacity: 0.7 }} />}
-                                            {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-                                        </button>
-                                    </div>
-                                )}
                             </div>
                         </div>
 
@@ -4516,87 +4483,416 @@ export default function ChatPage() {
             {showMediaGallery && activeConversationId && activeConversation && (
                 <div
                     style={{
-                        width: 320,
-                        minWidth: 280,
+                        width: 'min(100%, 360px)',
+                        minWidth: 0,
                         borderLeft: '1px solid rgba(255,255,255,0.06)',
                         display: 'flex',
                         flexDirection: 'column',
-                        background: 'rgba(255,255,255,0.01)',
+                        background: '#1f2125',
                         overflow: 'hidden',
                     }}
                     className="chat-media-panel"
                 >
-                    {/* Gallery Header */}
+                    {/* Sidebar Header */}
                     <div style={{
-                        padding: '14px 16px',
+                        padding: '18px 16px 14px',
                         borderBottom: '1px solid rgba(255,255,255,0.06)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
+                        display: 'grid',
+                        justifyItems: 'center',
+                        gap: 10,
                     }}>
-                        <h3 style={{ fontSize: 15, fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <FolderOpen size={16} style={{ color: 'var(--primary-400)' }} />
-                            Shared Media
-                        </h3>
-                        <button
-                            onClick={() => setShowMediaGallery(false)}
-                            style={{ background: 'none', border: 'none', color: 'var(--slate-400)', cursor: 'pointer', padding: 4 }}
-                        >
-                            <X size={16} />
-                        </button>
+                        {(() => {
+                            const display = getConversationDisplay(activeConversation);
+                            const avatar = display.avatar;
+                            const label = display.name || 'Chat';
+                            return avatar ? (
+                                <img src={avatar} alt={label} style={{ width: 74, height: 74, borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.15)' }} />
+                            ) : (
+                                <div style={{ width: 74, height: 74, borderRadius: '50%', background: 'linear-gradient(135deg, #10b981, #34d399)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 28, fontWeight: 700 }}>
+                                    {label.charAt(0).toUpperCase()}
+                                </div>
+                            );
+                        })()}
+                        <p style={{ margin: 0, fontSize: 22, lineHeight: 1.2, fontWeight: 700, color: 'white', textAlign: 'center', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                            {getConversationDisplay(activeConversation).name}
+                        </p>
+                        <p style={{ margin: 0, fontSize: 12, color: 'var(--slate-400)' }}>
+                            {activeConversation.isGroup ? 'Group chat' : 'Direct message'}
+                        </p>
                     </div>
 
-                    {/* Tabs */}
+                    {/* Section Nav */}
                     <div style={{
-                        display: 'flex',
+                        display: 'grid',
+                        gap: 6,
+                        padding: 10,
                         borderBottom: '1px solid rgba(255,255,255,0.06)',
-                        padding: '0 8px',
                     }}>
                         {([
-                            { key: 'images' as const, label: 'Images', icon: <ImageIcon size={13} />, count: galleryImages.length },
-                            { key: 'files' as const, label: 'Files', icon: <FileText size={13} />, count: galleryFiles.length },
-                            { key: 'links' as const, label: 'Links', icon: <Link2 size={13} />, count: galleryLinks.length },
-                        ]).map(tab => (
+                            { key: 'nicknames' as const, label: 'Customize Chat', icon: <Pencil size={14} />, visible: true },
+                            { key: 'group' as const, label: 'Chat Members', icon: <Users size={14} />, visible: !!activeConversation.isGroup },
+                            { key: 'images' as const, label: 'Media, Files and Links', icon: <FolderOpen size={14} />, visible: true },
+                        ]).filter(tab => tab.visible !== false).map(tab => (
                             <button
                                 key={tab.key}
                                 onClick={() => setMediaTab(tab.key)}
                                 style={{
-                                    flex: 1,
-                                    padding: '10px 6px',
-                                    background: 'none',
-                                    border: 'none',
-                                    borderBottom: mediaTab === tab.key ? '2px solid var(--primary-400)' : '2px solid transparent',
-                                    color: mediaTab === tab.key ? 'var(--primary-400)' : 'var(--slate-500)',
+                                    width: '100%',
+                                    padding: '10px 12px',
+                                    background: mediaTab === tab.key ? 'rgba(255,255,255,0.1)' : 'transparent',
+                                    border: '1px solid rgba(255,255,255,0.08)',
+                                    borderRadius: 10,
+                                    color: mediaTab === tab.key ? 'white' : 'var(--slate-300)',
                                     cursor: 'pointer',
-                                    fontSize: 12,
+                                    fontSize: 13,
                                     fontWeight: 600,
                                     display: 'flex',
                                     alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: 4,
+                                    justifyContent: 'space-between',
+                                    gap: 8,
                                     transition: 'all 150ms',
                                 }}
                             >
-                                {tab.icon}
-                                {tab.label}
-                                {tab.count > 0 && (
-                                    <span style={{
-                                        fontSize: 10,
-                                        background: mediaTab === tab.key ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.06)',
-                                        color: mediaTab === tab.key ? 'var(--primary-400)' : 'var(--slate-500)',
-                                        padding: '1px 5px',
-                                        borderRadius: 6,
-                                        fontWeight: 700,
-                                    }}>
-                                        {tab.count}
-                                    </span>
-                                )}
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{tab.icon}{tab.label}</span>
+                                <ChevronRight size={14} style={{ opacity: 0.8 }} />
                             </button>
                         ))}
                     </div>
 
                     {/* Gallery Content */}
                     <div style={{ flex: 1, overflowY: 'auto', padding: 12 }} className="chat-messages-area">
+                        {(mediaTab === 'images' || mediaTab === 'files' || mediaTab === 'links') && (
+                            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+                                {([
+                                    { key: 'images' as const, label: 'Media' },
+                                    { key: 'files' as const, label: 'Files' },
+                                    { key: 'links' as const, label: 'Links' },
+                                ]).map((tab) => (
+                                    <button
+                                        key={tab.key}
+                                        onClick={() => setMediaTab(tab.key)}
+                                        style={{
+                                            flex: 1,
+                                            height: 32,
+                                            borderRadius: 9,
+                                            border: mediaTab === tab.key ? '1px solid rgba(16,185,129,0.45)' : '1px solid rgba(255,255,255,0.1)',
+                                            background: mediaTab === tab.key ? 'rgba(16,185,129,0.18)' : 'rgba(255,255,255,0.04)',
+                                            color: mediaTab === tab.key ? 'var(--primary-200)' : 'var(--slate-300)',
+                                            fontSize: 12,
+                                            fontWeight: 700,
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {mediaTab === 'nicknames' && (
+                            activeConversation.isGroup && !nicknameTarget ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                    {Array.from(new Set(activeConversation.participants)).map(uid => {
+                                        const details = activeConversation.participantDetails?.[uid];
+                                        const currentNickname = activeConversation.nicknames?.[uid] || '';
+                                        const isMe = uid === currentUserId;
+                                        return (
+                                            <div key={uid} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                                                {details?.profileImage ? (
+                                                    <img src={details.profileImage} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                                                ) : (
+                                                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg, #10b981, #34d399)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 12, color: 'white', flexShrink: 0 }}>
+                                                        {(details?.name || '?').charAt(0).toUpperCase()}
+                                                    </div>
+                                                )}
+                                                <div style={{ flex: 1, minWidth: 0 }}>
+                                                    <p style={{ fontSize: 13, fontWeight: 600, color: 'white', margin: 0 }}>{details?.name || 'Unknown'}{isMe ? ' (You)' : ''}</p>
+                                                    {currentNickname && <p style={{ fontSize: 11, color: 'var(--slate-400)', margin: '2px 0 0' }}>Nickname: {currentNickname}</p>}
+                                                </div>
+                                                <button
+                                                    onClick={() => { setNicknameTarget(uid); setNicknameValue(currentNickname); }}
+                                                    style={{
+                                                        padding: '5px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)',
+                                                        background: currentNickname ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.04)',
+                                                        color: currentNickname ? '#86efac' : 'var(--slate-400)', fontSize: 12, fontWeight: 500,
+                                                        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+                                                    }}
+                                                >
+                                                    <Pencil size={12} />{currentNickname ? 'Edit' : 'Set'}
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div>
+                                    <p style={{ fontSize: 13, color: 'var(--slate-400)', marginBottom: 12 }}>
+                                        Set a nickname for <strong style={{ color: 'white' }}>{activeConversation.participantDetails?.[nicknameTarget]?.name || 'this user'}</strong>
+                                        {nicknameTarget === currentUserId ? ' (yourself)' : ''}
+                                    </p>
+                                    <input
+                                        type="text"
+                                        placeholder="Enter nickname (leave empty to remove)"
+                                        value={nicknameValue}
+                                        onChange={(e) => setNicknameValue(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') void handleSaveNickname(); }}
+                                        style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: 'white', fontSize: 14, outline: 'none', marginBottom: 12 }}
+                                    />
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        {activeConversation.isGroup && (
+                                            <button
+                                                onClick={() => { setNicknameTarget(''); setNicknameValue(''); }}
+                                                style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.04)', color: 'var(--slate-400)', fontSize: 12, cursor: 'pointer' }}
+                                            >
+                                                Back
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => void handleSaveNickname()}
+                                            disabled={savingNickname}
+                                            style={{ flex: 1, padding: '8px 10px', borderRadius: 8, border: 'none', background: 'var(--primary-500)', color: 'white', fontSize: 12, cursor: savingNickname ? 'not-allowed' : 'pointer', opacity: savingNickname ? 0.7 : 1 }}
+                                        >
+                                            {savingNickname ? 'Saving...' : 'Save'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )
+                        )}
+
+                        {mediaTab === 'group' && activeConversation.isGroup && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                <div style={{ padding: 12, borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+                                        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'white' }}>Group</p>
+                                        <p style={{ margin: 0, fontSize: 11, color: 'var(--slate-500)' }}>{activeConversation.groupName || 'Unnamed Group'}</p>
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                        {currentUserId === activeConversation.createdBy && (
+                                            <button onClick={() => { setShowRenameGroupPanel((current) => !current); if (!showRenameGroupPanel) setGroupRenameValue(activeConversation.groupName || ''); }} style={{ height: 30, padding: '0 10px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.16)', background: showRenameGroupPanel ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)', color: showRenameGroupPanel ? 'white' : 'var(--slate-300)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700 }}>
+                                                <Pencil size={12} /> {showRenameGroupPanel ? 'Hide Rename' : 'Rename Group'}
+                                            </button>
+                                        )}
+                                        {currentUserId === activeConversation.createdBy && (
+                                            <button onClick={() => setShowAddMembersPanel((current) => !current)} style={{ height: 30, padding: '0 10px', borderRadius: 8, border: '1px solid rgba(16,185,129,0.24)', background: showAddMembersPanel ? 'rgba(16,185,129,0.16)' : 'rgba(255,255,255,0.04)', color: showAddMembersPanel ? 'var(--primary-300)' : 'var(--slate-300)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700 }}>
+                                                <Plus size={12} /> {showAddMembersPanel ? 'Hide Add' : 'Add Members'}
+                                            </button>
+                                        )}
+                                        <button onClick={() => void handleLeaveActiveGroup()} disabled={leavingGroup} style={{ height: 30, padding: '0 10px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.08)', color: '#f87171', cursor: leavingGroup ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, opacity: leavingGroup ? 0.7 : 1 }}>
+                                            {leavingGroup ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <LogOut size={12} />} {leavingGroup ? 'Leaving...' : 'Leave Group'}
+                                        </button>
+                                    </div>
+
+                                    {currentUserId === activeConversation.createdBy && showRenameGroupPanel && (
+                                        <div style={{ marginTop: 12, padding: 12, borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}>
+                                            <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'white' }}>Rename group</p>
+                                            <p style={{ margin: '4px 0 10px', fontSize: 11, color: 'var(--slate-400)' }}>This will post a system announcement to the conversation.</p>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <input
+                                                    value={groupRenameValue}
+                                                    onChange={(e) => setGroupRenameValue(e.target.value)}
+                                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleRenameActiveGroup(); } }}
+                                                    placeholder="Enter new group name..."
+                                                    style={{ flex: 1, minWidth: 0, padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.04)', color: 'white', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                                                />
+                                                <button
+                                                    onClick={() => void handleRenameActiveGroup()}
+                                                    disabled={renamingGroup || !groupRenameValue.trim()}
+                                                    style={{ height: 36, padding: '0 12px', borderRadius: 8, border: 'none', background: 'var(--primary-500)', color: 'white', fontSize: 11, fontWeight: 700, cursor: renamingGroup || !groupRenameValue.trim() ? 'not-allowed' : 'pointer', opacity: renamingGroup || !groupRenameValue.trim() ? 0.7 : 1, display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
+                                                >
+                                                    {renamingGroup ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Pencil size={13} />}
+                                                    {renamingGroup ? 'Renaming...' : 'Rename'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {currentUserId === activeConversation.createdBy && showAddMembersPanel && (
+                                        <div style={{ marginTop: 12, padding: 12, borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)' }}>
+                                            <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'white' }}>Add new members</p>
+                                            <p style={{ margin: '4px 0 10px', fontSize: 11, color: 'var(--slate-400)' }}>Search chat users who are not already in this group.</p>
+                                            <input
+                                                value={addMemberSearchQuery}
+                                                onChange={(e) => setAddMemberSearchQuery(e.target.value)}
+                                                placeholder="Search by name or email..."
+                                                style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.04)', color: 'white', fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
+                                            />
+                                            <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+                                                {loadingAddMemberResults ? (
+                                                    <p style={{ margin: 0, fontSize: 11, color: 'var(--slate-500)' }}>Loading members...</p>
+                                                ) : addMemberResults.length === 0 ? (
+                                                    <p style={{ margin: 0, fontSize: 11, color: 'var(--slate-500)' }}>No available members found.</p>
+                                                ) : (
+                                                    addMemberResults.slice(0, 8).map((candidate) => (
+                                                        <div key={candidate.uid} style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, padding: '8px 10px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(24,24,27,0.7)' }}>
+                                                            {candidate.profileImage ? (
+                                                                <img src={candidate.profileImage} alt="" style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                                                            ) : (
+                                                                <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg, #10b981, #34d399)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, color: 'white', flexShrink: 0 }}>
+                                                                    {(candidate.name || '?').charAt(0).toUpperCase()}
+                                                                </div>
+                                                            )}
+                                                            <div style={{ flex: 1, minWidth: 0, display: 'grid', gap: 2 }}>
+                                                                <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'white', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{candidate.name || 'Unknown'}</p>
+                                                                <p style={{ margin: 0, fontSize: 11, color: 'var(--slate-500)', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{candidate.email || 'No email'}</p>
+                                                            </div>
+                                                            <button onClick={() => void handleAddMemberToCurrentGroup(candidate)} disabled={addingMemberUid === candidate.uid} style={{ height: 30, padding: '0 10px', borderRadius: 8, border: 'none', background: 'var(--primary-500)', color: 'white', fontSize: 11, fontWeight: 700, cursor: addingMemberUid === candidate.uid ? 'not-allowed' : 'pointer', opacity: addingMemberUid === candidate.uid ? 0.7 : 1, flexShrink: 0 }}>
+                                                                {addingMemberUid === candidate.uid ? 'Adding...' : 'Add'}
+                                                            </button>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--slate-300)' }}>Members ({Array.from(new Set(activeConversation.participants)).length})</p>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    {Array.from(new Set(activeConversation.participants)).map(uid => {
+                                        const details = activeConversation.participantDetails?.[uid];
+                                        const isMe = uid === currentUserId;
+                                        const isOwner = uid === activeConversation.createdBy;
+                                        const iAmOwner = currentUserId === activeConversation.createdBy;
+                                        const nickname = activeConversation.nicknames?.[uid];
+                                        return (
+                                            <div key={uid} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 8px 8px 10px', borderRadius: 12, background: isOwner ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.03)', border: `1px solid ${isOwner ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.06)'}` }}>
+                                                {details?.profileImage ? (
+                                                    <img src={details.profileImage} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                                                ) : (
+                                                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: isOwner ? 'linear-gradient(135deg, #059669, #ec4899)' : 'linear-gradient(135deg, #10b981, #34d399)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14, color: 'white', flexShrink: 0 }}>
+                                                        {(details?.name || '?').charAt(0).toUpperCase()}
+                                                    </div>
+                                                )}
+                                                <div style={{ flex: 1, minWidth: 116 }}>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                                                        <p style={{ fontSize: 13, fontWeight: 600, color: 'white', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'normal' }}>{nickname || details?.name || 'Unknown'}{isMe ? ' (You)' : ''}</p>
+                                                        {isOwner && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 600, color: '#a78bfa', background: 'rgba(167,139,250,0.12)', padding: '2px 6px', borderRadius: 6, flexShrink: 0 }}><Shield size={10} /> Owner</span>}
+                                                    </div>
+                                                    {details?.email && <p style={{ fontSize: 11, color: 'var(--slate-600)', margin: 0, overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'normal' }}>{details.email}</p>}
+                                                </div>
+                                                <div style={{ position: 'relative', flexShrink: 0 }}>
+                                                    <button
+                                                        onClick={() => setMemberActionsMenuUid((current) => (current === uid ? null : uid))}
+                                                        title="Member actions"
+                                                        style={{
+                                                            width: 28,
+                                                            height: 28,
+                                                            borderRadius: 8,
+                                                            border: '1px solid rgba(255,255,255,0.1)',
+                                                            background: memberActionsMenuUid === uid ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)',
+                                                            color: 'var(--slate-300)',
+                                                            cursor: 'pointer',
+                                                            display: 'inline-flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                        }}
+                                                    >
+                                                        <MoreVertical size={14} />
+                                                    </button>
+
+                                                    {memberActionsMenuUid === uid && (
+                                                        <div
+                                                            style={{
+                                                                position: 'absolute',
+                                                                top: 'calc(100% + 6px)',
+                                                                right: 0,
+                                                                minWidth: 148,
+                                                                borderRadius: 10,
+                                                                border: '1px solid rgba(255,255,255,0.1)',
+                                                                background: '#1f2125',
+                                                                boxShadow: '0 12px 28px rgba(0,0,0,0.35)',
+                                                                overflow: 'hidden',
+                                                                zIndex: 30,
+                                                            }}
+                                                        >
+                                                            <button
+                                                                onClick={() => {
+                                                                    setMemberActionsMenuUid(null);
+                                                                    void handleViewProfile(uid);
+                                                                }}
+                                                                style={{ width: '100%', height: 32, padding: '0 10px', border: 'none', background: 'transparent', color: 'var(--slate-200)', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, textAlign: 'left' }}
+                                                            >
+                                                                <ExternalLink size={12} /> View Profile
+                                                            </button>
+
+                                                            <button
+                                                                onClick={() => {
+                                                                    setMemberActionsMenuUid(null);
+                                                                    openNicknamesPanel(uid);
+                                                                }}
+                                                                style={{ width: '100%', height: 32, padding: '0 10px', border: 'none', background: 'transparent', color: 'var(--slate-200)', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, textAlign: 'left' }}
+                                                            >
+                                                                <Pencil size={12} /> Nickname
+                                                            </button>
+
+                                                            {iAmOwner && !isMe && (
+                                                                <>
+                                                                    <div style={{ height: 1, background: 'rgba(255,255,255,0.08)' }} />
+                                                                    {transferOwnerUid === uid ? (
+                                                                        <button
+                                                                            onClick={() => void handleTransferGroupOwner(uid)}
+                                                                            disabled={transferringOwnerUid === uid}
+                                                                            style={{ width: '100%', height: 32, padding: '0 10px', border: 'none', background: 'transparent', color: '#c7d2fe', fontSize: 11, fontWeight: 600, cursor: transferringOwnerUid === uid ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, textAlign: 'left', opacity: transferringOwnerUid === uid ? 0.7 : 1 }}
+                                                                        >
+                                                                            {transferringOwnerUid === uid ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Crown size={12} />} {transferringOwnerUid === uid ? 'Moving...' : 'Confirm Owner'}
+                                                                        </button>
+                                                                    ) : (
+                                                                        <button
+                                                                            onClick={() => { setTransferOwnerUid(uid); setKickingUid(null); }}
+                                                                            style={{ width: '100%', height: 32, padding: '0 10px', border: 'none', background: 'transparent', color: '#c7d2fe', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, textAlign: 'left' }}
+                                                                        >
+                                                                            <Crown size={12} /> Make Owner
+                                                                        </button>
+                                                                    )}
+
+                                                                    {kickingUid === uid ? (
+                                                                        <button
+                                                                            onClick={async () => {
+                                                                                const endGlobalLoading = beginGlobalLoading();
+                                                                                try {
+                                                                                    await kickGroupMember(activeConversation.id, uid);
+                                                                                    setKickingUid(null);
+                                                                                    setMemberActionsMenuUid(null);
+                                                                                } catch (err) {
+                                                                                    console.error('Kick failed:', err);
+                                                                                    setChatError('Failed to remove member. Please try again.');
+                                                                                    setKickingUid(null);
+                                                                                } finally {
+                                                                                    endGlobalLoading();
+                                                                                }
+                                                                            }}
+                                                                            style={{ width: '100%', height: 32, padding: '0 10px', border: 'none', background: 'transparent', color: '#fca5a5', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, textAlign: 'left' }}
+                                                                        >
+                                                                            <UserMinus size={12} /> Confirm Remove
+                                                                        </button>
+                                                                    ) : (
+                                                                        <button
+                                                                            onClick={() => { setKickingUid(uid); setTransferOwnerUid(null); }}
+                                                                            style={{ width: '100%', height: 32, padding: '0 10px', border: 'none', background: 'transparent', color: '#fca5a5', fontSize: 11, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, textAlign: 'left' }}
+                                                                        >
+                                                                            <UserMinus size={12} /> Remove Member
+                                                                        </button>
+                                                                    )}
+
+                                                                    {(transferOwnerUid === uid || kickingUid === uid) && (
+                                                                        <button
+                                                                            onClick={() => { setTransferOwnerUid(null); setKickingUid(null); }}
+                                                                            style={{ width: '100%', height: 32, padding: '0 10px', border: 'none', background: 'transparent', color: 'var(--slate-400)', fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left' }}
+                                                                        >
+                                                                            Cancel
+                                                                        </button>
+                                                                    )}
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
                         {/* ── Images Tab ── */}
                         {mediaTab === 'images' && (
                             galleryImages.length === 0 ? (
@@ -5062,672 +5358,6 @@ export default function ChatPage() {
                 />
             )}
 
-            {/* Nickname Modal */}
-            {showNicknameModal && activeConversation && (
-                <div
-                    onClick={() => setShowNicknameModal(false)}
-                    style={{
-                        position: 'fixed',
-                        inset: 0,
-                        background: 'rgba(0,0,0,0.6)',
-                        backdropFilter: 'blur(8px)',
-                        WebkitBackdropFilter: 'blur(8px)',
-                        zIndex: 1000,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: 24,
-                        overflowY: 'auto',
-                    }}
-                >
-                    <div
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                            background: 'var(--slate-900)',
-                            border: '1px solid rgba(255,255,255,0.08)',
-                            borderRadius: 16,
-                            maxWidth: 400,
-                            width: '100%',
-                            maxHeight: 'calc(100dvh - 48px)',
-                            overflowY: 'auto',
-                            overflow: 'hidden',
-                        }}
-                    >
-                        <div style={{
-                            padding: '16px 20px',
-                            borderBottom: '1px solid rgba(255,255,255,0.06)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                        }}>
-                            <h3 style={{ fontSize: 16, fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <Pencil size={16} style={{ color: 'var(--primary-400)' }} />
-                                {activeConversation.isGroup && !nicknameTarget ? 'Set Nicknames' : 'Set Nickname'}
-                            </h3>
-                            <button
-                                onClick={() => setShowNicknameModal(false)}
-                                style={{ background: 'none', border: 'none', color: 'var(--slate-400)', cursor: 'pointer', padding: 4 }}
-                            >
-                                <X size={18} />
-                            </button>
-                        </div>
-
-                        <div style={{ padding: '16px 20px', maxHeight: '50vh', overflowY: 'auto' }}>
-                            {/* For group chats with no specific target, show all members */}
-                            {activeConversation.isGroup && !nicknameTarget ? (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                    {Array.from(new Set(activeConversation.participants)).map(uid => {
-                                        const details = activeConversation.participantDetails?.[uid];
-                                        const currentNickname = activeConversation.nicknames?.[uid] || '';
-                                        const isMe = uid === currentUserId;
-                                        return (
-                                            <div key={uid} style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 10,
-                                                padding: '10px 14px',
-                                                borderRadius: 12,
-                                                background: 'rgba(255,255,255,0.03)',
-                                                border: '1px solid rgba(255,255,255,0.06)',
-                                            }}>
-                                                {details?.profileImage ? (
-                                                    <img src={details.profileImage} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
-                                                ) : (
-                                                    <div style={{
-                                                        width: 32, height: 32, borderRadius: '50%',
-                                                        background: 'linear-gradient(135deg, #10b981, #34d399)',
-                                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                        fontWeight: 700, fontSize: 12, color: 'white', flexShrink: 0,
-                                                    }}>
-                                                        {(details?.name || '?').charAt(0).toUpperCase()}
-                                                    </div>
-                                                )}
-                                                <div style={{ flex: 1, minWidth: 0 }}>
-                                                    <p style={{ fontSize: 13, fontWeight: 600, color: 'white', margin: 0 }}>
-                                                        {details?.name || 'Unknown'}{isMe ? ' (You)' : ''}
-                                                    </p>
-                                                    {currentNickname && (
-                                                        <p style={{
-                                                            fontSize: 11,
-                                                            color: 'var(--slate-400)',
-                                                            margin: '2px 0 0',
-                                                            whiteSpace: 'nowrap',
-                                                            overflow: 'hidden',
-                                                            textOverflow: 'ellipsis',
-                                                        }}>
-                                                            Nickname: {currentNickname}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                                <button
-                                                    onClick={() => {
-                                                        setNicknameTarget(uid);
-                                                        setNicknameValue(currentNickname);
-                                                    }}
-                                                    style={{
-                                                        padding: '5px 10px',
-                                                        borderRadius: 6,
-                                                        border: '1px solid rgba(255,255,255,0.1)',
-                                                        background: currentNickname ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.04)',
-                                                        color: currentNickname ? '#86efac' : 'var(--slate-400)',
-                                                        fontSize: 12,
-                                                        fontWeight: 500,
-                                                        cursor: 'pointer',
-                                                        transition: 'all 150ms',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: 6,
-                                                    }}
-                                                >
-                                                    <Pencil size={12} />
-                                                    {currentNickname ? 'Edit' : 'Set'}
-                                                </button>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ) : (
-                                /* Single user nickname edit */
-                                <div>
-                                    <p style={{ fontSize: 13, color: 'var(--slate-400)', marginBottom: 12 }}>
-                                        Set a nickname for <strong style={{ color: 'white' }}>
-                                            {activeConversation.participantDetails?.[nicknameTarget]?.name || 'this user'}
-                                        </strong>
-                                        {nicknameTarget === currentUserId ? ' (yourself)' : ''}
-                                    </p>
-                                    <input
-                                        type="text"
-                                        placeholder="Enter nickname (leave empty to remove)"
-                                        value={nicknameValue}
-                                        onChange={(e) => setNicknameValue(e.target.value)}
-                                        autoFocus
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') handleSaveNickname();
-                                        }}
-                                        style={{
-                                            width: '100%',
-                                            padding: '10px 14px',
-                                            borderRadius: 10,
-                                            border: '1px solid rgba(255,255,255,0.1)',
-                                            background: 'rgba(255,255,255,0.04)',
-                                            color: 'white',
-                                            fontSize: 14,
-                                            outline: 'none',
-                                            marginBottom: 16,
-                                        }}
-                                    />
-                                    <div style={{ display: 'flex', gap: 8 }}>
-                                        {activeConversation.isGroup && (
-                                            <button
-                                                onClick={() => { setNicknameTarget(''); setNicknameValue(''); }}
-                                                style={{
-                                                    flex: 1,
-                                                    padding: '10px',
-                                                    borderRadius: 10,
-                                                    border: '1px solid rgba(255,255,255,0.08)',
-                                                    background: 'rgba(255,255,255,0.04)',
-                                                    color: 'var(--slate-400)',
-                                                    fontSize: 13,
-                                                    fontWeight: 600,
-                                                    cursor: 'pointer',
-                                                }}
-                                            >
-                                                Back
-                                            </button>
-                                        )}
-                                        <button
-                                            onClick={handleSaveNickname}
-                                            disabled={savingNickname}
-                                            style={{
-                                                flex: 1,
-                                                padding: '10px',
-                                                borderRadius: 10,
-                                                border: 'none',
-                                                background: 'linear-gradient(135deg, #10b981, #059669)',
-                                                color: 'white',
-                                                fontSize: 13,
-                                                fontWeight: 600,
-                                                cursor: savingNickname ? 'not-allowed' : 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                gap: 6,
-                                                opacity: savingNickname ? 0.7 : 1,
-                                            }}
-                                        >
-                                            {savingNickname ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Check size={14} />}
-                                            {savingNickname ? 'Saving...' : 'Save'}
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Members Modal (Group Chat) */}
-            {showMembersModal && activeConversation?.isGroup && (
-                <div
-                    onClick={closeMembersModal}
-                    style={{
-                        position: 'fixed',
-                        inset: 0,
-                        background: 'rgba(0,0,0,0.6)',
-                        backdropFilter: 'blur(8px)',
-                        WebkitBackdropFilter: 'blur(8px)',
-                        zIndex: 1000,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: 24,
-                        overflowY: 'auto',
-                    }}
-                >
-                    <div
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                            background: 'var(--slate-900)',
-                            border: '1px solid rgba(255,255,255,0.08)',
-                            borderRadius: 16,
-                            maxWidth: 560,
-                            width: '100%',
-                            maxHeight: 'calc(100dvh - 48px)',
-                            overflowY: 'auto',
-                            overflow: 'hidden',
-                        }}
-                    >
-                        <div style={{
-                            padding: '16px 20px',
-                            borderBottom: '1px solid rgba(255,255,255,0.06)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                        }}>
-                            <h3 style={{ fontSize: 16, fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <Users size={16} style={{ color: 'var(--primary-400)' }} />
-                                Group Members ({Array.from(new Set(activeConversation.participants)).length})
-                            </h3>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                {currentUserId === activeConversation.createdBy && (
-                                    <button
-                                        onClick={() => {
-                                            setShowRenameGroupPanel((current) => !current);
-                                            if (!showRenameGroupPanel) {
-                                                setGroupRenameValue(activeConversation.groupName || '');
-                                            }
-                                        }}
-                                        style={{
-                                            height: 30,
-                                            padding: '0 10px',
-                                            borderRadius: 8,
-                                            border: '1px solid rgba(255,255,255,0.16)',
-                                            background: showRenameGroupPanel ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)',
-                                            color: showRenameGroupPanel ? 'white' : 'var(--slate-300)',
-                                            cursor: 'pointer',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: 6,
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                        }}
-                                    >
-                                        <Pencil size={12} /> {showRenameGroupPanel ? 'Hide Rename' : 'Rename Group'}
-                                    </button>
-                                )}
-                                {currentUserId === activeConversation.createdBy && (
-                                    <button
-                                        onClick={() => setShowAddMembersPanel((current) => !current)}
-                                        style={{
-                                            height: 30,
-                                            padding: '0 10px',
-                                            borderRadius: 8,
-                                            border: '1px solid rgba(16,185,129,0.24)',
-                                            background: showAddMembersPanel ? 'rgba(16,185,129,0.16)' : 'rgba(255,255,255,0.04)',
-                                            color: showAddMembersPanel ? 'var(--primary-300)' : 'var(--slate-300)',
-                                            cursor: 'pointer',
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: 6,
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                        }}
-                                    >
-                                        <Plus size={12} /> {showAddMembersPanel ? 'Hide Add' : 'Add Members'}
-                                    </button>
-                                )}
-                                <button
-                                    onClick={closeMembersModal}
-                                    style={{ background: 'none', border: 'none', color: 'var(--slate-400)', cursor: 'pointer', padding: 4 }}
-                                >
-                                    <X size={18} />
-                                </button>
-                            </div>
-                        </div>
-
-                        <div style={{ padding: '12px 20px', maxHeight: '50vh', overflowY: 'auto' }}>
-                            {currentUserId === activeConversation.createdBy && showRenameGroupPanel && (
-                                <div
-                                    style={{
-                                        marginBottom: 12,
-                                        padding: 12,
-                                        borderRadius: 12,
-                                        border: '1px solid rgba(255,255,255,0.08)',
-                                        background: 'rgba(255,255,255,0.03)',
-                                    }}
-                                >
-                                    <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'white' }}>Rename group</p>
-                                    <p style={{ margin: '4px 0 10px', fontSize: 11, color: 'var(--slate-400)' }}>
-                                        This will post a system announcement to the conversation.
-                                    </p>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <input
-                                            value={groupRenameValue}
-                                            onChange={(e) => setGroupRenameValue(e.target.value)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    e.preventDefault();
-                                                    void handleRenameActiveGroup();
-                                                }
-                                            }}
-                                            placeholder="Enter new group name..."
-                                            style={{
-                                                flex: 1,
-                                                minWidth: 0,
-                                                padding: '10px 12px',
-                                                borderRadius: 10,
-                                                border: '1px solid rgba(255,255,255,0.08)',
-                                                background: 'rgba(255,255,255,0.04)',
-                                                color: 'white',
-                                                fontSize: 13,
-                                                outline: 'none',
-                                                boxSizing: 'border-box',
-                                            }}
-                                        />
-                                        <button
-                                            onClick={() => void handleRenameActiveGroup()}
-                                            disabled={renamingGroup || !groupRenameValue.trim()}
-                                            style={{
-                                                height: 36,
-                                                padding: '0 12px',
-                                                borderRadius: 8,
-                                                border: 'none',
-                                                background: 'var(--primary-500)',
-                                                color: 'white',
-                                                fontSize: 11,
-                                                fontWeight: 700,
-                                                cursor: renamingGroup || !groupRenameValue.trim() ? 'not-allowed' : 'pointer',
-                                                opacity: renamingGroup || !groupRenameValue.trim() ? 0.7 : 1,
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: 6,
-                                                flexShrink: 0,
-                                            }}
-                                        >
-                                            {renamingGroup ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Pencil size={13} />}
-                                            {renamingGroup ? 'Renaming...' : 'Rename'}
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {currentUserId === activeConversation.createdBy && showAddMembersPanel && (
-                                <div
-                                    style={{
-                                        marginBottom: 14,
-                                        padding: 12,
-                                        borderRadius: 12,
-                                        border: '1px solid rgba(255,255,255,0.08)',
-                                        background: 'rgba(255,255,255,0.03)',
-                                    }}
-                                >
-                                    <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'white' }}>Add new members</p>
-                                    <p style={{ margin: '4px 0 10px', fontSize: 11, color: 'var(--slate-400)' }}>
-                                        Search chat users who are not already in this group.
-                                    </p>
-                                    <input
-                                        value={addMemberSearchQuery}
-                                        onChange={(e) => setAddMemberSearchQuery(e.target.value)}
-                                        placeholder="Search by name or email..."
-                                        style={{
-                                            width: '100%',
-                                            padding: '10px 12px',
-                                            borderRadius: 10,
-                                            border: '1px solid rgba(255,255,255,0.08)',
-                                            background: 'rgba(255,255,255,0.04)',
-                                            color: 'white',
-                                            fontSize: 13,
-                                            outline: 'none',
-                                            boxSizing: 'border-box',
-                                        }}
-                                    />
-                                    <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
-                                        {loadingAddMemberResults ? (
-                                            <p style={{ margin: 0, fontSize: 11, color: 'var(--slate-500)' }}>Loading members...</p>
-                                        ) : addMemberResults.length === 0 ? (
-                                            <p style={{ margin: 0, fontSize: 11, color: 'var(--slate-500)' }}>No available members found.</p>
-                                        ) : (
-                                            addMemberResults.slice(0, 8).map((candidate) => (
-                                                <div
-                                                    key={candidate.uid}
-                                                    style={{
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        gap: 10,
-                                                        minWidth: 0,
-                                                        padding: '8px 10px',
-                                                        borderRadius: 10,
-                                                        border: '1px solid rgba(255,255,255,0.06)',
-                                                        background: 'rgba(24,24,27,0.7)',
-                                                    }}
-                                                >
-                                                    {candidate.profileImage ? (
-                                                        <img src={candidate.profileImage} alt="" style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
-                                                    ) : (
-                                                        <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg, #10b981, #34d399)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, color: 'white', flexShrink: 0 }}>
-                                                            {(candidate.name || '?').charAt(0).toUpperCase()}
-                                                        </div>
-                                                    )}
-                                                    <div style={{ flex: 1, minWidth: 0, display: 'grid', gap: 2 }}>
-                                                        <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'white', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
-                                                            {candidate.name || 'Unknown'}
-                                                        </p>
-                                                        <p style={{ margin: 0, fontSize: 11, color: 'var(--slate-500)', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
-                                                            {candidate.email || 'No email'}
-                                                        </p>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => void handleAddMemberToCurrentGroup(candidate)}
-                                                        disabled={addingMemberUid === candidate.uid}
-                                                        style={{
-                                                            height: 30,
-                                                            padding: '0 10px',
-                                                            borderRadius: 8,
-                                                            border: 'none',
-                                                            background: 'var(--primary-500)',
-                                                            color: 'white',
-                                                            fontSize: 11,
-                                                            fontWeight: 700,
-                                                            cursor: addingMemberUid === candidate.uid ? 'not-allowed' : 'pointer',
-                                                            opacity: addingMemberUid === candidate.uid ? 0.7 : 1,
-                                                            flexShrink: 0,
-                                                        }}
-                                                    >
-                                                        {addingMemberUid === candidate.uid ? 'Adding...' : 'Add'}
-                                                    </button>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                {Array.from(new Set(activeConversation.participants)).map(uid => {
-                                    const details = activeConversation.participantDetails?.[uid];
-                                    const isMe = uid === currentUserId;
-                                    const isCreator = uid === activeConversation.createdBy;
-                                    const iAmCreator = currentUserId === activeConversation.createdBy;
-                                    const nickname = activeConversation.nicknames?.[uid];
-
-                                    return (
-                                        <div key={uid} style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 10,
-                                            padding: '9px 10px 9px 12px',
-                                            borderRadius: 12,
-                                            background: isCreator ? 'rgba(16,185,129,0.06)' : 'rgba(255,255,255,0.03)',
-                                            border: `1px solid ${isCreator ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.06)'}`,
-                                        }}>
-                                            {details?.profileImage ? (
-                                                <img src={details.profileImage} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
-                                            ) : (
-                                                <div style={{
-                                                    width: 36, height: 36, borderRadius: '50%',
-                                                    background: isCreator
-                                                        ? 'linear-gradient(135deg, #059669, #ec4899)'
-                                                        : 'linear-gradient(135deg, #10b981, #34d399)',
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    fontWeight: 700, fontSize: 14, color: 'white', flexShrink: 0,
-                                                }}>
-                                                    {(details?.name || '?').charAt(0).toUpperCase()}
-                                                </div>
-                                            )}
-                                            <button
-                                                onClick={() => {
-                                                    closeMembersModal();
-                                                    void handleViewProfile(uid);
-                                                }}
-                                                style={{
-                                                    flex: 1,
-                                                    minWidth: 0,
-                                                    background: 'none',
-                                                    border: 'none',
-                                                    padding: 0,
-                                                    textAlign: 'left',
-                                                    cursor: 'pointer',
-                                                }}
-                                                title={isMe ? 'View your profile' : `View ${(details?.name || 'member')}'s profile`}
-                                            >
-                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, minWidth: 0 }}>
-                                                    <p style={{
-                                                        fontSize: 13, fontWeight: 600, color: 'white', margin: 0,
-                                                        overflowWrap: 'anywhere', wordBreak: 'break-word', whiteSpace: 'normal',
-                                                    }}>
-                                                        {nickname || details?.name || 'Unknown'}
-                                                        {isMe ? ' (You)' : ''}
-                                                    </p>
-                                                    {isCreator && (
-                                                        <span style={{
-                                                            display: 'inline-flex', alignItems: 'center', gap: 3,
-                                                            fontSize: 10, fontWeight: 600, color: '#a78bfa',
-                                                            background: 'rgba(167,139,250,0.12)',
-                                                            padding: '2px 6px', borderRadius: 6,
-                                                            flexShrink: 0,
-                                                        }}>
-                                                            <Shield size={10} /> Admin
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                {nickname && details?.name && (
-                                                    <p style={{ fontSize: 11, color: 'var(--slate-500)', margin: 0 }}>
-                                                        {details.name}
-                                                    </p>
-                                                )}
-                                                {details?.email && (
-                                                    <p style={{
-                                                        fontSize: 11,
-                                                        color: 'var(--slate-600)',
-                                                        margin: 0,
-                                                        overflowWrap: 'anywhere',
-                                                        wordBreak: 'break-word',
-                                                        whiteSpace: 'normal',
-                                                    }}>
-                                                        {details.email}
-                                                    </p>
-                                                )}
-                                            </button>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                                                <button
-                                                    onClick={() => {
-                                                        closeMembersModal();
-                                                        void handleViewProfile(uid);
-                                                    }}
-                                                    title={isMe ? 'View your profile' : `View ${(details?.name || 'member')}'s profile`}
-                                                    style={{
-                                                        height: 30,
-                                                        padding: '0 10px',
-                                                        borderRadius: 8,
-                                                        border: '1px solid rgba(255,255,255,0.1)',
-                                                        background: 'rgba(255,255,255,0.04)',
-                                                        color: 'var(--slate-300)',
-                                                        cursor: 'pointer',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        gap: 5,
-                                                        fontSize: 11,
-                                                        fontWeight: 600,
-                                                        transition: 'all 150ms',
-                                                    }}
-                                                    onMouseEnter={(e) => {
-                                                        e.currentTarget.style.background = 'rgba(16,185,129,0.12)';
-                                                        e.currentTarget.style.borderColor = 'rgba(16,185,129,0.28)';
-                                                        e.currentTarget.style.color = 'var(--primary-300)';
-                                                    }}
-                                                    onMouseLeave={(e) => {
-                                                        e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-                                                        e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
-                                                        e.currentTarget.style.color = 'var(--slate-300)';
-                                                    }}
-                                                >
-                                                    <ExternalLink size={12} /> View
-                                                </button>
-
-                                                {iAmCreator && !isMe && (
-                                                    kickingUid === uid ? (
-                                                        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                                                        <button
-                                                            onClick={async () => {
-                                                                const endGlobalLoading = beginGlobalLoading();
-                                                                try {
-                                                                    await kickGroupMember(activeConversation.id, uid);
-                                                                    setKickingUid(null);
-                                                                    if (activeConversation.participants.length <= 2) {
-                                                                        closeMembersModal();
-                                                                    }
-                                                                } catch (err) {
-                                                                    console.error('Kick failed:', err);
-                                                                    setChatError('Failed to remove member. Please try again.');
-                                                                    setKickingUid(null);
-                                                                } finally {
-                                                                    endGlobalLoading();
-                                                                }
-                                                            }}
-                                                            style={{
-                                                                padding: '5px 10px', borderRadius: 6,
-                                                                border: 'none',
-                                                                background: 'rgba(239,68,68,0.9)',
-                                                                color: 'white', fontSize: 11, fontWeight: 600,
-                                                                cursor: 'pointer',
-                                                            }}
-                                                        >
-                                                            Confirm
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setKickingUid(null)}
-                                                            style={{
-                                                                padding: '5px 10px', borderRadius: 6,
-                                                                border: '1px solid rgba(255,255,255,0.1)',
-                                                                background: 'rgba(255,255,255,0.04)',
-                                                                color: 'var(--slate-400)', fontSize: 11, fontWeight: 600,
-                                                                cursor: 'pointer',
-                                                            }}
-                                                        >
-                                                            Cancel
-                                                        </button>
-                                                    </div>
-                                                    ) : (
-                                                        <button
-                                                            onClick={() => setKickingUid(uid)}
-                                                            title={`Remove ${details?.name || 'member'}`}
-                                                            style={{
-                                                                width: 30, height: 30, borderRadius: 8,
-                                                                background: 'rgba(239,68,68,0.08)',
-                                                                border: '1px solid rgba(239,68,68,0.15)',
-                                                                color: '#f87171',
-                                                                cursor: 'pointer',
-                                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                                flexShrink: 0,
-                                                                transition: 'all 150ms',
-                                                            }}
-                                                            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.4)'; }}
-                                                            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; e.currentTarget.style.borderColor = 'rgba(239,68,68,0.15)'; }}
-                                                        >
-                                                            <UserMinus size={14} />
-                                                        </button>
-                                                    )
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            {currentUserId !== activeConversation.createdBy && (
-                                <p style={{
-                                    fontSize: 12, color: 'var(--slate-500)', marginTop: 12, textAlign: 'center',
-                                    fontStyle: 'italic',
-                                }}>
-                                    Only the group admin can add or remove members
-                                </p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* Responsive CSS */}
             <style>{`
                 @keyframes spin { to { transform: rotate(360deg); } }
@@ -5758,12 +5388,18 @@ export default function ChatPage() {
                     }
                     .chat-right-panel {
                         display: ${activeConversationId ? 'flex' : 'none'} !important;
+                        position: relative !important;
                     }
                     .chat-back-btn {
                         display: flex !important;
                     }
                     .chat-media-panel {
-                        display: none !important;
+                        position: absolute !important;
+                        inset: 0 !important;
+                        width: 100% !important;
+                        min-width: 0 !important;
+                        border-left: none !important;
+                        z-index: 40 !important;
                     }
                 }
             `}</style>

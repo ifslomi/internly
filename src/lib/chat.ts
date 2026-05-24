@@ -73,11 +73,55 @@ export interface Conversation {
     groupName?: string;
     groupAvatar?: string;
     createdBy?: string;
+    participantJoinedAt?: Record<string, Timestamp>;
     nicknames?: Record<string, string>;
     typing?: Record<string, Timestamp>;
     lastMessageType?: 'text' | 'attachments' | 'unsent';
     lastAttachmentImageCount?: number;
     lastAttachmentFileCount?: number;
+}
+
+function getParticipantSortIdentity(
+    participantDetails: Record<string, { name: string; email: string; profileImage?: string }> | undefined,
+    uid: string,
+) {
+    const details = participantDetails?.[uid];
+    const name = (details?.name || '').trim();
+    const email = (details?.email || '').trim();
+    return {
+        name,
+        email,
+        uid: (uid || '').trim(),
+    };
+}
+
+function pickNextGroupOwner(
+    participants: string[],
+    participantDetails: Record<string, { name: string; email: string; profileImage?: string }> | undefined,
+    participantJoinedAt: Record<string, Timestamp> | undefined,
+) {
+    const candidates = Array.from(new Set(participants || [])).filter(Boolean);
+    if (candidates.length === 0) return '';
+
+    candidates.sort((a, b) => {
+        const joinedAtA = participantJoinedAt?.[a]?.toMillis?.() ?? Number.POSITIVE_INFINITY;
+        const joinedAtB = participantJoinedAt?.[b]?.toMillis?.() ?? Number.POSITIVE_INFINITY;
+
+        if (joinedAtA !== joinedAtB) return joinedAtA - joinedAtB;
+
+        const identityA = getParticipantSortIdentity(participantDetails, a);
+        const identityB = getParticipantSortIdentity(participantDetails, b);
+
+        const nameCompare = identityA.name.localeCompare(identityB.name, undefined, { numeric: true, sensitivity: 'base' });
+        if (nameCompare !== 0) return nameCompare;
+
+        const emailCompare = identityA.email.localeCompare(identityB.email, undefined, { numeric: true, sensitivity: 'base' });
+        if (emailCompare !== 0) return emailCompare;
+
+        return identityA.uid.localeCompare(identityB.uid, undefined, { numeric: true, sensitivity: 'base' });
+    });
+
+    return candidates[0];
 }
 
 function summarizeConversationPreview(messageData: {
@@ -535,6 +579,7 @@ export async function createGroupConversation(
         },
     };
     const unreadCount: Record<string, number> = { [currentUid]: 0 };
+    const participantJoinedAt: Record<string, unknown> = { [currentUid]: serverTimestamp() };
 
     for (const m of uniqueMembers) {
         participantDetails[m.uid] = {
@@ -543,6 +588,7 @@ export async function createGroupConversation(
             profileImage: m.profileImage || null as unknown as undefined,
         };
         unreadCount[m.uid] = 0;
+        participantJoinedAt[m.uid] = serverTimestamp();
     }
 
     const conversationRef = await addDoc(collection(db, 'conversations'), {
@@ -552,6 +598,7 @@ export async function createGroupConversation(
         lastMessageTime: serverTimestamp(),
         lastMessageSenderId: null,
         unreadCount,
+        participantJoinedAt,
         isGroup: true,
         groupName,
         groupAvatar: null,
@@ -867,7 +914,7 @@ export async function kickGroupMember(
 
     const data = convSnap.data();
     if (data.createdBy !== effectiveUid) {
-        throw new Error('Only the group creator can kick members');
+        throw new Error('Only the group owner can kick members');
     }
     if (targetUid === effectiveUid) {
         throw new Error('You cannot kick yourself');
@@ -883,6 +930,7 @@ export async function kickGroupMember(
         [`unreadCount.${targetUid}`]: deleteField(),
         [`nicknames.${targetUid}`]: deleteField(),
         [`typing.${targetUid}`]: deleteField(),
+        [`participantJoinedAt.${targetUid}`]: deleteField(),
     };
 
     await updateDoc(convRef, updates);
@@ -922,7 +970,7 @@ export async function addGroupMember(
     const data = convSnap.data();
     if (!data.isGroup) throw new Error('Can only add members to group chats');
     if (data.createdBy !== effectiveUid) {
-        throw new Error('Only the group creator can add members');
+        throw new Error('Only the group owner can add members');
     }
     const actorEmail = (
         data.participantDetails?.[effectiveUid]?.email ||
@@ -944,6 +992,7 @@ export async function addGroupMember(
             email: member.email || '',
             profileImage: member.profileImage || null,
         },
+        [`participantJoinedAt.${member.uid}`]: serverTimestamp(),
         [`unreadCount.${member.uid}`]: 0,
     });
 
@@ -1032,7 +1081,7 @@ export async function renameGroupConversation(
     const data = convSnap.data();
     if (!data.isGroup) throw new Error('Can only rename group chats');
     if (data.createdBy !== effectiveUid) {
-        throw new Error('Only the group creator can rename this group');
+        throw new Error('Only the group owner can rename this group');
     }
 
     const trimmedName = nextGroupName.trim();
@@ -1047,6 +1096,115 @@ export async function renameGroupConversation(
 
     const actorName = data.participantDetails?.[effectiveUid]?.name || 'Group admin';
     const systemText = `${actorName} renamed the group to "${trimmedName}"`;
+
+    await addDoc(collection(db, 'conversations', conversationId, 'messages'), {
+        senderId: 'system',
+        text: systemText,
+        imageUrl: null,
+        timestamp: serverTimestamp(),
+        read: true,
+        status: 'seen',
+        readBy: {},
+    });
+
+    await updateDoc(convRef, {
+        lastMessage: systemText,
+        lastMessageTime: serverTimestamp(),
+        lastMessageSenderId: null,
+    });
+}
+
+export async function transferGroupOwnership(
+    conversationId: string,
+    nextOwnerUid: string,
+): Promise<void> {
+    const effectiveUid = auth.currentUser?.uid;
+    if (!effectiveUid) throw new Error('Not authenticated');
+
+    const convRef = doc(db, 'conversations', conversationId);
+    const convSnap = await getDoc(convRef);
+    if (!convSnap.exists()) throw new Error('Conversation not found');
+
+    const data = convSnap.data();
+    if (!data.isGroup) throw new Error('Can only transfer ownership in group chats');
+    if (data.createdBy !== effectiveUid) throw new Error('Only the group owner can transfer ownership');
+    if (!nextOwnerUid || nextOwnerUid === effectiveUid) throw new Error('Choose another member as the next owner');
+    if (!data.participants?.includes(nextOwnerUid)) throw new Error('Selected member is not in this group');
+
+    await updateDoc(convRef, {
+        createdBy: nextOwnerUid,
+    });
+
+    const actorName = data.participantDetails?.[effectiveUid]?.name || 'Group owner';
+    const nextOwnerName = data.participantDetails?.[nextOwnerUid]?.name || 'A member';
+    const systemText = `${actorName} transferred group ownership to ${nextOwnerName}`;
+
+    await addDoc(collection(db, 'conversations', conversationId, 'messages'), {
+        senderId: 'system',
+        text: systemText,
+        imageUrl: null,
+        timestamp: serverTimestamp(),
+        read: true,
+        status: 'seen',
+        readBy: {},
+    });
+
+    await updateDoc(convRef, {
+        lastMessage: systemText,
+        lastMessageTime: serverTimestamp(),
+        lastMessageSenderId: null,
+    });
+}
+
+export async function leaveGroupConversation(
+    conversationId: string,
+): Promise<void> {
+    const effectiveUid = auth.currentUser?.uid;
+    if (!effectiveUid) throw new Error('Not authenticated');
+
+    const convRef = doc(db, 'conversations', conversationId);
+    const convSnap = await getDoc(convRef);
+    if (!convSnap.exists()) throw new Error('Conversation not found');
+
+    const data = convSnap.data();
+    if (!data.isGroup) throw new Error('Can only leave group chats');
+    if (!data.participants?.includes(effectiveUid)) {
+        throw new Error('You are not a member of this group');
+    }
+
+    const remainingParticipants = Array.from(new Set((data.participants || []).filter((uid: string) => uid !== effectiveUid)));
+    const isCurrentOwner = data.createdBy === effectiveUid;
+
+    const updates: Record<string, unknown> = {
+        participants: arrayRemove(effectiveUid),
+        [`participantDetails.${effectiveUid}`]: deleteField(),
+        [`participantJoinedAt.${effectiveUid}`]: deleteField(),
+        [`unreadCount.${effectiveUid}`]: deleteField(),
+        [`nicknames.${effectiveUid}`]: deleteField(),
+        [`typing.${effectiveUid}`]: deleteField(),
+    };
+
+    let nextOwnerUid = '';
+    if (isCurrentOwner) {
+        nextOwnerUid = pickNextGroupOwner(
+            remainingParticipants,
+            data.participantDetails,
+            data.participantJoinedAt,
+        );
+        if (nextOwnerUid) {
+            updates.createdBy = nextOwnerUid;
+        } else {
+            updates.createdBy = deleteField();
+        }
+    }
+
+    await updateDoc(convRef, updates);
+
+    const actorName = data.participantDetails?.[effectiveUid]?.name || 'A member';
+    const nextOwnerName = nextOwnerUid ? (data.participantDetails?.[nextOwnerUid]?.name || 'A member') : '';
+    const systemText = isCurrentOwner && nextOwnerUid
+        ? `${actorName} left the group. ${nextOwnerName} is now the group owner.`
+        : `${actorName} left the group`;
 
     await addDoc(collection(db, 'conversations', conversationId, 'messages'), {
         senderId: 'system',
