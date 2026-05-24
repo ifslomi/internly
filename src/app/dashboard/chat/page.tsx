@@ -25,6 +25,7 @@ import {
     kickGroupMember,
     addGroupMember,
     renameGroupConversation,
+    updateGroupConversationAvatar,
     leaveGroupConversation,
     transferGroupOwnership,
     editChatMessage,
@@ -892,6 +893,8 @@ export default function ChatPage() {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [showChatMenu, setShowChatMenu] = useState(false);
     const [memberActionsMenuUid, setMemberActionsMenuUid] = useState<string | null>(null);
+    const [showGroupAvatarOverlay, setShowGroupAvatarOverlay] = useState(false);
+    const [uploadingGroupAvatar, setUploadingGroupAvatar] = useState(false);
     const chatMenuRef = React.useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -940,6 +943,7 @@ export default function ChatPage() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const attachFileInputRef = useRef<HTMLInputElement>(null);
+    const groupAvatarInputRef = useRef<HTMLInputElement>(null);
     const messageInputRef = useRef<HTMLTextAreaElement>(null);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const isTypingRef = useRef(false);
@@ -1019,6 +1023,7 @@ export default function ChatPage() {
         setTransferOwnerUid(null);
         setTransferringOwnerUid(null);
         setMemberActionsMenuUid(null);
+        setShowGroupAvatarOverlay(false);
         setNicknameTarget('');
         setNicknameValue('');
     }, []);
@@ -1341,10 +1346,16 @@ export default function ChatPage() {
 
     // ─── Media Gallery: extract images, files, and links from messages ───
     const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
+    const isRemovedMessage = useCallback((message: Message) => {
+        if (message.isUnsent) return true;
+        const normalizedText = (message.text || '').trim().toLowerCase();
+        return normalizedText === 'this message was removed' || normalizedText === 'message removed';
+    }, []);
 
     const galleryImages = React.useMemo(() => {
         const images: { id: string; url: string; senderId: string; senderName: string; timestamp: Message['timestamp'] }[] = [];
         for (const m of messages) {
+            if (isRemovedMessage(m)) continue;
             const urls = m.imageUrls && m.imageUrls.length > 0
                 ? m.imageUrls
                 : (m.imageUrl ? [m.imageUrl] : []);
@@ -1360,11 +1371,12 @@ export default function ChatPage() {
             }
         }
         return images.reverse(); // newest first
-    }, [messages, activeConversation]);
+    }, [messages, activeConversation, isRemovedMessage]);
 
     const galleryLinks = React.useMemo(() => {
         const links: { id: string; url: string; text: string; senderId: string; senderName: string; timestamp: Message['timestamp'] }[] = [];
         for (const m of messages) {
+            if (isRemovedMessage(m)) continue;
             if (!m.text) continue;
             const matches = m.text.match(URL_REGEX);
             if (matches) {
@@ -1388,11 +1400,12 @@ export default function ChatPage() {
         }
         return links.reverse(); // newest first
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [messages, activeConversation]);
+    }, [messages, activeConversation, isRemovedMessage]);
 
     const galleryFiles = React.useMemo(() => {
         const files: { id: string; name: string; url: string; type: string; size: number; senderId: string; senderName: string; timestamp: Message['timestamp'] }[] = [];
         for (const m of messages) {
+            if (isRemovedMessage(m)) continue;
             const attachments = m.fileAttachments && m.fileAttachments.length > 0
                 ? m.fileAttachments
                 : (m.fileUrl && m.fileName ? [{
@@ -1416,12 +1429,13 @@ export default function ChatPage() {
             }
         }
         return files.reverse(); // newest first
-    }, [messages, activeConversation]);
+    }, [messages, activeConversation, isRemovedMessage]);
 
     // Keep sidebar state across chats; only close transient chat menu.
     useEffect(() => {
         setShowChatMenu(false);
         setMemberActionsMenuUid(null);
+        setShowGroupAvatarOverlay(false);
     }, [activeConversationId]);
 
     useEffect(() => {
@@ -1872,6 +1886,66 @@ export default function ChatPage() {
             return fileOrBlob;
         } finally {
             URL.revokeObjectURL(objectUrl);
+        }
+    };
+
+    const compressGroupAvatarForUpload = async (file: File): Promise<Blob> => {
+        const objectUrl = URL.createObjectURL(file);
+        try {
+            const image = await createImage(objectUrl);
+            const maxDimension = 900;
+            const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
+            const targetWidth = Math.max(1, Math.round(image.width * scale));
+            const targetHeight = Math.max(1, Math.round(image.height * scale));
+
+            const canvas = document.createElement('canvas');
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return file;
+
+            ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+            const compressed = await new Promise<Blob | null>((resolve) => {
+                canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.82);
+            });
+            return compressed || file;
+        } catch {
+            return file;
+        } finally {
+            URL.revokeObjectURL(objectUrl);
+        }
+    };
+
+    const handleGroupAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        if (!activeConversationId || !activeConversation?.isGroup) return;
+
+        const isOwner = activeConversation.createdBy === currentUserId;
+        if (!isOwner) {
+            setChatError('Only the group owner can change the group icon.');
+            return;
+        }
+
+        if (!file.type.startsWith('image/')) {
+            setChatError('Please select an image file for the group icon.');
+            return;
+        }
+
+        const endGlobalLoading = beginGlobalLoading();
+        setUploadingGroupAvatar(true);
+        try {
+            const compressedBlob = await compressGroupAvatarForUpload(file);
+            const uploadedImageUrl = await uploadChatImage(activeConversationId, compressedBlob);
+            await updateGroupConversationAvatar(activeConversationId, uploadedImageUrl);
+            setShowGroupAvatarOverlay(false);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'Failed to update group icon.';
+            setChatError(message);
+        } finally {
+            setUploadingGroupAvatar(false);
+            if (groupAvatarInputRef.current) groupAvatarInputRef.current.value = '';
+            endGlobalLoading();
         }
     };
 
@@ -3289,6 +3363,7 @@ export default function ChatPage() {
                             )}
 
                             {messages.map((msg, idx) => {
+                                const messageIsRemoved = isRemovedMessage(msg);
                                 const isSystemMessage = msg.senderId === 'system';
                                 const isMine = msg.senderId === currentUserId;
                                 const showAvatar = idx === 0 || messages[idx - 1]?.senderId !== msg.senderId;
@@ -3312,10 +3387,14 @@ export default function ChatPage() {
                                 const myReaction = currentUserId ? (msg.reactions?.[currentUserId] || null) : null;
                                 const actionPanelOnLeft = isMine;
                                 const pickerOnRight = !isMine;
-                                const messageImageUrls = msg.imageUrls && msg.imageUrls.length > 0
+                                const messageImageUrls = messageIsRemoved
+                                    ? []
+                                    : (msg.imageUrls && msg.imageUrls.length > 0
                                     ? msg.imageUrls
-                                    : (msg.imageUrl ? [msg.imageUrl] : []);
-                                const messageFileAttachments = msg.fileAttachments && msg.fileAttachments.length > 0
+                                    : (msg.imageUrl ? [msg.imageUrl] : []));
+                                const messageFileAttachments = messageIsRemoved
+                                    ? []
+                                    : (msg.fileAttachments && msg.fileAttachments.length > 0
                                     ? msg.fileAttachments
                                     : (msg.fileUrl && msg.fileName
                                         ? [{
@@ -3324,7 +3403,7 @@ export default function ChatPage() {
                                             fileSize: msg.fileSize || 0,
                                             fileType: msg.fileType || 'file',
                                         }]
-                                        : []);
+                                        : []));
 
                                 if (isSystemMessage) {
                                     return (
@@ -3435,9 +3514,9 @@ export default function ChatPage() {
                                                 position: 'relative',
                                                 width: 'fit-content',
                                                 maxWidth: '100%',
-                                                paddingBottom: !msg.isUnsent && totalReactions > 0 ? 18 : 0,
+                                                paddingBottom: !messageIsRemoved && totalReactions > 0 ? 18 : 0,
                                             }}>
-                                            {!msg.isUnsent && !isEditingThisMessage && (
+                                            {!messageIsRemoved && !isEditingThisMessage && (
                                                 <div
                                                     style={{
                                                         position: 'absolute',
@@ -3518,7 +3597,7 @@ export default function ChatPage() {
                                                 </div>
                                             )}
 
-                                            {reactionPickerMessageId === msg.id && !msg.isUnsent && (
+                                            {reactionPickerMessageId === msg.id && !messageIsRemoved && (
                                                 <div style={{
                                                     position: 'absolute',
                                                     [pickerOnRight ? 'left' : 'right']: '100%',
@@ -3811,14 +3890,14 @@ export default function ChatPage() {
                                                     wordBreak: 'break-word',
                                                     overflowWrap: 'anywhere',
                                                     whiteSpace: 'pre-wrap',
-                                                    fontStyle: msg.isUnsent ? 'italic' : 'normal',
-                                                    opacity: msg.isUnsent ? 0.82 : 1,
+                                                    fontStyle: messageIsRemoved ? 'italic' : 'normal',
+                                                    opacity: messageIsRemoved ? 0.82 : 1,
                                                 }}>
                                                     {msg.text}
                                                 </div>
                                             )}
 
-                                            {!msg.isUnsent && totalReactions > 0 && (
+                                            {!messageIsRemoved && totalReactions > 0 && (
                                                 <button
                                                     onClick={() => setReactionDetailsMessageId(msg.id)}
                                                     style={{
@@ -3855,7 +3934,7 @@ export default function ChatPage() {
 
                                             </div>
 
-                                            {msg.editedAt && !msg.isUnsent && !isEditingThisMessage && (
+                                            {msg.editedAt && !messageIsRemoved && !isEditingThisMessage && (
                                                 <div style={{
                                                     display: 'flex',
                                                     alignItems: 'center',
@@ -3883,7 +3962,7 @@ export default function ChatPage() {
                                                 </div>
                                             )}
 
-                                            {isHistoryExpanded && !msg.isUnsent && (
+                                            {isHistoryExpanded && !messageIsRemoved && (
                                                 <div style={{
                                                     marginTop: 6,
                                                     display: 'grid',
@@ -4505,12 +4584,42 @@ export default function ChatPage() {
                             const display = getConversationDisplay(activeConversation);
                             const avatar = display.avatar;
                             const label = display.name || 'Chat';
-                            return avatar ? (
-                                <img src={avatar} alt={label} style={{ width: 74, height: 74, borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.15)' }} />
-                            ) : (
-                                <div style={{ width: 74, height: 74, borderRadius: '50%', background: 'linear-gradient(135deg, #10b981, #34d399)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 28, fontWeight: 700 }}>
-                                    {label.charAt(0).toUpperCase()}
-                                </div>
+                            if (!activeConversation.isGroup) {
+                                return avatar ? (
+                                    <img src={avatar} alt={label} style={{ width: 74, height: 74, borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.15)' }} />
+                                ) : (
+                                    <div style={{ width: 74, height: 74, borderRadius: '50%', background: 'linear-gradient(135deg, #10b981, #34d399)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 28, fontWeight: 700 }}>
+                                        {label.charAt(0).toUpperCase()}
+                                    </div>
+                                );
+                            }
+
+                            return (
+                                <button
+                                    onClick={() => setShowGroupAvatarOverlay(true)}
+                                    title="View group icon options"
+                                    style={{
+                                        width: 74,
+                                        height: 74,
+                                        borderRadius: '50%',
+                                        border: '2px solid rgba(255,255,255,0.2)',
+                                        background: 'transparent',
+                                        padding: 0,
+                                        cursor: 'pointer',
+                                        overflow: 'hidden',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                    }}
+                                >
+                                    {avatar ? (
+                                        <img src={avatar} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    ) : (
+                                        <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg, #10b981, #34d399)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 28, fontWeight: 700 }}>
+                                            {label.charAt(0).toUpperCase()}
+                                        </div>
+                                    )}
+                                </button>
                             );
                         })()}
                         <p style={{ margin: 0, fontSize: 22, lineHeight: 1.2, fontWeight: 700, color: 'white', textAlign: 'center', overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
@@ -5336,6 +5445,116 @@ export default function ChatPage() {
                                 {pendingUnsendMessage && unsendingMessageId === pendingUnsendMessage.id ? 'Unsending...' : 'Unsend'}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {showGroupAvatarOverlay && activeConversation?.isGroup && (
+                <div
+                    onClick={() => {
+                        if (!uploadingGroupAvatar) setShowGroupAvatarOverlay(false);
+                    }}
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        background: 'rgba(0,0,0,0.62)',
+                        backdropFilter: 'blur(6px)',
+                        WebkitBackdropFilter: 'blur(6px)',
+                        zIndex: 1000,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 20,
+                    }}
+                >
+                    <div
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                            width: '100%',
+                            maxWidth: 380,
+                            borderRadius: 14,
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            background: '#1f2125',
+                            boxShadow: '0 22px 48px rgba(0,0,0,0.42)',
+                            padding: 16,
+                            display: 'grid',
+                            gap: 12,
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                            <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'white' }}>Group Icon</p>
+                            <button
+                                onClick={() => setShowGroupAvatarOverlay(false)}
+                                disabled={uploadingGroupAvatar}
+                                style={{
+                                    width: 28,
+                                    height: 28,
+                                    borderRadius: 8,
+                                    border: '1px solid rgba(255,255,255,0.12)',
+                                    background: 'rgba(255,255,255,0.04)',
+                                    color: 'var(--slate-300)',
+                                    cursor: uploadingGroupAvatar ? 'not-allowed' : 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}
+                            >
+                                <X size={14} />
+                            </button>
+                        </div>
+
+                        <div style={{ display: 'grid', justifyItems: 'center', gap: 10 }}>
+                            {activeConversation.groupAvatar ? (
+                                <img
+                                    src={activeConversation.groupAvatar}
+                                    alt={activeConversation.groupName || 'Group icon'}
+                                    style={{ width: 110, height: 110, borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.16)' }}
+                                />
+                            ) : (
+                                <div style={{ width: 110, height: 110, borderRadius: '50%', background: 'linear-gradient(135deg, #10b981, #34d399)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 40, fontWeight: 700 }}>
+                                    {(activeConversation.groupName || 'G').charAt(0).toUpperCase()}
+                                </div>
+                            )}
+                            <p style={{ margin: 0, fontSize: 13, color: 'var(--slate-300)' }}>
+                                Group owner: <strong style={{ color: 'white' }}>{activeConversation.participantDetails?.[activeConversation.createdBy || '']?.name || 'Unknown'}</strong>
+                            </p>
+                            <p style={{ margin: 0, fontSize: 12, color: 'var(--slate-500)', textAlign: 'center' }}>
+                                Group icon uploads are compressed automatically for faster loading.
+                            </p>
+                        </div>
+
+                        <input
+                            ref={groupAvatarInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={handleGroupAvatarUpload}
+                            style={{ display: 'none' }}
+                        />
+
+                        {activeConversation.createdBy === currentUserId ? (
+                            <button
+                                onClick={() => groupAvatarInputRef.current?.click()}
+                                disabled={uploadingGroupAvatar}
+                                style={{
+                                    width: '100%',
+                                    height: 36,
+                                    borderRadius: 10,
+                                    border: 'none',
+                                    background: 'var(--primary-500)',
+                                    color: 'white',
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    cursor: uploadingGroupAvatar ? 'not-allowed' : 'pointer',
+                                    opacity: uploadingGroupAvatar ? 0.7 : 1,
+                                }}
+                            >
+                                {uploadingGroupAvatar ? 'Uploading...' : 'Change Group Icon'}
+                            </button>
+                        ) : (
+                            <div style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.03)', color: 'var(--slate-400)', fontSize: 12, textAlign: 'center' }}>
+                                Only the group owner can change the group icon.
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

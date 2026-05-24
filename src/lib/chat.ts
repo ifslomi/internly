@@ -1114,6 +1114,50 @@ export async function renameGroupConversation(
     });
 }
 
+export async function updateGroupConversationAvatar(
+    conversationId: string,
+    avatarUrl: string,
+): Promise<void> {
+    const effectiveUid = auth.currentUser?.uid;
+    if (!effectiveUid) throw new Error('Not authenticated');
+
+    const convRef = doc(db, 'conversations', conversationId);
+    const convSnap = await getDoc(convRef);
+    if (!convSnap.exists()) throw new Error('Conversation not found');
+
+    const data = convSnap.data();
+    if (!data.isGroup) throw new Error('Can only update group icon for group chats');
+    if (data.createdBy !== effectiveUid) {
+        throw new Error('Only the group owner can change the group icon');
+    }
+
+    const trimmedAvatarUrl = avatarUrl.trim();
+    if (!trimmedAvatarUrl) throw new Error('Group icon URL is required');
+
+    await updateDoc(convRef, {
+        groupAvatar: trimmedAvatarUrl,
+    });
+
+    const actorName = data.participantDetails?.[effectiveUid]?.name || 'Group owner';
+    const systemText = `${actorName} changed the group icon`;
+
+    await addDoc(collection(db, 'conversations', conversationId, 'messages'), {
+        senderId: 'system',
+        text: systemText,
+        imageUrl: null,
+        timestamp: serverTimestamp(),
+        read: true,
+        status: 'seen',
+        readBy: {},
+    });
+
+    await updateDoc(convRef, {
+        lastMessage: systemText,
+        lastMessageTime: serverTimestamp(),
+        lastMessageSenderId: null,
+    });
+}
+
 export async function transferGroupOwnership(
     conversationId: string,
     nextOwnerUid: string,
@@ -1167,12 +1211,15 @@ export async function leaveGroupConversation(
     if (!convSnap.exists()) throw new Error('Conversation not found');
 
     const data = convSnap.data();
+    const participants = Array.isArray(data.participants)
+        ? data.participants.filter((uid: unknown): uid is string => typeof uid === 'string' && uid.trim().length > 0)
+        : [];
     if (!data.isGroup) throw new Error('Can only leave group chats');
-    if (!data.participants?.includes(effectiveUid)) {
+    if (!participants.includes(effectiveUid)) {
         throw new Error('You are not a member of this group');
     }
 
-    const remainingParticipants = Array.from(new Set((data.participants || []).filter((uid: string) => uid !== effectiveUid)));
+    const remainingParticipants = Array.from(new Set(participants.filter((uid) => uid !== effectiveUid)));
     const isCurrentOwner = data.createdBy === effectiveUid;
 
     const updates: Record<string, unknown> = {
