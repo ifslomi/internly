@@ -6,7 +6,13 @@ import { format } from 'date-fns';
 import { showToast } from '@/lib/toast';
 import { uploadEvidenceFile } from '@/lib/intern';
 
-const AREA_SECTIONS = [
+type AreaSection = {
+  key: 'A' | 'B' | 'C';
+  title: string;
+  items: string[];
+};
+
+const DEFAULT_AREA_SECTIONS: AreaSection[] = [
   {
     key: 'A',
     title: 'Problem Analysis and Knowledge for Solving Computing Problems',
@@ -38,6 +44,110 @@ const AREA_SECTIONS = [
     ],
   },
 ];
+
+const BSCS_AREA_SECTIONS: AreaSection[] = [
+  {
+    key: 'A',
+    title: 'Problem Analysis and Knowledge for Solving Computing Problems',
+    items: [
+      'A.1 Analyze and solve computing problems by application of knowledge in computing basics and specializations.',
+      'A.2 Develop sound critical thinking skills.',
+      'A.3 Be aware of current best practices and modern tools in analyzing and solving computing problems.',
+    ],
+  },
+  {
+    key: 'B',
+    title: 'Individual/Teamwork and Communication',
+    items: [
+      'B.1 Demonstrate the ability to function effectively as either a member or leader of a team.',
+      'B.2 Develop desirable attitudes, good work habits and proper office decorum.',
+      'B.3 Exhibit sound oral and written communication skills.',
+      'B.4 Demonstrate conflict resolution skills.',
+      'B.5 Value corporate code of ethics.',
+    ],
+  },
+  {
+    key: 'C',
+    title: 'Design/Development of Solution',
+    items: [
+      'C.1 Apply mathematical and computing science principles in modeling and design of computer-based systems.',
+      'C.2 Demonstrate knowledge and understanding of information security issues in the design and development of information systems.',
+      'C.3 Evaluate computing solutions to meet stakeholder needs while considering cultural, societal, environmental, and public safety concerns.',
+      'C.4 Recognize and apply technical standards and interoperability.',
+    ],
+  },
+];
+
+const BSIS_AREA_SECTIONS: AreaSection[] = [
+  {
+    key: 'A',
+    title: 'Problem Analysis and Knowledge for Solving Computing Problems',
+    items: [
+      'A.1 Apply knowledge in business processes, computing, mathematics and social sciences appropriate to IS.',
+      'A.2 Analyze complex problems and identify computing requirements while considering organizational factors in planning strategies and proposing solutions.',
+      'A.3 Develop critical-thinking skills.',
+      'A.4 Be familiar with current best practices and modern tools in analyzing and solving computing problems.',
+    ],
+  },
+  {
+    key: 'B',
+    title: 'Individual/Teamwork and Communication',
+    items: [
+      'B.1 Develop teamwork and collaboration skills.',
+      'B.2 Develop desirable attitudes, good work habits and proper office decorum.',
+      'B.3 Develop sound oral and written communication skills aligned with technical writing, presentation, negotiation, and numeracy.',
+      'B.4 Enhance conflict resolution skills.',
+      'B.5 Value corporate code of ethics.',
+    ],
+  },
+  {
+    key: 'C',
+    title: 'Design/Development of Solution',
+    items: [
+      'C.1 Design, implement and evaluate information systems, processes, and programs.',
+      'C.2 Apply knowledge about modern-day enterprises in modeling and designing information systems.',
+      'C.3 Recognize and apply technical standards and interoperability.',
+    ],
+  },
+];
+
+const ACT_AREA_SECTIONS: AreaSection[] = [
+  {
+    key: 'A',
+    title: 'Problem Analysis and Knowledge for Solving Computing Problems',
+    items: [
+      'A.1 Apply knowledge of computing fundamentals and domain knowledge on computing specialization.',
+      'A.2 Identify and solve computing problems using analytical approaches appropriate to the area of specialization.',
+    ],
+  },
+  {
+    key: 'B',
+    title: 'Service Management Skills and Modern Tool Usage',
+    items: [
+      'B.1 Practice sound service management skills in the workplace.',
+      'B.2 Demonstrate the use of contemporary techniques, tools and resources in computing activities.',
+    ],
+  },
+  {
+    key: 'C',
+    title: 'Individual/Team Work and Communication',
+    items: [
+      'C.1 Develop teamwork and collaboration skills.',
+      'C.2 Develop desirable attitudes, good work habits and proper office decorum.',
+      'C.3 Develop sound oral and written communication skills by writing effective reports, documentation, and presentations.',
+      'C.4 Value corporate code of ethics.',
+    ],
+  },
+];
+
+const AREA_SECTIONS_BY_PROGRAM: Record<string, AreaSection[]> = {
+  ACT: ACT_AREA_SECTIONS,
+  BSCS: BSCS_AREA_SECTIONS,
+  BSIS: BSIS_AREA_SECTIONS,
+};
+
+const normalizeProgram = (course?: string | null): string =>
+  (course || '').trim().toUpperCase().replace(/\s+/g, '');
 
 const getAreaKeys = (areaCovered: string): string[] => {
   const matches = areaCovered.match(/[ABC]\.[0-9]+/g) || [];
@@ -261,9 +371,14 @@ export default function CompetenciesPage() {
     return competencies.filter((c) => getAreaKeys(c.areaCovered).includes(activeAreaTab));
   }, [competencies, activeAreaTab]);
 
+  const areaSections = useMemo(() => {
+    const normalizedProgram = normalizeProgram(user?.course);
+    return AREA_SECTIONS_BY_PROGRAM[normalizedProgram] || DEFAULT_AREA_SECTIONS;
+  }, [user?.course]);
+
   const selectedAreaOptions = useMemo(() => {
-    return AREA_SECTIONS.find((section) => section.key === selectedAreaSection)?.items || [];
-  }, [selectedAreaSection]);
+    return areaSections.find((section) => section.key === selectedAreaSection)?.items || [];
+  }, [areaSections, selectedAreaSection]);
 
   if (!user) return null;
 
@@ -326,7 +441,7 @@ export default function CompetenciesPage() {
                 <label className="input-label">Area Covered</label>
                 <div style={{ display: 'grid', gap: 10 }}>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    {AREA_SECTIONS.map((section) => {
+                    {areaSections.map((section) => {
                       const isActive = selectedAreaSection === section.key;
                       return (
                         <button

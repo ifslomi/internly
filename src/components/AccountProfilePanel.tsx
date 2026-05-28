@@ -7,7 +7,7 @@ import { uploadProfileImage } from '@/lib/intern';
 
 const DEPARTMENT_OPTIONS = ['CICT'] as const;
 const PROGRAM_OPTIONS_BY_DEPARTMENT: Record<string, string[]> = {
-  CICT: ['BSIT', 'BSCS', 'BSIS', 'ACT', 'BLIS'],
+  CICT: ['BSIT', 'BSCS', 'BSIS', 'ACT'],
 };
 
 const normalizeDepartment = (value?: string | null) => {
