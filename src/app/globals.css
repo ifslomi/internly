@@ -534,8 +534,7 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: radial-gradient(circle at top, rgba(16, 185, 129, 0.08), transparent 34%), var(--slate-950);
   color: var(--slate-100);
-  font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
@@ -844,7 +843,7 @@ body > :not(.liquid-glass-bg) {
   justify-content: center;
   gap: 8px;
   padding: 12px 24px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   border: none;
   border-radius: var(--radius-md);
@@ -945,7 +944,7 @@ body > :not(.liquid-glass-bg) {
 
 .btn-sm {
   padding: 8px 16px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .btn-lg {
@@ -1014,7 +1013,7 @@ body > :not(.liquid-glass-bg) {
 }
 
 .input-label {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--slate-400);
   letter-spacing: 0.02em;
@@ -1027,7 +1026,7 @@ body > :not(.liquid-glass-bg) {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-sm);
   color: var(--slate-100);
-  font-size: 13px;
+  font-size: 14px;
   font-family: inherit;
   transition:
     border-color var(--transition-fast),
@@ -1243,7 +1242,7 @@ select option {
 }
 
 .stat-value {
-  font-size: 24px;
+  font-size: 28px;
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.1;
@@ -1331,7 +1330,7 @@ select option {
 
 .data-table td {
   padding: 14px 16px;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--slate-300);
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   transition:
@@ -1853,7 +1852,7 @@ select option {
 
 /* Page title */
 .page-title {
-  font-size: 24px;
+  font-size: 28px;
 }
 
 /* Grid layouts */
@@ -1899,7 +1898,7 @@ select option {
   }
 
   .page-title {
-    font-size: 22px;
+    font-size: 24px;
   }
 
   .card,
@@ -1938,7 +1937,7 @@ select option {
   }
 
   .page-title {
-    font-size: 20px;
+    font-size: 22px;
   }
 
   .card,
@@ -2034,7 +2033,7 @@ select option {
   }
 
   .page-title {
-    font-size: 20px;
+    font-size: 22px;
   }
 
   .features-grid {
@@ -2054,12 +2053,12 @@ select option {
   }
 
   .stat-value {
-    font-size: 22px;
+    font-size: 24px;
   }
 
   .btn-lg {
     padding: 14px 24px;
-    font-size: 14px;
+    font-size: 15px;
   }
 
   .modal-content {
@@ -2151,7 +2150,7 @@ select option {
   }
 
   .page-title {
-    font-size: 19px;
+    font-size: 20px;
   }
 
   .features-grid {
@@ -2181,7 +2180,7 @@ select option {
   }
 
   .stat-value {
-    font-size: 19px;
+    font-size: 20px;
   }
 
   .stat-label {

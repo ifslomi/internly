@@ -287,7 +287,7 @@ export default function LoginPage() {
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontWeight: 800,
-                                fontSize: 24,
+                                fontSize: 28,
                                 color: 'white',
                                 marginBottom: 20,
                                 boxShadow: '0 14px 40px rgba(16,185,129,0.28)',
@@ -295,7 +295,7 @@ export default function LoginPage() {
                         >
                             I
                         </div>
-                        <h1 style={{ fontSize: 36, lineHeight: 1.05, fontWeight: 800, marginBottom: 10, letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+                        <h1 style={{ fontSize: 44, lineHeight: 1.05, fontWeight: 800, marginBottom: 10, letterSpacing: '0.03em', textTransform: 'uppercase' }}>
                             Welcome
                         </h1>
                         <p style={{ color: 'rgba(236,253,245,0.88)', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase', fontSize: 12, marginBottom: 18 }}>
@@ -306,7 +306,7 @@ export default function LoginPage() {
                                 ? 'Sign in to continue tracking your internship progress, work logs, and weekly submissions.'
                                 : 'Create your account to organize hours, daily outputs, and weekly reports from one streamlined dashboard.'}
                         </p>
-                        <h2 style={{ fontSize: 20, lineHeight: 1.28, fontWeight: 700, color: 'white', maxWidth: 420 }}>
+                        <h2 style={{ fontSize: 22, lineHeight: 1.28, fontWeight: 700, color: 'white', maxWidth: 420 }}>
                             OJT Hours Monitoring and Training Management
                         </h2>
                     </div>
@@ -316,7 +316,7 @@ export default function LoginPage() {
                     <div className="card-elevated auth-card" style={{ borderRadius: 24, minHeight: 620, paddingTop: 24 }}>
                         <div key={mode} style={{ animation: 'authModeSwap 220ms ease both' }}>
                             <div style={{ textAlign: 'center', marginBottom: 20 }}>
-                                <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 6, letterSpacing: '-0.02em' }}>
+                                <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 6, letterSpacing: '-0.02em' }}>
                                     {mode === 'login' ? 'Sign in' : 'Sign up'}
                                 </h1>
                                 <p style={{ color: 'var(--slate-400)', fontSize: 13 }}>

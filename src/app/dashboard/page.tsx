@@ -225,7 +225,7 @@ export default function DashboardPage() {
                                 <span className="badge badge-primary">Latest Week {latestWeeklyReport.weekNumber}</span>
                                 <Clock size={18} style={{ color: 'var(--primary-400)' }} />
                             </div>
-                            <div style={{ fontSize: 28, fontWeight: 800, color: 'white', marginBottom: 4 }}>
+                            <div style={{ fontSize: 32, fontWeight: 800, color: 'white', marginBottom: 4 }}>
                                 {latestWeeklyReport.hoursRendered} hrs
                             </div>
                             <div className="stat-label">Rendered duty hours</div>
@@ -239,7 +239,7 @@ export default function DashboardPage() {
                                 <span className="badge badge-success">Deadline</span>
                                 <Target size={18} style={{ color: 'var(--emerald-400)' }} />
                             </div>
-                            <div style={{ fontSize: 20, fontWeight: 800, color: 'white', marginBottom: 4 }}>
+                            <div style={{ fontSize: 22, fontWeight: 800, color: 'white', marginBottom: 4 }}>
                                 {formatDateSafe(latestWeeklyReport.deadline)}
                             </div>
                             <div className="stat-label">Submission deadline</div>
